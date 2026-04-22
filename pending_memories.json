@@ -1,0 +1,44 @@
+{
+  "6895898630": [
+    {
+      "content": "[général] **SYNTHÈSE**\nEntretien avec Serma demain à 9h. L'entretien se déroulera par téléphone. Le lieu de l'appel est Grenoble.\n\n**PLAN D'ACTION**\n• Préparer les questions et les réponses pour l'entretien\n• Vérifier la connexion téléphonique avant l'entretien\n• Se connecter à l'appel à 9h précises\n\n**POINTS",
+      "category": "contexte",
+      "importance": 7
+    },
+    {
+      "content": "[Aria] **SYNTHÈSE**\nLe projet Aria nécessite des corrections pour résoudre les problèmes de quota épuisé et d'Intent Scheduler. Les modifications incluent la désactivation temporaire de Gemini lorsque le quota est épuisé. \n\n**PLAN D'ACTION**\n• Désactiver Gemini temporairement lorsque le quota est épuisé\n• ",
+      "category": "project",
+      "importance": 7
+    },
+    {
+      "content": "[Aria] Bloc ingéré : Bon diagnostic. On règle les deux points bloquants d'abord, puis on attaque l'Intent Scheduler. \n \nFix immédiat — désactiver Gemini temporairement quand quota épuisé. \n \nDans llm_router.py, ajoute ces...",
+      "category": "reference",
+      "importance": 5
+    },
+    {
+      "content": "Utiliser la technique de mempalace pour améliorer la mémorisation",
+      "category": "préférence",
+      "importance": 6
+    },
+    {
+      "content": "Intérêt pour la programmation (coder)",
+      "category": "préférence",
+      "importance": 7
+    },
+    {
+      "content": "La chambre est utilisée comme point de départ pour le mempalace",
+      "category": "contexte",
+      "importance": 4
+    },
+    {
+      "content": "[général] **SYNTHÈSE**\nL'objectif est d'apprendre Docker. Le type d'activité est centré sur l'apprentissage. Le projet détecté est de nature générale.\n\n**PLAN D'ACTION**\n• Rechercher des ressources pour apprendre Docker\n• Comprendre les bases de Docker\n• Mettre en pratique les connaissances acquises\n\n**POINTS",
+      "category": "contexte",
+      "importance": 7
+    },
+    {
+      "content": "l'utilisateur aime la soupe crémeuse aux carottes et oignons",
+      "category": "préférence",
+      "importance": 2
+    }
+  ]
+}

@@ -1,0 +1,315 @@
+(venv) nico@vDebianIA:~/projects/rpg-engine$ git pull
+Username for 'https://github.com': cossonn-coder
+Password for 'https://cossonn-coder@github.com':
+remote: Enumerating objects: 9, done.
+remote: Counting objects: 100% (9/9), done.
+remote: Compressing objects: 100% (1/1), done.
+remote: Total 5 (delta 4), reused 5 (delta 4), pack-reused 0 (from 0)
+Dépaquetage des objets: 100% (5/5), 754 octets | 377.00 Kio/s, fait.
+Depuis https://github.com/cossonn-coder/rpg-engine
+   5bca98a..3fbe5b5  main       -> origin/main
+Mise à jour 5bca98a..3fbe5b5
+Fast-forward
+ src/core/narrator_enhanced.py | 63 ++++++++++++++++-----------------------------------------------
+ 1 file changed, 16 insertions(+), 47 deletions(-)
+(venv) nico@vDebianIA:~/projects/rpg-engine$ python main_narration.py
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│     ╔═══════════════════════════════════════╗                                                                        │
+│     ║     🎮 RPG ENGINE - Alpha 1.0         ║                                                                        │
+│     ║   Moteur de Jeu de Rôle IA-Powered   ║                                                                         │
+│     ║      🤖 Narration Automatique         ║                                                                        │
+│     ╚═══════════════════════════════════════╝                                                                        │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Création de Personnage
+
+Utiliser le personnage de démonstration ? [y/n]: y
+✅ Personnage 'Héros' créé !
+         ⚔️ Héros
+┏━━━━━━━━━━━━━━┳━━━━━━━━━┓
+┃ Attribut     ┃ Valeur  ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━┩
+│ Niveau       │ 1       │
+│ XP           │ 0/?     │
+│ PV           │ 100/100 │
+│ Force        │ 14      │
+│ Dextérité    │ 12      │
+│ Intelligence │ 10      │
+│ Charisme     │ 8       │
+└──────────────┴─────────┘
+
+🎮 Début de l'Aventure
+
+╭──────────────────────────────────────────────────── 🌍 Narration ────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Vous vous tenez au seuil d'une nouvelle aventure. Le monde s'étend devant vous, plein de mystères et de dangers.    │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+⚠️ 💡 Actions simples (regarder, avancer) = réponse rapide
+⚠️ 💡 Actions complexes (grimper, attaquer) = narration IA + jets de dés
+
+Appuyez sur Entrée pour continuer...
+
+============================================================
+
+Que faites-vous ? (): fouiller
+🤖 L'Architecte analyse votre action...
+╭──────────────────────────────────────────────────── 🌍 Narration ────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Le sol du Point de Départ est jonché de terre battue et de débris végétaux. Sous un buisson épineux, une sacoche    │
+│  de cuir à demi enterrée dépasse du limon. À quelques pas, un monticule de pierres plates semble avoir été remué     │
+│  récemment. L'air est sec et immobile. Des insectes fouisseurs s'activent sous une souche d'arbre en décomposition.  │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+⚔️ Cette action nécessite un jet de intelligence !
+
+🎲 Lancez votre dé physiquement !
+Difficulté: Facile (12+)
+Résultat du dé (1-20): 3
+❌ Résultat: 3 = 3 (Difficulté: 12)
+╭──────────────────────────────────────────────────── 🌍 Narration ────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Vos mains ne ramènent que des lambeaux de tissu moisi et de la terre humide de la sacoche dégradée.                 │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Générer l'image de cette scène ? [y/n]: n
+
+============================================================
+
+Que faites-vous ? (): grimper
+🤖 L'Architecte analyse votre action...
+╭──────────────────────────────────────────────────── 🌍 Narration ────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Vous tentez : grimper.                                                                                              │
+│                                                                                                                      │
+│  [Narration IA indisponible : name 'time' is not defined]                                                            │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Générer l'image de cette scène ? [y/n]: n
+
+============================================================
+
+Que faites-vous ? (): convaincre
+🤖 L'Architecte analyse votre action...
+╭──────────────────────────────────────────────────── 🌍 Narration ────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│  Vous tentez : convaincre.                                                                                           │
+│                                                                                                                      │
+│  [Narration IA indisponible : Invalid JSON]                                                                          │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Générer l'image de cette scène ? [y/n]: n
+
+============================================================
+
+Que faites-vous ? (): /exit
+Sauvegarder avant de quitter ? [y/n]: n
+✅ Au revoir ! À bientôt dans l'aventure.
+(venv) nico@vDebianIA:~/projects/rpg-engine$
+
+
+(venv) nico@vDebianIA:~/projects/rpg-engine$ cat logs/gemini_prompts.txt | tail -200
+2026-01-12 12:59:03,941 - DEBUG - entering paragraph: StateBlock(line=20,level=2,tokens=78), 20, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering fence: StateBlock(line=20,level=2,tokens=78), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering blockquote: StateBlock(line=20,level=2,tokens=78), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering hr: StateBlock(line=20,level=2,tokens=78), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering list: StateBlock(line=20,level=2,tokens=78), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering fence: StateBlock(line=21,level=1,tokens=82), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering blockquote: StateBlock(line=21,level=1,tokens=82), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering hr: StateBlock(line=21,level=1,tokens=82), 21, 23, True
+2026-01-12 12:59:03,941 - DEBUG - entering code: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering fence: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering blockquote: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering hr: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering list: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering reference: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,941 - DEBUG - entering html_block: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,942 - DEBUG - entering heading: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,942 - DEBUG - entering lheading: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,942 - DEBUG - entering fence: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering blockquote: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering hr: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering list: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering paragraph: StateBlock(line=21,level=2,tokens=83), 21, 23, False
+2026-01-12 12:59:03,942 - DEBUG - entering fence: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering blockquote: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering hr: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering list: StateBlock(line=21,level=2,tokens=83), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering fence: StateBlock(line=22,level=1,tokens=87), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering blockquote: StateBlock(line=22,level=1,tokens=87), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering hr: StateBlock(line=22,level=1,tokens=87), 22, 23, True
+2026-01-12 12:59:03,942 - DEBUG - entering code: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,942 - DEBUG - entering fence: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering blockquote: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering hr: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering list: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering reference: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering html_block: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering heading: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering lheading: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 12:59:03,943 - DEBUG - entering paragraph: StateBlock(line=22,level=2,tokens=88), 22, 23, False
+2026-01-12 13:00:24,382 - ERROR - Erreur Gemini: name 'time' is not defined
+2026-01-12 13:00:26,384 - INFO - Cache HIT: Point de Dpart:qu'il y a t'il devant mes yeux?
+2026-01-13 22:40:09,185 - DEBUG - RAW RESPONSE:
+{
+  "narration": "La cellule de pierre où vous vous trouvez est empreinte d'une humidité glaciale qui semble s'infiltrer jusqu'à la moelle. L'air y est lourd, saturé de l'odeur de la poussière ancienne et du salpêtre. Devant vous, une porte massive en chêne noirci, cerclée de fer rouillé, est la seule issue visible. En exerçant une pression, le bois gémit sourdement contre le sol inégal de terre battue. L'ouverture révèle un monde noyé dans un brouillard grisâtre et impénétrable. Vous franchissez le seuil pour vous retrouver sur un plateau rocheux balayé par un vent cinglant. Le sol
+================================================================================
+2026-01-13 22:40:09,185 - DEBUG - CLEANED TEXT:
+{
+  "narration": "La cellule de pierre où vous vous trouvez est empreinte d'une humidité glaciale qui semble s'infiltrer jusqu'à la moelle. L'air y est lourd, saturé de l'odeur de la poussière ancienne et du salpêtre. Devant vous, une porte massive en chêne noirci, cerclée de fer rouillé, est la seule issue visible. En exerçant une pression, le bois gémit sourdement contre le sol inégal de terre battue. L'ouverture révèle un monde noyé dans un brouillard grisâtre et impénétrable. Vous franchissez le seuil pour vous retrouver sur un plateau rocheux balayé par un vent cinglant. Le sol
+================================================================================
+2026-01-13 22:40:09,185 - ERROR - Erreur JSON: Unterminated string starting at: line 2 column 16 (char 17)
+Texte reçu: {
+  "narration": "La cellule de pierre où vous vous trouvez est empreinte d'une humidité glaciale qui semble s'infiltrer jusqu'à la moelle. L'air y est lourd, saturé de l'odeur de la poussière ancienne et du salpêtre. Devant vous, une porte massive en chêne noirci, cerclée de fer rouillé, est la seule issue visible. En exerçant une pression, le bois gémit sourdement contre le sol inégal de terre battue. L'ouverture révèle un monde noyé dans un brouillard grisâtre et impénétrable. Vous franchisse
+2026-01-13 22:45:59,374 - DEBUG - RAW RESPONSE:
+{
+  "narration": "Le sol est jonché de terre battue et de feuilles mortes. Des débris rocheux s'accumulent près d'un muret en ruine, vestige d'une structure oubliée. Le vent siffle entre les pierres déchaussées. Des traces de pas anciennes s'estompent sous la poussière. Un examen minutieux des anfractuosités et des décombres permettrait peut-être de déceler ce que la nature n'a pas encore totalement repris.",
+  "requires_roll": true,
+  "roll_type": "intelligence",
+  "difficulty": 12,
+  "difficulty_name": "Normale",
+  "consequences_on_critical_success": "Vous dénichez une bourse en cuir scellée contenant 10 pièces d'or et une dague en fer froid parfaitement affûtée sous une pierre gravée.",
+  "consequences_on_success": "Sous une dalle instable, vous trouvez une ration de voyage encore comestible et une gourde en cuir usée mais fonctionnelle.",
+  "consequences_on_failure": "Vos mains ne brassent que de la poussière et des graviers sans valeur. Le lieu semble avoir été vidé de tout intérêt il y a bien longtemps.",
+  "consequences_on_critical_failure": "En déplaçant brusquement une pierre, le muret s'effondre partiellement sur vos mains. Vous subissez 2 points de dégâts et le fracas résonne dans le silence."
+}
+================================================================================
+2026-01-13 22:45:59,374 - DEBUG - CLEANED TEXT:
+{
+  "narration": "Le sol est jonché de terre battue et de feuilles mortes. Des débris rocheux s'accumulent près d'un muret en ruine, vestige d'une structure oubliée. Le vent siffle entre les pierres déchaussées. Des traces de pas anciennes s'estompent sous la poussière. Un examen minutieux des anfractuosités et des décombres permettrait peut-être de déceler ce que la nature n'a pas encore totalement repris.",
+  "requires_roll": true,
+  "roll_type": "intelligence",
+  "difficulty": 12,
+  "difficulty_name": "Normale",
+  "consequences_on_critical_success": "Vous dénichez une bourse en cuir scellée contenant 10 pièces d'or et une dague en fer froid parfaitement affûtée sous une pierre gravée.",
+  "consequences_on_success": "Sous une dalle instable, vous trouvez une ration de voyage encore comestible et une gourde en cuir usée mais fonctionnelle.",
+  "consequences_on_failure": "Vos mains ne brassent que de la poussière et des graviers sans valeur. Le lieu semble avoir été vidé de tout intérêt il y a bien longtemps.",
+  "consequences_on_critical_failure": "En déplaçant brusquement une pierre, le muret s'effondre partiellement sur vos mains. Vous subissez 2 points de dégâts et le fracas résonne dans le silence."
+}
+================================================================================
+2026-01-13 22:45:59,374 - ERROR - Erreur Gemini: name 'time' is not defined
+2026-01-13 22:46:01,375 - INFO - Cache HIT: Point de Départ:fouiller
+2026-01-13 22:52:18,808 - INFO - AFC is enabled with max remote calls: 10.
+2026-01-13 22:52:18,810 - DEBUG - connect_tcp.started host='generativelanguage.googleapis.com' port=443 local_address=None timeout=None socket_options=None
+2026-01-13 22:52:18,838 - DEBUG - connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3ce42f90>
+2026-01-13 22:52:18,838 - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x7fee3cf78290> server_hostname='generativelanguage.googleapis.com' timeout=None
+2026-01-13 22:52:18,859 - DEBUG - start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3cf46e90>
+2026-01-13 22:52:18,859 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2026-01-13 22:52:18,859 - DEBUG - send_request_headers.complete
+2026-01-13 22:52:18,859 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2026-01-13 22:52:18,860 - DEBUG - send_request_body.complete
+2026-01-13 22:52:18,860 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2026-01-13 22:52:27,225 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json; charset=UTF-8'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Content-Encoding', b'gzip'), (b'Date', b'Tue, 13 Jan 2026 21:52:27 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Server-Timing', b'gfet4t7; dur=8353'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'), (b'Transfer-Encoding', b'chunked')])
+2026-01-13 22:52:27,226 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent "HTTP/1.1 200 OK"
+2026-01-13 22:52:27,226 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2026-01-13 22:52:27,226 - DEBUG - receive_response_body.complete
+2026-01-13 22:52:27,226 - DEBUG - response_closed.started
+2026-01-13 22:52:27,226 - DEBUG - response_closed.complete
+2026-01-13 22:52:27,228 - DEBUG - RAW RESPONSE:
+{
+  "narration": "Le sol du Point de Départ est jonché de terre battue et de débris végétaux. Sous un buisson épineux, une sacoche de cuir à demi enterrée dépasse du limon. À quelques pas, un monticule de pierres plates semble avoir été remué récemment. L'air est sec et immobile. Des insectes fouisseurs s'activent sous une souche d'arbre en décomposition.",
+  "requires_roll": true,
+  "roll_type": "intelligence",
+  "difficulty": 12,
+  "difficulty_name": "Facile",
+  "consequences_on_critical_success": "Vous découvrez une pièce d'or ancienne et une pierre à aiguiser intacte dissimulées dans un double fond de la sacoche.",
+  "consequences_on_success": "Vous extrayez de la sacoche un couteau de chasse rouillé mais encore fonctionnel.",
+  "consequences_on_failure": "Vos mains ne ramènent que des lambeaux de tissu moisi et de la terre humide de la sacoche dégradée.",
+  "consequences_on_critical_failure": "En fouillant brusquement sous les pierres, vous dérangez un scorpion dissimulé qui vous pique la main. Vous perdez 2 PV."
+}
+================================================================================
+2026-01-13 22:52:27,228 - DEBUG - CLEANED TEXT:
+{
+  "narration": "Le sol du Point de Départ est jonché de terre battue et de débris végétaux. Sous un buisson épineux, une sacoche de cuir à demi enterrée dépasse du limon. À quelques pas, un monticule de pierres plates semble avoir été remué récemment. L'air est sec et immobile. Des insectes fouisseurs s'activent sous une souche d'arbre en décomposition.",
+  "requires_roll": true,
+  "roll_type": "intelligence",
+  "difficulty": 12,
+  "difficulty_name": "Facile",
+  "consequences_on_critical_success": "Vous découvrez une pièce d'or ancienne et une pierre à aiguiser intacte dissimulées dans un double fond de la sacoche.",
+  "consequences_on_success": "Vous extrayez de la sacoche un couteau de chasse rouillé mais encore fonctionnel.",
+  "consequences_on_failure": "Vos mains ne ramènent que des lambeaux de tissu moisi et de la terre humide de la sacoche dégradée.",
+  "consequences_on_critical_failure": "En fouillant brusquement sous les pierres, vous dérangez un scorpion dissimulé qui vous pique la main. Vous perdez 2 PV."
+}
+================================================================================
+2026-01-13 22:52:27,228 - ERROR - Erreur Gemini 2.0: name 'time' is not defined
+2026-01-13 22:52:29,228 - INFO - Cache HIT: Point de Départ:fouiller
+2026-01-13 22:52:59,865 - INFO - AFC is enabled with max remote calls: 10.
+2026-01-13 22:52:59,866 - DEBUG - close.started
+2026-01-13 22:52:59,866 - DEBUG - close.complete
+2026-01-13 22:52:59,867 - DEBUG - connect_tcp.started host='generativelanguage.googleapis.com' port=443 local_address=None timeout=None socket_options=None
+2026-01-13 22:52:59,895 - DEBUG - connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3ce68190>
+2026-01-13 22:52:59,895 - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x7fee3cf78290> server_hostname='generativelanguage.googleapis.com' timeout=None
+2026-01-13 22:52:59,914 - DEBUG - start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3cfddba0>
+2026-01-13 22:52:59,914 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2026-01-13 22:52:59,914 - DEBUG - send_request_headers.complete
+2026-01-13 22:52:59,914 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2026-01-13 22:52:59,914 - DEBUG - send_request_body.complete
+2026-01-13 22:52:59,914 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2026-01-13 22:53:09,916 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json; charset=UTF-8'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Content-Encoding', b'gzip'), (b'Date', b'Tue, 13 Jan 2026 21:53:09 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Server-Timing', b'gfet4t7; dur=9990'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'), (b'Transfer-Encoding', b'chunked')])
+2026-01-13 22:53:09,916 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent "HTTP/1.1 200 OK"
+2026-01-13 22:53:09,916 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2026-01-13 22:53:09,917 - DEBUG - receive_response_body.complete
+2026-01-13 22:53:09,917 - DEBUG - response_closed.started
+2026-01-13 22:53:09,918 - DEBUG - response_closed.complete
+2026-01-13 22:53:09,918 - DEBUG - RAW RESPONSE:
+{
+  "narration": "Une paroi calcaire escarpée barre la route. La roche est parcourue de fissures étroites et de quelques prises saillantes, rendues glissantes par une fine couche de mousse. L'ascension demande une traction constante pour s'élever au-dessus du sol meuble. Le vent souffle par intermittence, testant l'équilibre de quiconque tente de franchir cet obstacle naturel.",
+  "requires_roll": true,
+  "roll_type": "force",
+  "difficulty": 12,
+  "difficulty_name": "Normale",
+  "consequences_on_critical_success": "Vous atteignez le sommet avec une agilité inhabituelle, repérant immédiatement un détail utile sur le plateau supérieur.",
+  "consequences_on_success": "Vous parvenez à vous hisser en haut de la paroi sans encombre.",
+  "consequences_on_failure": "Vos mains glissent sur la pierre humide. Vous retombez au point de départ sans blessure, mais l'effort vous a épuisé.",
+  "consequences_on_critical_failure": "Une prise cède sous votre poids. Vous chutez lourdement, subissant 10 points de dégâts suite à l'impact au sol."
+}
+================================================================================
+2026-01-13 22:53:09,919 - DEBUG - CLEANED TEXT:
+{
+  "narration": "Une paroi calcaire escarpée barre la route. La roche est parcourue de fissures étroites et de quelques prises saillantes, rendues glissantes par une fine couche de mousse. L'ascension demande une traction constante pour s'élever au-dessus du sol meuble. Le vent souffle par intermittence, testant l'équilibre de quiconque tente de franchir cet obstacle naturel.",
+  "requires_roll": true,
+  "roll_type": "force",
+  "difficulty": 12,
+  "difficulty_name": "Normale",
+  "consequences_on_critical_success": "Vous atteignez le sommet avec une agilité inhabituelle, repérant immédiatement un détail utile sur le plateau supérieur.",
+  "consequences_on_success": "Vous parvenez à vous hisser en haut de la paroi sans encombre.",
+  "consequences_on_failure": "Vos mains glissent sur la pierre humide. Vous retombez au point de départ sans blessure, mais l'effort vous a épuisé.",
+  "consequences_on_critical_failure": "Une prise cède sous votre poids. Vous chutez lourdement, subissant 10 points de dégâts suite à l'impact au sol."
+}
+================================================================================
+2026-01-13 22:53:09,919 - ERROR - Erreur Gemini 2.0: name 'time' is not defined
+2026-01-13 22:53:21,020 - INFO - AFC is enabled with max remote calls: 10.
+2026-01-13 22:53:21,021 - DEBUG - close.started
+2026-01-13 22:53:21,021 - DEBUG - close.complete
+2026-01-13 22:53:21,021 - DEBUG - connect_tcp.started host='generativelanguage.googleapis.com' port=443 local_address=None timeout=None socket_options=None
+2026-01-13 22:53:21,049 - DEBUG - connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3cfde2c0>
+2026-01-13 22:53:21,050 - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x7fee3cf78290> server_hostname='generativelanguage.googleapis.com' timeout=None
+2026-01-13 22:53:21,068 - DEBUG - start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x7fee3d006450>
+2026-01-13 22:53:21,068 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2026-01-13 22:53:21,069 - DEBUG - send_request_headers.complete
+2026-01-13 22:53:21,069 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2026-01-13 22:53:21,069 - DEBUG - send_request_body.complete
+2026-01-13 22:53:21,069 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2026-01-13 22:53:34,556 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json; charset=UTF-8'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Content-Encoding', b'gzip'), (b'Date', b'Tue, 13 Jan 2026 21:53:34 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Server-Timing', b'gfet4t7; dur=13475'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'), (b'Transfer-Encoding', b'chunked')])
+2026-01-13 22:53:34,556 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent "HTTP/1.1 200 OK"
+2026-01-13 22:53:34,557 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2026-01-13 22:53:34,558 - DEBUG - receive_response_body.complete
+2026-01-13 22:53:34,558 - DEBUG - response_closed.started
+2026-01-13 22:53:34,558 - DEBUG - response_closed.complete
+2026-01-13 22:53:34,559 - DEBUG - RAW RESPONSE:
+{
+  "narration": "Les paroles sont prononcées avec conviction, mais elles se dissipent dans l'immensité du Point de Départ. Aucun être vivant n'est présent pour recevoir ces mots ou se laisser influencer par la force du discours. Le silence qui suit est total, interrompu seulement par le craquement d'une branche ou le souffle du vent. La solitude du
+================================================================================
+2026-01-13 22:53:34,559 - DEBUG - CLEANED TEXT:
+{
+  "narration": "Les paroles sont prononcées avec conviction, mais elles se dissipent dans l'immensité du Point de Départ. Aucun être vivant n'est présent pour recevoir ces mots ou se laisser influencer par la force du discours. Le silence qui suit est total, interrompu seulement par le craquement d'une branche ou le souffle du vent. La solitude du
+================================================================================
+2026-01-13 22:53:34,559 - ERROR - Erreur JSON: Unterminated string starting at: line 2 column 16 (char 17)
+Texte reçu: {
+  "narration": "Les paroles sont prononcées avec conviction, mais elles se dissipent dans l'immensité du Point de Départ. Aucun être vivant n'est présent pour recevoir ces mots ou se laisser influencer par la force du discours. Le silence qui suit est total, interrompu seulement par le craquement d'une branche ou le souffle du vent. La solitude du
+2026-01-13 22:53:44,148 - DEBUG - close.started
+2026-01-13 22:53:44,148 - DEBUG - close.complete
+(venv) nico@vDebianIA:~/projects/rpg-engine$

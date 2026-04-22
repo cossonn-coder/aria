@@ -1,0 +1,30 @@
+wing: aria
+rooms:
+- name: chroma_db
+  description: Files from chroma_db/
+  keywords:
+  - chroma_db
+  - chroma_db
+- name: memory
+  description: Files from memory/
+  keywords:
+  - memory
+  - memory
+- name: inbox
+  description: Files from inbox/
+  keywords:
+  - inbox
+  - inbox
+- name: agents
+  description: Files from agents/
+  keywords:
+  - agents
+  - agents
+- name: logs
+  description: Files from logs/
+  keywords:
+  - logs
+  - logs
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

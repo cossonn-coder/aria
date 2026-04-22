@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.venv/
+venv/
+
+# ARIA runtime
+.aria/
+chroma/
+*.db
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
