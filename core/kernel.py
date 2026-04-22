@@ -8,6 +8,7 @@ from memory.mempalace_writer import store_interaction
 from embedding.embedder import Embedder
 from llm.llm_router import LLMRouter
 from llm.intent_namer import extract_intent_name
+from llm.image_router import ImageRouter
 from agents.base_agent import AgentContext
 from agents.registry_agent import AgentRegistry
 from agents.controller.controller_agent import AgentController
@@ -15,7 +16,14 @@ from cognition.cognitive_classifier import classify_operation
 from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOperation
 from cognition.memory_context import MemoryContext
 from cognition.cognitive_trace import CognitiveTrace
+from cognition.cognitive_dispatcher import CognitiveDispatcher
 
+FAST_PATH = {
+    CognitiveOperation.IMAGE_GENERATION,
+    CognitiveOperation.IMAGE_INPUT,
+    CognitiveOperation.INGESTION,
+    CognitiveOperation.UNKNOWN,
+}
 
 class AriaKernel:
     """
@@ -36,12 +44,33 @@ class AriaKernel:
         self.embedder = Embedder(config.EMBEDDING_MODEL)
         self.intent_engine = IntentEngine(self.embedder)
         self.llm_router = LLMRouter()
+        self.image_router = ImageRouter()
+        self.dispatcher = CognitiveDispatcher()
 
         # =====================================================
         # AGENTS
         # =====================================================
         self.registry = AgentRegistry()
         self.controller = AgentController(self.registry)
+
+        # =====================================================
+        # DISPATCHER
+        # =====================================================
+        self.dispatcher.register(CognitiveOperation.INGESTION)(
+            self.handle_ingestion
+        )
+
+        self.dispatcher.register(CognitiveOperation.IMAGE_INPUT)(
+            self.handle_image_input
+        )
+
+        self.dispatcher.register(CognitiveOperation.IMAGE_GENERATION)(
+            self.handle_image_generation
+        )
+
+        self.dispatcher.register(CognitiveOperation.UNKNOWN)(
+            self.handle_unknown
+        )
 
     # =========================================================
     # ENTRYPOINT
@@ -50,7 +79,6 @@ class AriaKernel:
     async def handle_message(self, message: str, metadata: dict | None = None) -> str:
 
         metadata = metadata or {}
-        user_id = metadata.get("user_id", "legacy")
 
         # =====================================================
         # 0 — MESSAGE CLASSIFICATION
@@ -59,22 +87,18 @@ class AriaKernel:
         if not message:
             return ""
 
-        operation = classify_operation(message, self.llm_router)
+        operation = classify_operation(
+            message,
+            self.llm_router,
+            metadata=metadata
+        )
+
         print(f"[COGNITION] operation={operation.value}")
 
-        if operation == CognitiveOperation.INGESTION:
-            try:
-                store_interaction(text=message, intent_id="knowledge_ingest",
-                                metadata={"source": "ingest"})
-            except Exception as e:
-                print(f"[INGEST ERROR] {e}")
-            return "[INGESTION] contexte enregistré."
-        
-        if operation == CognitiveOperation.UNKNOWN:
-            return (
-                "Je veux bien t'aider — c'est une demande de planning, "
-                "une question sur ta mémoire, ou autre chose ?"
-            )
+        dispatch_out = self.dispatcher.dispatch(operation, message, metadata)
+
+        if dispatch_out["short_circuit"]:
+            return dispatch_out["result"]
 
         # =====================================================
         # 1 — GLOBAL MEMORY (pre-intent context)
@@ -117,7 +141,6 @@ class AriaKernel:
             session_memories=retrieve_by_intent(
                 query=message,
                 intent_id=intent.id,
-                user_id=user_id,
             ) if intent else {"hits": [], "count": 0},
         )
 
@@ -137,7 +160,6 @@ class AriaKernel:
                 "recall": recall_decision,
                 "active_intents": self.intent_engine.list_active(),
                 "cognitive_operation": operation,
-                "user_id": user_id,
                 **metadata,
             },
         )
@@ -182,7 +204,6 @@ class AriaKernel:
                 store_interaction(
                     text=f"USER:\n{message}\n\nARIA:\n{result}",
                     intent_id=intent.id,
-                    user_id=user_id,
                     metadata={
                         "intent_name": intent.name,
                         "wing": "aria",
@@ -200,3 +221,51 @@ class AriaKernel:
         self.last_ctx = ctx  # pour debug / inspection post-run
 
         return result
+    
+
+    def handle_ingestion(self, message, metadata):
+        store_interaction(
+            text=message,
+            intent_id="knowledge_ingest",
+            metadata={"source": "ingest"}
+        )
+        return "[INGESTION] contexte enregistré."
+
+
+    def handle_image_input(self, message, metadata):
+        img_path = metadata.get("image")
+
+        store_interaction(
+            text=f"[IMAGE_INPUT] {img_path}",
+            intent_id="image_input",
+            metadata={
+                "type": "image_input",
+                "wing": "aria",
+                "room": "image_input",
+                "path": img_path,
+            },
+        )
+
+        return self.image_router.handle_input(img_path)
+
+
+    def handle_image_generation(self, message, metadata):
+        result = self.image_router.generate(message)
+
+        store_interaction(
+            text=f"[IMAGE_GENERATION] {message}",
+            intent_id="image_generation",
+            metadata={
+                "type": "image_generated",
+                "wing": "aria",
+                "room": metadata.get("intent_id", "image_generation"),
+                "path": result.path,
+                "prompt": message,
+            },
+        )
+
+        return result.path
+
+
+    def handle_unknown(self, message, metadata):
+        return "Je veux bien t'aider — c'est une demande de planning, " "une question sur ta mémoire, ou autre chose ?"

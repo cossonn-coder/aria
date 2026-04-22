@@ -5,6 +5,15 @@ from cognition.cognitive_context import CognitiveOperation
 from memory.mempalace_store import search
 from memory.mempalace_writer import store_interaction
 
+def detect_image_intent(message: str) -> bool:
+    keywords = [
+        "image", "dessine", "génère une image",
+        "draw", "generate image", "photo"
+    ]
+    return any(k in message.lower() for k in keywords)
+
+def detect_image_input(message: str, metadata: dict) -> bool:
+    return metadata.get("image") is not None
 
 CLASSIFIER_PROMPT = """
 Tu es un classificateur d'opérations cognitives.
@@ -28,7 +37,17 @@ Message : {message}
 CONFIDENCE_THRESHOLD = 0.65
 
 
-def classify_operation(message: str, llm_router=None) -> CognitiveOperation:
+def classify_operation(message: str, llm_router=None, metadata: dict | None = None) -> CognitiveOperation:
+
+    metadata = metadata or {}
+
+    # 1. image explicite via metadata (Telegram / API)
+    if metadata.get("image") is not None:
+        return CognitiveOperation.IMAGE_INPUT
+
+    # 2. heuristique texte
+    if detect_image_intent(message):
+        return CognitiveOperation.IMAGE_GENERATION
 
     # ingestion sur message long
     if len(message) > 150:
@@ -58,10 +77,9 @@ def classify_operation(message: str, llm_router=None) -> CognitiveOperation:
         if not raw.startswith("{"):
             raw = "{" + raw + "}"
         data = json.loads(raw)
-        operation_str = data.get("operation", "unknown")
-        confidence = float(data.get("confidence", 0.0))
 
-        operation = _parse_operation(operation_str)
+        operation = _parse_operation(data.get("operation", "unknown"))
+        confidence = float(data.get("confidence", 0.0))
 
         # 4. stocke dans MemPalace si confiance suffisante
         if confidence >= CONFIDENCE_THRESHOLD and operation != CognitiveOperation.UNKNOWN:

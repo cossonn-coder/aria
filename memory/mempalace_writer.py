@@ -7,7 +7,8 @@ from config import config
 from mempalace.palace import get_collection
 
 
-REQUIRED_FIELDS = {"wing", "room", "type", "intent"}
+REQUIRED_FIELDS = {"wing", "room", "type"}
+OPTIONAL_FIELDS = {"intent"}
 
 
 def validate(meta: dict):
@@ -19,7 +20,6 @@ def validate(meta: dict):
 def store_interaction(
     text: str,
     intent_id: str,
-    user_id: str = "legacy",
     metadata: dict | None = None,
 ):
     col = get_collection(config.mempalace_path)
@@ -31,7 +31,6 @@ def store_interaction(
         "room": intent_id,
         "intent": intent_id,
         "type": "interaction",
-        "user_id": user_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **(metadata or {}),
     }

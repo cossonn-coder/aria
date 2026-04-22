@@ -13,6 +13,8 @@ class CognitiveOperation(Enum):
     INGESTION     = "ingestion"      # message > 300 chars
     CONFIRMATION  = "confirmation"
     UNKNOWN       = "unknown"
+    IMAGE_INPUT = "image_input"
+    IMAGE_GENERATION = "image_generation"
 
 
 # TOP_K mémoire par opération

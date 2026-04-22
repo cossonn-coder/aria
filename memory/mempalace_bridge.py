@@ -8,14 +8,11 @@ def retrieve_memories(
     wing: str = "aria",
     room: str | None = None,
     n: int = 5,
+    type_filter: list[str] | None = None,
 ):
 
     if n <= 0:
-        return {
-            "query": query,
-            "hits": [],
-            "count": 0,
-        }
+        return {"query": query, "hits": [], "count": 0}
 
     result = search(
         query=query,
@@ -29,6 +26,13 @@ def retrieve_memories(
         if h.get("room", "") != "general"
         and h.get("distance", 1.0) < 0.8
     ][:n]
+
+    # filtre type (optionnel)
+    if type_filter:
+        hits = [
+            h for h in hits
+            if h.get("type") in type_filter
+        ]
 
     return {
         "query": query,
