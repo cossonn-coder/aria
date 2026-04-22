@@ -50,6 +50,7 @@ class AriaKernel:
     async def handle_message(self, message: str, metadata: dict | None = None) -> str:
 
         metadata = metadata or {}
+        user_id = metadata.get("user_id", "legacy")
 
         # =====================================================
         # 0 — MESSAGE CLASSIFICATION
@@ -115,7 +116,8 @@ class AriaKernel:
             global_memories=retrieve_memories(message, n=top_k),
             session_memories=retrieve_by_intent(
                 query=message,
-                intent_id=intent.id
+                intent_id=intent.id,
+                user_id=metadata.get("user_id"),
             ) if intent else {"hits": [], "count": 0},
         )
 
@@ -123,7 +125,7 @@ class AriaKernel:
         # 5 — CONTEXT BUILD (CRITICAL STEP MISSING IN CURRENT CODE)
         # =====================================================
         trace = CognitiveTrace()
-
+        user_id=metadata.get("user_id")
         ctx = AgentContext(
             message=message,
             intent=intent,
@@ -135,6 +137,7 @@ class AriaKernel:
                 "recall": recall_decision,
                 "active_intents": self.intent_engine.list_active(),
                 "cognitive_operation": operation,
+                "user_id": user_id,
                 **metadata,
             },
         )
@@ -179,6 +182,7 @@ class AriaKernel:
                 store_interaction(
                     text=f"USER:\n{message}\n\nARIA:\n{result}",
                     intent_id=intent.id,
+                    user_id=user_id,
                     metadata={
                         "intent_name": intent.name,
                         "wing": "aria",
