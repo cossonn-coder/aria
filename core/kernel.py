@@ -117,7 +117,7 @@ class AriaKernel:
             session_memories=retrieve_by_intent(
                 query=message,
                 intent_id=intent.id,
-                user_id=metadata.get("user_id"),
+                user_id=user_id,
             ) if intent else {"hits": [], "count": 0},
         )
 
@@ -125,7 +125,7 @@ class AriaKernel:
         # 5 — CONTEXT BUILD (CRITICAL STEP MISSING IN CURRENT CODE)
         # =====================================================
         trace = CognitiveTrace()
-        user_id=metadata.get("user_id")
+        
         ctx = AgentContext(
             message=message,
             intent=intent,

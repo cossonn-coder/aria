@@ -19,7 +19,7 @@ def validate(meta: dict):
 def store_interaction(
     text: str,
     intent_id: str,
-    user_id: str,
+    user_id: str = "legacy",
     metadata: dict | None = None,
 ):
     col = get_collection(config.mempalace_path)

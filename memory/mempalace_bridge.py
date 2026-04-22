@@ -3,11 +3,13 @@
 from memory.mempalace_store import search
 
 
-def retrieve_memories(query: str, wing: str = "aria", room: str | None = None, n: int = 5):
+def retrieve_memories(
+    query: str,
+    wing: str = "aria",
+    room: str | None = None,
+    n: int = 5,
+):
 
-    # =====================================================
-    # EARLY EXIT (important: éviter appel embedding inutile)
-    # =====================================================
     if n <= 0:
         return {
             "query": query,
@@ -15,19 +17,13 @@ def retrieve_memories(query: str, wing: str = "aria", room: str | None = None, n
             "count": 0,
         }
 
-    # =====================================================
-    # VECTOR SEARCH
-    # =====================================================
     result = search(
         query=query,
         wing=wing,
         room=room,
-        n=n * 2,  # over-fetch pour filtrage postérieur
+        n=n * 2,
     )
 
-    # =====================================================
-    # POST FILTERING (bruit + distance)
-    # =====================================================
     hits = [
         h for h in result.get("results", [])
         if h.get("room", "") != "general"
