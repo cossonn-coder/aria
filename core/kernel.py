@@ -141,10 +141,7 @@ class AriaKernel:
         # =====================================================
         # 6 — COGNITION PIPELINE
         # =====================================================
-        for agent in self.registry.all().values():
-            ctx = agent.run(ctx, self.llm_router)
-            if ctx.halted:
-                break
+        ctx = self.controller.run(ctx, self.llm_router)
 
         # =====================================================
         # 7 — RESULT RESOLUTION

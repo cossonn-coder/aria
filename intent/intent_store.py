@@ -31,9 +31,9 @@ def load_intents(embedder) -> dict[str, Intent]:
         for intent_id, d in data.items():
             intent = Intent(
                 id=d["id"],
-                name=d["name"],
+                name=d.get("name") or d.get("subject") or "",
                 description=d.get("description", ""),
-                status=IntentStatus(d["status"]),
+                status=IntentStatus(d.get("status", "active")),
                 next_action=d.get("next_action"),
                 actions_history=d.get("actions_history", []),
             )

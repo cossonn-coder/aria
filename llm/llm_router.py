@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import httpx
-
+import time
 from config import config
 from llm.llm_role import LLMRole
 
@@ -84,12 +84,18 @@ ROUTING_TABLE = {
             "base_url": "https://api.mistral.ai/v1",
             "api_key": lambda: config.mistral_api_key,
         },
+        {   "provider": "cerebras",
+            "model": "llama-3.3-70b", 
+            "base_url": "https://api.cerebras.ai/v1",
+            "api_key": lambda: config.cerebras_api_key,
+        },
         {
             "provider": "openrouter",
             "model": "meta-llama/llama-3.3-70b-instruct:free",
             "base_url": "https://openrouter.ai/api/v1",
             "api_key": lambda: config.openrouter_api_key,
         },
+
     ],
     LLMRole.REASONING: [
         {
@@ -142,7 +148,7 @@ class LLMRouter:
         chain = ROUTING_TABLE.get(role, DEFAULT_CHAIN)
         last_error = None
 
-        for provider_cfg in chain:
+        for i, provider_cfg in enumerate(chain):
             try:
                 return self._call(
                     prompt=prompt,
@@ -153,6 +159,8 @@ class LLMRouter:
             except Exception as e:
                 print(f"[LLM FALLBACK] {provider_cfg['provider']} failed: {e}")
                 last_error = e
+                if i < len(chain) - 1:  # pas de sleep après le dernier
+                    time.sleep(1)
 
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 

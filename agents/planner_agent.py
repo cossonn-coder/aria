@@ -2,6 +2,7 @@
 
 from agents.base_agent import BaseAgent, AgentContext
 from llm.llm_role import LLMRole
+import json
 
 PROMPT = """
 Tu es un agent cognitif d'Aria.
@@ -17,8 +18,11 @@ CONTEXTE (résultat analyse) :
 
 RÈGLES :
 - Si l'analyse contient déjà une réponse directe → transmets-la sans reformuler
-- Si une action est nécessaire → donne les étapes numérotées + NEXT_ACTION
+- Si une action est nécessaire → donne les étapes numérotées
 - Ne planifie pas ce qui est déjà fait ou déjà connu
+
+Réponds UNIQUEMENT avec ce JSON, sans backticks, sans texte autour :
+{{"response": "<réponse à afficher à l'utilisateur>", "next_action": "<prochaine action concrète ou null>"}}
 """
 
 
@@ -28,25 +32,13 @@ class PlannerAgent(BaseAgent):
 
     def run(self, ctx: AgentContext, llm_router):
 
-        # =====================================================
-        # SAFETY CHECK
-        # =====================================================
         if ctx.intent is None:
             return ctx
-
-        # =====================================================
-        # CONTEXT BUILD (stable source)
-        # =====================================================
-        context = {
-            "message": ctx.message,
-            "memories": ctx.memories,
-            "extra": ctx.extra,
-        }
 
         prompt = PROMPT.format(
             message=ctx.message,
             intent=ctx.intent.name,
-            analysis=ctx.result or "Aucune analyse disponible.",  # ← fix + renommage
+            analysis=ctx.result or "Aucune analyse disponible.",
         )
 
         response = llm_router.complete(
@@ -56,37 +48,31 @@ class PlannerAgent(BaseAgent):
             max_tokens=600,
         )
 
-        # =====================================================
-        # OUTPUT ISOLATION
-        # =====================================================
-        content = response.content.strip()
+        parsed = self._parse_response(response.content)
 
-        ctx.result = content
+        # seule la réponse va à l'utilisateur
+        ctx.result = parsed["response"]
 
-        # =====================================================
-        # INTENT UPDATE (SAFE PARSING)
-        # =====================================================
-        next_action = self._extract_next_action(content)
-
-        if next_action and ctx.intent:
-            ctx.intent.set_next_action(next_action)
+        # next_action sur l'intent, jamais dans le résultat
+        if parsed["next_action"] and ctx.intent:
+            ctx.intent.set_next_action(parsed["next_action"])
 
         return ctx
 
     # =========================================================
     # SAFE PARSER
     # =========================================================
+    def _parse_response(self, content: str) -> dict:
 
-    def _extract_next_action(self, text: str) -> str | None:
-        """
-        Extraction robuste du NEXT_ACTION.
-        Évite dépendance à split fragile.
-        """
+        try:
+            raw = content.strip().replace("```json", "").replace("```", "").strip()
+            data = json.loads(raw)
+            return {
+                "response": data.get("response", "").strip(),
+                "next_action": data.get("next_action") or None,
+            }
+        except Exception:
+            # fallback : tout va dans response, next_action perdu
+            return {"response": content.strip(), "next_action": None}
 
-        lines = text.splitlines()
 
-        for i, line in enumerate(lines):
-            if "NEXT_ACTION" in line and i + 1 < len(lines):
-                return lines[i + 1].strip()
-
-        return None
