@@ -3,6 +3,7 @@ python-telegram-bot>=22.0
 
 # === MEMORY LAYER ===
 chromadb>=1.5.0
+mempalace==3.3.0
 
 # === EMBEDDINGS ===
 sentence-transformers>=5.0.0
