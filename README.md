@@ -80,8 +80,45 @@ python bot.py
 
 ---
 
-##🧩 Comportement du système
+## 🧩 Comportement du système
 chaque message est transformé en Intent ou rattaché à un intent existant
 la mémoire est consultée uniquement par le Kernel
 les agents reçoivent uniquement un AgentContext
 aucun agent ne peut accéder directement à la mémoire ou au stockage
+
+---
+
+## 📁 Données
+~/.aria/intents.json : intents persistants
+MemPalace : mémoire vectorielle locale
+logs systemd : exécution runtime
+
+---
+
+## ⚠️ Contraintes architecturales
+pas d’accès direct mémoire depuis les agents
+pas de logique métier dans les interfaces
+pas d’état global partagé entre utilisateurs (en cours de refactor)
+Kernel = seul orchestrateur
+
+---
+
+## 🧭 État du projet
+
+ARIA est actuellement en phase de refactor vers :
+
+pipeline cognitif strict
+isolation utilisateur
+séparation mémoire / intention / exécution
+
+---
+
+## 📌 Notes
+
+Ce système est expérimental et évolutif.
+
+
+---
+
+
+

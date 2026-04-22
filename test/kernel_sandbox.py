@@ -8,6 +8,12 @@ import asyncio
 from core.kernel import AriaKernel
 
 
+TEST_CASES = [
+    "explique docker",
+    "planifie un système de mémoire",
+    "résume mes idées sur ARIA",
+]
+
 async def run():
     kernel = AriaKernel()
     print("\n=== ARIA KERNEL SANDBOX ===")
@@ -34,6 +40,18 @@ async def run():
 
         print(f"\nARIA >\n{result}")
         print("\n-------------------------")
+
+        # =====================================================
+        # COGNITIVE TRACE OUTPUT (NEW)
+        # =====================================================
+        ctx = getattr(kernel, "last_ctx", None)
+
+        if ctx and hasattr(ctx, "trace"):
+            print("\n=== COGNITIVE TRACE ===")
+            for step in ctx.trace.as_dict():
+                print(step)
+
+        print("\n-------------------------")        
 
 
 if __name__ == "__main__":

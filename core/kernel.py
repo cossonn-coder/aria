@@ -2,9 +2,8 @@
 
 from config import config
 
-from intent import intent_engine
 from intent.intent_engine import IntentEngine
-from memory.mempalace_bridge import retrieve_memories
+from memory.mempalace_bridge import retrieve_by_intent, retrieve_memories
 from memory.mempalace_writer import store_interaction
 from embedding.embedder import Embedder
 from llm.llm_router import LLMRouter
@@ -14,6 +13,8 @@ from agents.registry_agent import AgentRegistry
 from agents.controller.controller_agent import AgentController
 from cognition.cognitive_classifier import classify_operation
 from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOperation
+from cognition.memory_context import MemoryContext
+from cognition.cognitive_trace import CognitiveTrace
 
 
 class AriaKernel:
@@ -75,10 +76,13 @@ class AriaKernel:
             )
 
         # =====================================================
-        # 1 — MEMORY (filtrée par opération)
+        # 1 — GLOBAL MEMORY (pre-intent context)
         # =====================================================
         top_k = MEMORY_TOP_K.get(operation, 4)
-        memories = retrieve_memories(message, n=top_k) if top_k > 0 else {"hits": [], "count": 0}
+        memory_context = MemoryContext(
+            global_memories=retrieve_memories(message, n=top_k),
+            session_memories={},  # pas encore calculé
+        )
 
         # =====================================================
         # 2 — INTENT RECALL
@@ -88,22 +92,14 @@ class AriaKernel:
         recall_decision, matches = self.intent_engine.resolve(
             message,
             active_intents,
-            memory_context=memories
+            memory_context=memory_context.global_memories
         )
-
-        print("\n[KERNEL DEBUG]")
-        print(f"message={message}")
-        print(f"recall_action={recall_decision.action}")
-        print(f"matches={len(matches)}")
-
         # =====================================================
         # 3 — INTENT MUTATION
         # =====================================================
-        # extraction nom canonique uniquement sur CREATE
         intent_name = None
         if recall_decision.action == "create":
             intent_name = extract_intent_name(message, self.llm_router)
-            print(f"intent_name={intent_name}")
 
         intent = self.intent_engine.apply(
             decision=recall_decision,
@@ -111,30 +107,47 @@ class AriaKernel:
             intent_name=intent_name,
         )
 
-        print(f"intent={intent.id if intent else None}")
+        # =====================================================
+        # 4 — SESSION MEMORY (post-intent context)
+        # =====================================================
 
-        # =====================================================
-        # 4 — CONTEXT BUILD
-        # =====================================================
-        ctx = AgentContext(
-            message=message,
-            intent=intent,
-            memories=memories,
-            extra={
-                "recall": recall_decision,
-                "active_intents": self.intent_engine.list_active(),
-                "cognitive_operation": operation,   # ← ajout
-                **metadata,
-            },
+        memory_context = MemoryContext(
+            global_memories=retrieve_memories(message, n=top_k),
+            session_memories=retrieve_by_intent(
+                query=message,
+                intent_id=intent.id
+            ) if intent else {"hits": [], "count": 0},
         )
 
         # =====================================================
-        # 5 — COGNITION PIPELINE
+        # 5 — CONTEXT BUILD (CRITICAL STEP MISSING IN CURRENT CODE)
         # =====================================================
-        ctx = self.controller.run(ctx, self.llm_router)
+        trace = CognitiveTrace()
+
+        ctx = AgentContext(
+            message=message,
+            intent=intent,
+            memories=memory_context.global_memories,
+            session_memory=memory_context.session_memories,
+            trace=trace,
+            extra={
+                "memory_context": memory_context,
+                "recall": recall_decision,
+                "active_intents": self.intent_engine.list_active(),
+                "cognitive_operation": operation,
+                **metadata,
+            },
+        )
+        # =====================================================
+        # 6 — COGNITION PIPELINE
+        # =====================================================
+        for agent in self.registry.all().values():
+            ctx = agent.run(ctx, self.llm_router)
+            if ctx.halted:
+                break
 
         # =====================================================
-        # 6 — RESULT RESOLUTION
+        # 7 — RESULT RESOLUTION
         # =====================================================
         if ctx.result:
             result = ctx.result
@@ -146,19 +159,20 @@ class AriaKernel:
             result = f"[NO RESULT] intent={ctx.intent.id if ctx.intent else None}"
 
         # =====================================================
-        # 7 — INTENT PERSISTENCE (IN MEMORY ENGINE)
+        # 8 — INTENT PERSISTENCE (IN MEMORY ENGINE)
         # =====================================================
         if intent:
+            intent.activate()
             self.intent_engine.save(intent)
 
-        # ====
-        # DECAY
-        # ====
-        intent.activate()
+        # =================================================
+        # 9 — DECAY
+        # =================================================
+
         self.intent_engine.decay_if_needed()
 
         # =====================================================
-        # 8 — MEMPALACE WRITE (CRITICAL FIX)
+        # 10 — MEMPALACE WRITE (CRITICAL FIX)
         # =====================================================
         # Triggered ONLY after full reasoning completion
         # → avoids storing intermediate/noisy states
@@ -177,5 +191,11 @@ class AriaKernel:
                 )
         except Exception as e:
             print(f"[MEMORY WRITE ERROR] {e}")
+
+        print("\n[COGNITIVE TRACE]")
+        for step in ctx.trace.as_dict():
+            print(step)
+
+        self.last_ctx = ctx  # pour debug / inspection post-run
 
         return result

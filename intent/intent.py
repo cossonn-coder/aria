@@ -73,6 +73,13 @@ class Intent:
     # =====================================================
 
     @property
+
+    def actions(self):
+        '''
+        Historique complet des actions, incluant la prochaine action planifiée.
+        '''
+        return self.actions_history
+
     def subject(self) -> str:
         return self.name
 

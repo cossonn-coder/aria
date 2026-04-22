@@ -5,17 +5,33 @@ from memory.mempalace_store import search
 
 def retrieve_memories(query: str, wing: str = "aria", room: str | None = None, n: int = 5):
 
+    # =====================================================
+    # EARLY EXIT (important: éviter appel embedding inutile)
+    # =====================================================
+    if n <= 0:
+        return {
+            "query": query,
+            "hits": [],
+            "count": 0,
+        }
+
+    # =====================================================
+    # VECTOR SEARCH
+    # =====================================================
     result = search(
         query=query,
         wing=wing,
         room=room,
-        n=n * 2,  # over-fetch pour filtrer ensuite
+        n=n * 2,  # over-fetch pour filtrage postérieur
     )
 
+    # =====================================================
+    # POST FILTERING (bruit + distance)
+    # =====================================================
     hits = [
         h for h in result.get("results", [])
-        if h.get("room", "") != "general"       # exclure contenu étranger
-        and h.get("distance", 1.0) < 0.8        # exclure hits trop distants
+        if h.get("room", "") != "general"
+        and h.get("distance", 1.0) < 0.8
     ][:n]
 
     return {
@@ -23,7 +39,6 @@ def retrieve_memories(query: str, wing: str = "aria", room: str | None = None, n
         "hits": hits,
         "count": len(hits),
     }
-
 
 def retrieve_by_intent(query: str, intent_id: str, n: int = 10):
 

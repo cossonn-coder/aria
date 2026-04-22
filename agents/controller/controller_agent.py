@@ -11,9 +11,14 @@ class AgentController:
 
     def run(self, ctx: AgentContext, llm_router):
 
-        operation = ctx.extra.get("cognitive_operation", CognitiveOperation.UNKNOWN)
+        operation = ctx.extra.get(
+            "cognitive_operation",
+            CognitiveOperation.UNKNOWN
+        )
 
-        # routing par opération cognitive en priorité
+        # =====================================================
+        # 1 — ROUTING LOGIC (inchangé)
+        # =====================================================
         if operation in (
             CognitiveOperation.FACT_RECALL,
             CognitiveOperation.MEMORY_QUERY,
@@ -29,8 +34,8 @@ class AgentController:
             pipeline = ["analyst"]
 
         else:
-            # fallback : routing par phase d'intent
             phase = ctx.intent.infer_phase() if ctx.intent else "creation"
+
             if phase == "creation":
                 pipeline = ["analyst"]
             elif phase == "planning":
@@ -40,9 +45,30 @@ class AgentController:
             else:
                 pipeline = ["analyst"]
 
+        # =====================================================
+        # 2 — EXECUTION ENGINE (nouvelle couche explicite)
+        # =====================================================
         for agent_name in pipeline:
+
             agent = self.registry.get(agent_name)
-            if agent:
-                ctx = agent.run(ctx, llm_router)
+            if not agent:
+                continue
+
+            # START TRACE
+            ctx.trace.start(agent_name)
+
+            before_state = ctx.result
+
+            ctx = agent.run(ctx, llm_router)
+
+            after_state = ctx.result
+
+            # END TRACE
+            ctx.trace.end(
+                output_snapshot=str(after_state)
+            )
+
+            if ctx.halted:
+                break
 
         return ctx

@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from intent.intent import Intent
 
+from cognition.cognitive_trace import CognitiveTrace
+
 
 # =========================================================
 # AGENT CONTEXT
@@ -27,7 +29,7 @@ class AgentContext:
     message: str
     intent: Optional[Intent]
     memories: dict
-    session_memory: dict
+    session_memory: dict = field(default_factory=dict)
 
     # ----- RUNTIME -----
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -37,6 +39,9 @@ class AgentContext:
 
     # ----- INTERNAL STATE -----
     halted: bool = False
+
+    # ----- TRACE -----
+    trace: CognitiveTrace = field(default_factory=CognitiveTrace)
 
     # =====================================================
     # SAFE HELPERS

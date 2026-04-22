@@ -1,7 +1,6 @@
 # aria/agents/analyst_agent.py
 
 from agents.base_agent import BaseAgent, AgentContext
-from memory.mempalace_bridge import retrieve_by_intent
 from cognition.cognitive_context import LLM_ROLE_MAP, CognitiveOperation
 
 
@@ -47,10 +46,7 @@ class AnalystAgent(BaseAgent):
         role = LLM_ROLE_MAP.get(operation)
 
         # mémoire session courante
-        session_mem = retrieve_by_intent(
-            query=ctx.message,
-            intent_id=ctx.intent.id,
-        )
+        session_mem = ctx.session_memory
 
         # mémoire globale
         global_mem = ctx.memories
