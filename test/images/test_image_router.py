@@ -1,4 +1,5 @@
-#aria/test/images/test_image_router.py
+# aria/test/images/test_image_router.py
+
 from llm.image_router import ImageRouter
 from images.image_types import ImageInput
 
@@ -6,18 +7,22 @@ from images.image_types import ImageInput
 def test_image_input():
     router = ImageRouter()
 
-    img = ImageInput(user_id="u1", path="/tmp/test.png")
+    # user_id supprimé — ARIA est mono-utilisateur (décision architecture Sprint 2)
+    img = ImageInput(path="/tmp/test.png")
 
-    res = router.handle_input(img)
+    artifact = router.handle_input(img)
 
-    assert res["status"] == "received"
-    assert res["has_path"] is True
+    assert artifact.source == "input"
+    assert artifact.path == "/tmp/test.png"
+    assert isinstance(artifact.caption, str)
 
 
 def test_image_generation():
     router = ImageRouter()
 
-    out = router.generate("un jardin cyberpunk")
+    artifact = router.generate("un jardin cyberpunk")
 
-    assert out.path.endswith(".png")
-    assert out.prompt == "un jardin cyberpunk"
+    assert artifact.source == "generated"
+    assert artifact.path.endswith(".png")
+    assert artifact.prompt == "un jardin cyberpunk"
+    assert artifact.intent_id is None

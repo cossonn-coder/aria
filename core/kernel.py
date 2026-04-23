@@ -9,6 +9,7 @@ from embedding.embedder import Embedder
 from llm.llm_router import LLMRouter
 from llm.intent_namer import extract_intent_name
 from llm.image_router import ImageRouter
+from images.image_types import ImageInput
 from agents.base_agent import AgentContext
 from agents.registry_agent import AgentRegistry
 from agents.controller.controller_agent import AgentController
@@ -24,6 +25,29 @@ FAST_PATH = {
     CognitiveOperation.INGESTION,
     CognitiveOperation.UNKNOWN,
 }
+
+
+def _serialize_artifact(artifact) -> dict:
+    """
+    Aplatit un ImageArtifact en dict compatible ChromaDB.
+
+    ChromaDB n'accepte que : str, int, float, bool, None.
+    - datetime  → isoformat string
+    - dict      → str (metadata imbriquée)
+    - autre     → str fallback
+    """
+    result = {}
+    for k, v in artifact.__dict__.items():
+        if hasattr(v, "isoformat"):
+            result[k] = v.isoformat()
+        elif isinstance(v, dict):
+            result[k] = str(v)
+        elif v is None or isinstance(v, (str, int, float, bool)):
+            result[k] = v
+        else:
+            result[k] = str(v)
+    return result
+
 
 class AriaKernel:
     """
@@ -106,7 +130,7 @@ class AriaKernel:
         top_k = MEMORY_TOP_K.get(operation, 4)
         memory_context = MemoryContext(
             global_memories=retrieve_memories(message, n=top_k),
-            session_memories={},  # pas encore calculé
+            session_memories={},
         )
 
         # =====================================================
@@ -119,6 +143,7 @@ class AriaKernel:
             active_intents,
             memory_context=memory_context.global_memories
         )
+
         # =====================================================
         # 3 — INTENT MUTATION
         # =====================================================
@@ -135,7 +160,6 @@ class AriaKernel:
         # =====================================================
         # 4 — SESSION MEMORY (post-intent context)
         # =====================================================
-
         memory_context = MemoryContext(
             global_memories=retrieve_memories(message, n=top_k),
             session_memories=retrieve_by_intent(
@@ -145,10 +169,10 @@ class AriaKernel:
         )
 
         # =====================================================
-        # 5 — CONTEXT BUILD (CRITICAL STEP MISSING IN CURRENT CODE)
+        # 5 — CONTEXT BUILD
         # =====================================================
         trace = CognitiveTrace()
-        
+
         ctx = AgentContext(
             message=message,
             intent=intent,
@@ -163,6 +187,7 @@ class AriaKernel:
                 **metadata,
             },
         )
+
         # =====================================================
         # 6 — COGNITION PIPELINE
         # =====================================================
@@ -173,32 +198,26 @@ class AriaKernel:
         # =====================================================
         if ctx.result:
             result = ctx.result
-
         elif ctx.intent and hasattr(ctx.intent, "last_state"):
             result = ctx.intent.last_state
-
         else:
             result = f"[NO RESULT] intent={ctx.intent.id if ctx.intent else None}"
 
         # =====================================================
-        # 8 — INTENT PERSISTENCE (IN MEMORY ENGINE)
+        # 8 — INTENT PERSISTENCE
         # =====================================================
         if intent:
             intent.activate()
             self.intent_engine.save(intent)
 
-        # =================================================
+        # =====================================================
         # 9 — DECAY
-        # =================================================
-
+        # =====================================================
         self.intent_engine.decay_if_needed()
 
         # =====================================================
-        # 10 — MEMPALACE WRITE (CRITICAL FIX)
+        # 10 — MEMPALACE WRITE
         # =====================================================
-        # Triggered ONLY after full reasoning completion
-        # → avoids storing intermediate/noisy states
-
         try:
             if intent:
                 store_interaction(
@@ -218,54 +237,46 @@ class AriaKernel:
         for step in ctx.trace.as_dict():
             print(step)
 
-        self.last_ctx = ctx  # pour debug / inspection post-run
+        self.last_ctx = ctx
 
         return result
-    
+
+    # =========================================================
+    # TERMINAL HANDLERS
+    # =========================================================
 
     def handle_ingestion(self, message, metadata):
         store_interaction(
             text=message,
             intent_id="knowledge_ingest",
-            metadata={"source": "ingest"}
+            metadata={"source": "ingest"},
         )
         return "[INGESTION] contexte enregistré."
 
-
     def handle_image_input(self, message, metadata):
         img_path = metadata.get("image")
-
+        artifact = self.image_router.handle_input(ImageInput(path=img_path))
         store_interaction(
-            text=f"[IMAGE_INPUT] {img_path}",
-            intent_id="image_input",
-            metadata={
-                "type": "image_input",
-                "wing": "aria",
-                "room": "image_input",
-                "path": img_path,
-            },
+            text=artifact.caption or artifact.path,
+            intent_id=metadata.get("intent_id", "image_input"),
+            metadata={"type": "image_input", **_serialize_artifact(artifact)},
         )
-
-        return self.image_router.handle_input(img_path)
-
+        return artifact
 
     def handle_image_generation(self, message, metadata):
-        result = self.image_router.generate(message)
-
-        store_interaction(
-            text=f"[IMAGE_GENERATION] {message}",
-            intent_id="image_generation",
-            metadata={
-                "type": "image_generated",
-                "wing": "aria",
-                "room": metadata.get("intent_id", "image_generation"),
-                "path": result.path,
-                "prompt": message,
-            },
+        artifact = self.image_router.generate(
+            message,
+            intent_id=metadata.get("intent_id")
         )
-
-        return result.path
-
+        store_interaction(
+            text=artifact.prompt,
+            intent_id=artifact.intent_id or "image_generation",
+            metadata={"type": "image_generated", **_serialize_artifact(artifact)},
+        )
+        return artifact
 
     def handle_unknown(self, message, metadata):
-        return "Je veux bien t'aider — c'est une demande de planning, " "une question sur ta mémoire, ou autre chose ?"
+        return (
+            "Je veux bien t'aider — c'est une demande de planning, "
+            "une question sur ta mémoire, ou autre chose ?"
+        )

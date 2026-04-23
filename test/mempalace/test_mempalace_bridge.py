@@ -4,34 +4,7 @@ import pytest
 from memory.mempalace_bridge import retrieve_memories, retrieve_by_intent
 
 
-class FakeResult:
-    def __init__(self):
-        self._data = {
-            "results": [
-                {
-                    "text": "img1",
-                    "room": "a",
-                    "distance": 0.2,
-                    "type": "image_generated",
-                },
-                {
-                    "text": "img2",
-                    "room": "a",
-                    "distance": 0.3,
-                    "type": "image_input",
-                },
-                {
-                    "text": "txt1",
-                    "room": "a",
-                    "distance": 0.1,
-                    "type": "text",
-                },
-            ]
-        }
-
-    def get(self, key):
-        return self._data.get(key)
-    
+  
 def test_retrieve_memories_basic():
     res = retrieve_memories("test query", n=5)
 
@@ -49,8 +22,31 @@ def test_retrieve_memories_zero_n():
 
 def test_retrieve_memories_type_filter(monkeypatch):
 
+    fake_data = {
+        "results": [
+            {
+                "text": "img1",
+                "room": "a",
+                "distance": 0.2,
+                "type": "image_generated",
+            },
+            {
+                "text": "img2",
+                "room": "a",
+                "distance": 0.3,
+                "type": "image_input",
+            },
+            {
+                "text": "txt1",
+                "room": "a",
+                "distance": 0.1,
+                "type": "text",
+            },
+        ]
+    }
+
     def fake_search(*args, **kwargs):
-        return FakeResult()
+        return fake_data
 
     monkeypatch.setattr(
         "memory.mempalace_bridge.search",
