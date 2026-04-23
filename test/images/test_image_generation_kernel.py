@@ -8,4 +8,5 @@ def test_image_generation_kernel():
         k.handle_message("dessine un robot dans un jardin")
     )
 
-    assert ".png" in res
+    # test
+    assert res.endswith(".png")

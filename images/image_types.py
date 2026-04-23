@@ -18,4 +18,4 @@ class ImageArtifact:
 class ImageInput:
     path: Optional[str] = None
     base64: Optional[str] = None
-    source: str = "telegram"
+    source: str = "input"

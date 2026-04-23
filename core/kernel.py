@@ -273,7 +273,7 @@ class AriaKernel:
             intent_id=artifact.intent_id or "image_generation",
             metadata={"type": "image_generated", **_serialize_artifact(artifact)},
         )
-        return artifact
+        return artifact.path
 
     def handle_unknown(self, message, metadata):
         return (

@@ -1,4 +1,4 @@
-#aria/config.py
+# aria/config.py
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,14 +23,26 @@ class Config:
     cerebras_api_key: str = ""
     sambanova_api_key: str = ""
     openrouter_api_key: str = ""
+    hf_token: str = ""
 
-    # ── Modèles ───────────────────────────────────────────────────────────────
+    # ── Modèles texte ─────────────────────────────────────────────────────────
     groq_model: str = "llama-3.3-70b-versatile"
     cerebras_model: str = "qwen-3-235b-a22b-instruct-2507"
     gemini_model: str = "gemini-2.0-flash"
     mistral_model: str = "mistral-small-latest"
     sambanova_model: str = "Meta-Llama-3.3-70B-Instruct"
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+    # ── Modèles vision ────────────────────────────────────────────────────────
+    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    openrouter_vision_models: tuple = (
+        "nvidia/nemotron-nano-12b-v2-vl:free",
+        "baidu/qianfan-ocr-fast:free",
+    )
+
+    # ── Modèles génération image ──────────────────────────────────────────────
+    hf_image_model: str = "black-forest-labs/FLUX.1-schnell"
+    image_output_dir: str = "/tmp/aria_images"
 
     # ── Mémoire ChromaDB ──────────────────────────────────────────────────────
     chroma_path: str = ""
@@ -65,6 +77,7 @@ class Config:
         self.cerebras_api_key = os.getenv("CEREBRAS_API_KEY", "")
         self.sambanova_api_key = os.getenv("SAMBANOVA_API_KEY", "")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+        self.hf_token = os.getenv("HF_TOKEN", "")
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.chroma_path = str(BASE_DIR / "chroma_db")
         self.soul_path = str(BASE_DIR / "soul.md")
