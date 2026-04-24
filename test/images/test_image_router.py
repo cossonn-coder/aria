@@ -2,7 +2,7 @@
 
 from llm.image_router import ImageRouter
 from images.image_types import ImageInput
-from images.fakes import DummyVision
+from fakes import DummyVision
 
 
 def test_image_input(monkeypatch):

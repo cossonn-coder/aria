@@ -1,282 +1,192 @@
 # aria/core/kernel.py
+#
+# Orchestrateur central d'ARIA. Responsabilité unique : séquencer le pipeline.
+#
+# Le kernel ne décide rien, n'exécute rien, ne stocke rien.
+# Il reçoit un Event, obtient une décision du CognitiveEngine,
+# et délègue l'exécution à l'ExecutionDispatcher.
+#
+# Pattern constructeur :
+#   AriaKernel()                              → auto-wire complet (production)
+#   AriaKernel(cognitive_engine=FakeEngine()) → injection partielle (tests)
+#
+# Flux :
+#   Event → CognitiveEngine.classify() → CognitiveResult
+#         → ExecutionDispatcher.dispatch() → ExecutionResult
+#         → normalisation → str (réponse Telegram)
 
 from config import config
 
-from intent.intent_engine import IntentEngine
-from memory.mempalace_bridge import retrieve_by_intent, retrieve_memories
-from memory.mempalace_writer import store_interaction
+from core.event import Event
+from cognition.cognitive_engine import CognitiveEngine, CognitiveResult
+from cognition.cognitive_context import CognitiveOperation
+
 from embedding.embedder import Embedder
+from intent.intent_engine import IntentEngine
 from llm.llm_router import LLMRouter
-from llm.intent_namer import extract_intent_name
-from llm.image_router import ImageRouter
-from images.image_types import ImageInput
-from agents.base_agent import AgentContext
-from agents.registry_agent import AgentRegistry
-from agents.controller.controller_agent import AgentController
-from cognition.cognitive_classifier import classify_operation
-from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOperation
-from cognition.memory_context import MemoryContext
-from cognition.cognitive_trace import CognitiveTrace
-from cognition.cognitive_dispatcher import CognitiveDispatcher
+from llm.image_router import ImageRouter as InternalImageRouter
 
-FAST_PATH = {
-    CognitiveOperation.IMAGE_GENERATION,
-    CognitiveOperation.IMAGE_INPUT,
-    CognitiveOperation.INGESTION,
-    CognitiveOperation.UNKNOWN,
-}
+from execution.operation import ExecutionOperation
+from execution.execution_dispatcher import ExecutionDispatcher
+from execution.routing_table import RoutingTable
+from execution.router_registry import RouterRegistry
+from execution.routers.image_router import ImageExecutionRouter
+from execution.routers.llm_router import LLMExecutionRouter
+from execution.routers.ingestion_router import IngestionExecutionRouter
 
 
-def _serialize_artifact(artifact) -> dict:
+# ── Table de routing opération → nom de router ──────────────────────────────
+#
+# Toutes les CognitiveOperation doivent avoir une entrée ici.
+# Ajouter une capacité = ajouter 1 ligne + 1 router. Le kernel ne change pas.
+
+_ROUTING_TABLE = RoutingTable({
+    CognitiveOperation.IMAGE_GENERATION.value : "image_router",
+    CognitiveOperation.IMAGE_INPUT.value       : "image_router",
+    CognitiveOperation.INGESTION.value         : "ingestion_router",
+    CognitiveOperation.FACT_RECALL.value       : "llm_router",
+    CognitiveOperation.MEMORY_QUERY.value      : "llm_router",
+    CognitiveOperation.PLANNING.value          : "llm_router",
+    CognitiveOperation.REASONING.value         : "llm_router",
+    CognitiveOperation.META_MEMORY.value       : "llm_router",
+    CognitiveOperation.PROFILE_QUERY.value     : "llm_router",
+    CognitiveOperation.CONFIRMATION.value      : "llm_router",
+    CognitiveOperation.UNKNOWN.value           : "llm_router",
+})
+
+
+def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine) -> ExecutionDispatcher:
     """
-    Aplatit un ImageArtifact en dict compatible ChromaDB.
+    Construit et câble le registre de routers d'exécution.
 
-    ChromaDB n'accepte que : str, int, float, bool, None.
-    - datetime  → isoformat string
-    - dict      → str (metadata imbriquée)
-    - autre     → str fallback
+    Séparé en fonction pour rester testable :
+    un test peut appeler _build_dispatcher avec des fakes.
     """
-    result = {}
-    for k, v in artifact.__dict__.items():
-        if hasattr(v, "isoformat"):
-            result[k] = v.isoformat()
-        elif isinstance(v, dict):
-            result[k] = str(v)
-        elif v is None or isinstance(v, (str, int, float, bool)):
-            result[k] = v
-        else:
-            result[k] = str(v)
-    return result
+    registry = RouterRegistry()
+
+    # Router image : analyse (IMAGE_INPUT) et génération (IMAGE_GENERATION)
+    registry.register("image_router", ImageExecutionRouter(
+        internal_router=InternalImageRouter(),
+    ))
+
+    # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
+    registry.register("llm_router", LLMExecutionRouter(
+        llm_router=llm_router,
+        intent_engine=intent_engine,
+    ))
+
+    # Router ingestion : stockage direct sans pipeline cognitif
+    registry.register("ingestion_router", IngestionExecutionRouter())
+
+    return ExecutionDispatcher(
+        registry=registry._routers,
+        routing_table=_ROUTING_TABLE,
+    )
 
 
 class AriaKernel:
     """
-    Orchestrateur central.
+    Orchestrateur pur.
 
-    Pipeline :
-        1. retrieve_memories (MemPalace READ)
-        2. intent recall + mutation
-        3. cognition (agents + LLM)
-        4. persistence (MemPalace WRITE)
+    Ne contient aucune logique métier.
+    Toute décision vit dans CognitiveEngine.
+    Toute exécution vit dans les routers.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        cognitive_engine: CognitiveEngine | None = None,
+        execution_dispatcher: ExecutionDispatcher | None = None,
+    ):
+        # Dépendances partagées entre cognitive engine et execution layer
+        llm_router = LLMRouter()
+        embedder = Embedder(config.EMBEDDING_MODEL)
+        intent_engine = IntentEngine(embedder)
 
-        # =====================================================
-        # CORE
-        # =====================================================
-        self.embedder = Embedder(config.EMBEDDING_MODEL)
-        self.intent_engine = IntentEngine(self.embedder)
-        self.llm_router = LLMRouter()
-        self.image_router = ImageRouter()
-        self.dispatcher = CognitiveDispatcher()
-
-        # =====================================================
-        # AGENTS
-        # =====================================================
-        self.registry = AgentRegistry()
-        self.controller = AgentController(self.registry)
-
-        # =====================================================
-        # DISPATCHER
-        # =====================================================
-        self.dispatcher.register(CognitiveOperation.INGESTION)(
-            self.handle_ingestion
+        # Injection optionnelle pour les tests — auto-wire en production
+        self.cognitive_engine = cognitive_engine or CognitiveEngine(
+            llm_router=llm_router,
+        )
+        self.execution_dispatcher = execution_dispatcher or _build_dispatcher(
+            llm_router=llm_router,
+            intent_engine=intent_engine,
         )
 
-        self.dispatcher.register(CognitiveOperation.IMAGE_INPUT)(
-            self.handle_image_input
-        )
+    async def handle_event(self, event: Event) -> str:
+        """
+        Point d'entrée unique pour tous les events entrants.
 
-        self.dispatcher.register(CognitiveOperation.IMAGE_GENERATION)(
-            self.handle_image_generation
-        )
+        1. classify  → décision cognitive
+        2. short_circuit check → réponse directe si applicable
+        3. build ExecutionOperation → contrat vers la couche exécution
+        4. dispatch → router spécialisé
+        5. normalize → str pour la couche interface (Telegram)
+        """
 
-        self.dispatcher.register(CognitiveOperation.UNKNOWN)(
-            self.handle_unknown
-        )
+        # ── 1. Classification cognitive ──────────────────────────────────────
+        cognitive_result: CognitiveResult = self.cognitive_engine.classify(event)
 
-    # =========================================================
-    # ENTRYPOINT
-    # =========================================================
+        # ── 2. Short-circuit ────────────────────────────────────────────────
+        # Utilisé quand le CognitiveEngine peut répondre sans exécution
+        # (ex: réponse en cache, opération non supportée connue, etc.)
+        if cognitive_result.short_circuit:
+            return cognitive_result.result
 
-    async def handle_message(self, message: str, metadata: dict | None = None) -> str:
-
-        metadata = metadata or {}
-
-        # =====================================================
-        # 0 — MESSAGE CLASSIFICATION
-        # =====================================================
-        message = message.strip()
-        if not message:
-            return ""
-
-        operation = classify_operation(
-            message,
-            self.llm_router,
-            metadata=metadata
-        )
-
-        print(f"[COGNITION] operation={operation.value}")
-
-        dispatch_out = self.dispatcher.dispatch(operation, message, metadata)
-
-        if dispatch_out["short_circuit"]:
-            return dispatch_out["result"]
-
-        # =====================================================
-        # 1 — GLOBAL MEMORY (pre-intent context)
-        # =====================================================
-        top_k = MEMORY_TOP_K.get(operation, 4)
-        memory_context = MemoryContext(
-            global_memories=retrieve_memories(message, n=top_k),
-            session_memories={},
-        )
-
-        # =====================================================
-        # 2 — INTENT RECALL
-        # =====================================================
-        active_intents = self.intent_engine.list_attention_active()
-
-        recall_decision, matches = self.intent_engine.resolve(
-            message,
-            active_intents,
-            memory_context=memory_context.global_memories
-        )
-
-        # =====================================================
-        # 3 — INTENT MUTATION
-        # =====================================================
-        intent_name = None
-        if recall_decision.action == "create":
-            intent_name = extract_intent_name(message, self.llm_router)
-
-        intent = self.intent_engine.apply(
-            decision=recall_decision,
-            message=message,
-            intent_name=intent_name,
-        )
-
-        # =====================================================
-        # 4 — SESSION MEMORY (post-intent context)
-        # =====================================================
-        memory_context = MemoryContext(
-            global_memories=retrieve_memories(message, n=top_k),
-            session_memories=retrieve_by_intent(
-                query=message,
-                intent_id=intent.id,
-            ) if intent else {"hits": [], "count": 0},
-        )
-
-        # =====================================================
-        # 5 — CONTEXT BUILD
-        # =====================================================
-        trace = CognitiveTrace()
-
-        ctx = AgentContext(
-            message=message,
-            intent=intent,
-            memories=memory_context.global_memories,
-            session_memory=memory_context.session_memories,
-            trace=trace,
-            extra={
-                "memory_context": memory_context,
-                "recall": recall_decision,
-                "active_intents": self.intent_engine.list_active(),
-                "cognitive_operation": operation,
-                **metadata,
+        # ── 3. Construction de l'ExecutionOperation ──────────────────────────
+        # On passe op_type dans le payload pour que le router puisse distinguer
+        # les sous-cas (ex: IMAGE_INPUT vs IMAGE_GENERATION dans ImageExecutionRouter)
+        exec_op = ExecutionOperation(
+            type=cognitive_result.type,
+            payload={
+                "op_type": cognitive_result.type,
+                "content": event.content,
+                "metadata": event.metadata,
             },
+            metadata=event.metadata,
         )
 
-        # =====================================================
-        # 6 — COGNITION PIPELINE
-        # =====================================================
-        ctx = self.controller.run(ctx, self.llm_router)
+        # ── 4. Dispatch vers le router d'exécution ───────────────────────────
+        exec_result = self.execution_dispatcher.dispatch(exec_op)
 
-        # =====================================================
-        # 7 — RESULT RESOLUTION
-        # =====================================================
-        if ctx.result:
-            result = ctx.result
-        elif ctx.intent and hasattr(ctx.intent, "last_state"):
-            result = ctx.intent.last_state
-        else:
-            result = f"[NO RESULT] intent={ctx.intent.id if ctx.intent else None}"
+        # ── 5. Normalisation vers str ────────────────────────────────────────
+        # ExecutionDispatcher retourne toujours un dict {"status", "data"/"error"}
+        return self._normalize(exec_result)
 
-        # =====================================================
-        # 8 — INTENT PERSISTENCE
-        # =====================================================
-        if intent:
-            intent.activate()
-            self.intent_engine.save(intent)
+    def _normalize(self, exec_result: dict):
+        """
+        Traduit un ExecutionResult dict en réponse pour la couche interface.
 
-        # =====================================================
-        # 9 — DECAY
-        # =====================================================
-        self.intent_engine.decay_if_needed()
+        Retourne :
+        - str               → réponse texte standard
+        - dict {"type": "image", "path": ..., "caption": ...}
+                            → signal à TelegramInterface d'envoyer send_photo()
 
-        # =====================================================
-        # 10 — MEMPALACE WRITE
-        # =====================================================
-        try:
-            if intent:
-                store_interaction(
-                    text=f"USER:\n{message}\n\nARIA:\n{result}",
-                    intent_id=intent.id,
-                    metadata={
-                        "intent_name": intent.name,
-                        "wing": "aria",
-                        "room": intent.id,
-                        "source": "kernel",
-                    },
-                )
-        except Exception as e:
-            print(f"[MEMORY WRITE ERROR] {e}")
+        On ne lève jamais d'exception ici.
+        """
+        if not isinstance(exec_result, dict):
+            return str(exec_result)
 
-        print("\n[COGNITIVE TRACE]")
-        for step in ctx.trace.as_dict():
-            print(step)
+        if exec_result.get("status") == "success":
+            data = exec_result.get("data")
 
-        self.last_ctx = ctx
+            if isinstance(data, dict):
+                # Résultat image : le router retourne "path" + "caption"
+                # On détecte par la présence de "path" avec extension image
+                path = data.get("path", "")
+                if isinstance(path, str) and path.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                    return {
+                        "type": "image",
+                        "path": path,
+                        "caption": data.get("caption", ""),
+                    }
+                return data.get("text") or str(data)
 
-        return result
+            if isinstance(data, str):
+                return data
 
-    # =========================================================
-    # TERMINAL HANDLERS
-    # =========================================================
+            return str(data)
 
-    def handle_ingestion(self, message, metadata):
-        store_interaction(
-            text=message,
-            intent_id="knowledge_ingest",
-            metadata={"source": "ingest"},
-        )
-        return "[INGESTION] contexte enregistré."
-
-    def handle_image_input(self, message, metadata):
-        img_path = metadata.get("image")
-        artifact = self.image_router.handle_input(ImageInput(path=img_path))
-        store_interaction(
-            text=artifact.caption or artifact.path,
-            intent_id=metadata.get("intent_id", "image_input"),
-            metadata={"type": "image_input", **_serialize_artifact(artifact)},
-        )
-        return artifact
-
-    def handle_image_generation(self, message, metadata):
-        artifact = self.image_router.generate(
-            message,
-            intent_id=metadata.get("intent_id")
-        )
-        store_interaction(
-            text=artifact.prompt,
-            intent_id=artifact.intent_id or "image_generation",
-            metadata={"type": "image_generated", **_serialize_artifact(artifact)},
-        )
-        return artifact.path
-
-    def handle_unknown(self, message, metadata):
-        return (
-            "Je veux bien t'aider — c'est une demande de planning, "
-            "une question sur ta mémoire, ou autre chose ?"
-        )
+        # Erreur d'exécution — message neutre, pas de crash Telegram
+        error = exec_result.get("error", "Erreur interne")
+        print(f"[KERNEL] execution error: {error}")
+        return "Une erreur s'est produite, réessaie."

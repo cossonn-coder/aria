@@ -11,6 +11,10 @@ venv/
 chroma/
 *.db
 
+# Images — générées et reçues, pas besoin de versionner
+generated_images/
+received_images/
+
 # VSCode
 .vscode/
 

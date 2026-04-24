@@ -42,7 +42,7 @@ class Config:
 
     # ── Modèles génération image ──────────────────────────────────────────────
     hf_image_model: str = "black-forest-labs/FLUX.1-schnell"
-    image_output_dir: str = "/tmp/aria_images"
+    image_output_dir: str = ""
 
     # ── Mémoire ChromaDB ──────────────────────────────────────────────────────
     chroma_path: str = ""
@@ -83,6 +83,8 @@ class Config:
         self.soul_path = str(BASE_DIR / "soul.md")
         self.user_path = str(BASE_DIR / "user.md")
         self.pending_path = str(BASE_DIR / "pending_memories.json")
+        self.image_output_dir = str(BASE_DIR / "generated_images")
+        self.image_input_dir = str(BASE_DIR / "received_images")
 
 
 config = Config()
