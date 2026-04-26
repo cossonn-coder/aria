@@ -36,6 +36,28 @@ Message : {message}
 
 CONFIDENCE_THRESHOLD = 0.65
 
+# Mots-clés indiquant une demande de génération dans une caption accompagnant une photo
+_GENERATION_KEYWORDS = [
+    "génère", "generé", "genere",
+    "dessine", "crée", "cree",
+    "transforme", "refais", "fais",
+    "produis", "render", "generate",
+    "draw", "create", "make",
+    "version", "style", "comme ça mais",
+]
+
+def detect_generation_intent_from_caption(caption: str | None) -> bool:
+    """
+    Retourne True si la caption d'une photo exprime une demande de génération.
+
+    Exemples positifs  : "génère une version estivale", "dessine ça en aquarelle"
+    Exemples négatifs  : "c'est ma courge", "qu'est-ce que c'est ?", None
+    """
+    if not caption:
+        return False
+    lower = caption.lower()
+    return any(k in lower for k in _GENERATION_KEYWORDS)
+
 
 def classify_operation(message: str, llm_router=None, metadata: dict | None = None) -> CognitiveOperation:
 

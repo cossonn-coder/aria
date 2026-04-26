@@ -17,6 +17,10 @@
 # Règle d'architecture :
 #   Ce router est le seul point d'écriture mémoire pour les images.
 #   Aucun client vision, aucun client génération n'écrit en mémoire.
+#
+# Sprint 0.2 : _handle_generation() enrichit le prompt avec
+#   - les intents actifs (triés par salience)
+#   - les souvenirs épisodiques pertinents (retrieve_memories)
 
 from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
@@ -28,27 +32,21 @@ class ImageExecutionRouter(BaseRouter):
     """
     Effecteur image du pipeline d'exécution.
 
-    Reçoit le payload construit par AriaKernel et délègue
-    à l'ImageRouter interne (llm/image_router.py).
-
     Args:
-        internal_router : instance de llm.image_router.ImageRouter
-                          Injecté par AriaKernel pour permettre le remplacement
-                          en tests sans toucher le router lui-même.
+        internal_router : llm.image_router.ImageRouter (vision + génération)
+        intent_engine   : IntentEngine — accès aux intents actifs (optionnel)
+        mempalace_bridge: MempalaceBridge — recall épisodique (optionnel)
+
+    intent_engine et mempalace_bridge sont optionnels pour rester
+    compatibles avec les tests qui n'injectent que internal_router.
     """
 
-    def __init__(self, internal_router):
+    def __init__(self, internal_router, intent_engine=None, mempalace_bridge=None):
         self.internal_router = internal_router
+        self.intent_engine = intent_engine
+        self.mempalace_bridge = mempalace_bridge
 
     def execute(self, payload: dict) -> dict:
-        """
-        Dispatche vers handle_input ou generate selon op_type.
-
-        payload attendu :
-            op_type  : "image_input" | "image_generation"
-            content  : str (prompt) ou dict {"file_path": ..., "caption": ...}
-            metadata : dict passé depuis l'Event (peut contenir intent_id)
-        """
         op_type = payload.get("op_type", "")
         content = payload.get("content")
 
@@ -58,83 +56,60 @@ class ImageExecutionRouter(BaseRouter):
         if op_type == CognitiveOperation.IMAGE_GENERATION.value:
             return self._handle_generation(content, payload)
 
-        # Cas non attendu — on lève pour que ExecutionDispatcher capture l'erreur
         raise ValueError(f"ImageExecutionRouter: op_type inconnu '{op_type}'")
 
+    # =========================================================
+    # IMAGE INPUT — inchangé
+    # =========================================================
+
     def _handle_input(self, content, payload: dict) -> dict:
-        """
-        Analyse une image reçue (photo Telegram, fichier).
-
-        Flux :
-            1. Extraction du path et de la caption utilisateur
-            2. Construction d'ImageInput avec la caption — elle sera
-               injectée dans le prompt vision par ImageRouter
-            3. Analyse par le modèle de vision
-            4. Stockage en mémoire épisodique
-            5. Retour du résultat
-
-        content attendu : dict {"file_path": str, "caption": str | None}
-        """
         file_path = content.get("file_path") if isinstance(content, dict) else content
         user_caption = content.get("caption") if isinstance(content, dict) else None
 
-        # La caption est maintenant transmise à ImageInput.
-        # ImageRouter l'injecte dans le prompt vision pour contextualiser
-        # l'analyse — le modèle sait ce que l'utilisateur cherche à montrer.
         artifact = self.internal_router.handle_input(
-            ImageInput(
-                path=str(file_path),
-                caption=user_caption,   # contexte utilisateur → prompt vision
-            )
+            ImageInput(path=str(file_path), caption=user_caption)
         )
 
-        # ── Stockage mémoire épisodique ──────────────────────────────────────
-        # On stocke l'artefact immédiatement après l'analyse.
-        # La caption vision + caption utilisateur sont indexées ensemble
-        # pour un recall sémantique riche ("ma courge", "jardin mars", etc.)
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
-            # Erreur mémoire non bloquante — l'utilisateur reçoit quand même
-            # la description de son image
             print(f"[MEMORY WRITE ERROR] image_input: {e}")
-
-        # Construction de la réponse : description vision en premier,
-        # puis rappel de la caption utilisateur si elle apporte du contexte
-        # supplémentaire non couvert par l'analyse.
-        response = artifact.caption or ""
 
         return {
             "path": artifact.path,
             "caption": artifact.caption,
-            "text": response,
+            "text": artifact.caption or "",
         }
+
+    # =========================================================
+    # IMAGE GENERATION — enrichi sprint 0.2
+    # =========================================================
 
     def _handle_generation(self, content, payload: dict) -> dict:
         """
-        Génère une image depuis un prompt texte.
+        Génère une image depuis un prompt enrichi par le contexte cognitif.
 
         Flux :
-            1. Extraction du prompt (message utilisateur)
-            2. Génération via ImageRouter (Pollinations → HuggingFace)
-            3. Stockage en mémoire épisodique (prompt indexé)
-            4. Retour du path pour envoi Telegram
-
-        content attendu : str (message utilisateur complet, déjà traduit EN)
+            1. Extraction du prompt brut (message utilisateur)
+            2. Construction du contexte : intents actifs + mémoire épisodique
+            3. Enrichissement du prompt si contexte disponible
+            4. Génération via ImageRouter
+            5. Stockage épisodique
+            6. Retour du path pour Telegram
         """
-        prompt = content if isinstance(content, str) else str(content)
+        raw_prompt = content if isinstance(content, str) else str(content)
         intent_id = payload.get("metadata", {}).get("intent_id")
 
+        # ── Enrichissement du prompt ─────────────────────────────────────────
+        context_block = self._build_generation_context(raw_prompt)
+        enriched_prompt = _inject_context(raw_prompt, context_block)
+
         artifact = self.internal_router.generate(
-            message=prompt,
+            message=enriched_prompt,
             intent_id=intent_id,
         )
 
-        # ── Stockage mémoire épisodique ──────────────────────────────────────
-        # Le prompt est ce qui sera indexé et retrouvable plus tard.
-        # "dessine mon jardin en été" doit rester dans la mémoire d'ARIA
-        # pour que "montre-moi les images de mon jardin" fonctionne.
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
@@ -143,6 +118,74 @@ class ImageExecutionRouter(BaseRouter):
         return {
             "path": artifact.path,
             "caption": artifact.caption,
-            # Telegram reçoit le path — TelegramInterface.send() l'envoie comme fichier
             "text": artifact.path,
         }
+
+    # =========================================================
+    # CONTEXT BUILDER (privé)
+    # =========================================================
+
+    def _build_generation_context(self, prompt: str) -> str:
+        """
+        Assemble le contexte cognitif disponible pour enrichir le prompt image.
+
+        Retourne une chaîne vide si aucune information utile n'est disponible,
+        ce qui évite d'injecter du bruit dans le prompt de génération.
+
+        Deux sources :
+        - Intents actifs (triés par salience décroissante, max 3)
+        - Mémoire épisodique pertinente (max 3 souvenirs)
+        """
+        parts = []
+
+        # ── Intents actifs ───────────────────────────────────────────────────
+        if self.intent_engine is not None:
+            active = self.intent_engine.list_attention_active()
+            # Trier par salience décroissante, garder les 3 plus saillants
+            active_sorted = sorted(
+                active,
+                key=lambda i: getattr(i, "salience", 0.0),
+                reverse=True,
+            )[:3]
+
+            if active_sorted:
+                intent_lines = [f"- {i.name}" for i in active_sorted]
+                parts.append("Projets actifs de l'utilisateur :\n" + "\n".join(intent_lines))
+
+        # ── Mémoire épisodique ───────────────────────────────────────────────
+        if self.mempalace_bridge is not None:
+            try:
+                memories = self.mempalace_bridge.retrieve_memories(
+                    query=prompt,
+                    n=3,
+                )
+                if memories:
+                    mem_lines = [f"- {m}" for m in memories]
+                    parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
+            except Exception as e:
+                print(f"[CONTEXT BUILD ERROR] episodic recall: {e}")
+
+        return "\n\n".join(parts)
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+
+def _inject_context(prompt: str, context: str) -> str:
+    """
+    Injecte le contexte cognitif dans le prompt de génération.
+
+    Si le contexte est vide, retourne le prompt original sans modification.
+    Le contexte est placé AVANT le prompt pour que le modèle le traite
+    comme information de fond plutôt que comme contrainte directe.
+
+    Format :
+        [Contexte : ...]
+
+        <prompt utilisateur>
+    """
+    if not context.strip():
+        return prompt
+
+    return f"[Contexte :\n{context}]\n\n{prompt}"

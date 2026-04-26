@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from core.event import Event, EventType
-from cognition.cognitive_classifier import classify_operation
+from cognition.cognitive_classifier import classify_operation, detect_generation_intent_from_caption
 from cognition.cognitive_context import CognitiveOperation
 
 
@@ -57,41 +57,39 @@ class CognitiveEngine:
         self.llm_router = llm_router
 
     def classify(self, event: Event) -> CognitiveResult:
-        """
-        Classifie un Event et retourne l'opération cognitive correspondante.
 
-        L'ordre de priorité est important :
-        1. EventType non-TEXT → classification directe (pas de LLM)
-        2. EventType TEXT     → classify_operation (heuristiques + LLM)
-        """
-
-        # ── Événements image (Telegram photo, fichier image, etc.) ─────────
-        # Le type d'Event suffit : pas besoin d'analyser le contenu texte.
+        # ── Événements image ─────────────────────────────────────────────────
         if event.type == EventType.IMAGE:
+            content = event.content if isinstance(event.content, dict) else {}
+            caption = content.get("caption")
+
+            # Caption = demande de génération → IMAGE_GENERATION
+            if detect_generation_intent_from_caption(caption):
+                return CognitiveResult(
+                    type=CognitiveOperation.IMAGE_GENERATION.value,
+                    operation=CognitiveOperation.IMAGE_GENERATION,
+                )
+
+            # Pas de caption ou caption descriptive → analyse de l'image reçue
             return CognitiveResult(
                 type=CognitiveOperation.IMAGE_INPUT.value,
                 operation=CognitiveOperation.IMAGE_INPUT,
             )
 
-        # ── Événements texte ────────────────────────────────────────────────
-        # classify_operation gère : heuristiques image, longueur, cache, LLM
+        # ── Événements texte ─────────────────────────────────────────────────
         if event.type == EventType.TEXT:
             message = event.content if isinstance(event.content, str) else ""
-            metadata = event.metadata or {}
-
             operation = classify_operation(
                 message=message,
                 llm_router=self.llm_router,
-                metadata=metadata,
+                metadata=event.metadata or {},
             )
             return CognitiveResult(
                 type=operation.value,
                 operation=operation,
             )
 
-        # ── Types non encore supportés (VOICE, FILE, SYSTEM) ───────────────
-        # On laisse passer en UNKNOWN plutôt que de crasher.
-        # Le llm_router répondra avec un message d'orientation.
+        # ── Types non supportés ──────────────────────────────────────────────
         return CognitiveResult(
             type=CognitiveOperation.UNKNOWN.value,
             operation=CognitiveOperation.UNKNOWN,

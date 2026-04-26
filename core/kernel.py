@@ -21,6 +21,8 @@ from core.event import Event
 from cognition.cognitive_engine import CognitiveEngine, CognitiveResult
 from cognition.cognitive_context import CognitiveOperation
 
+from memory.mempalace_bridge import MempalaceBridge
+
 from embedding.embedder import Embedder
 from intent.intent_engine import IntentEngine
 from llm.llm_router import LLMRouter
@@ -68,6 +70,8 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine) -> Exe
     # llm_router injecté pour la traduction FR→EN des prompts de génération
     registry.register("image_router", ImageExecutionRouter(
         internal_router=InternalImageRouter(),
+        intent_engine=intent_engine,
+        mempalace_bridge=self.mempalace_bridge,
     ))
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
@@ -99,19 +103,18 @@ class AriaKernel:
         cognitive_engine: CognitiveEngine | None = None,
         execution_dispatcher: ExecutionDispatcher | None = None,
     ):
-        # Dépendances partagées entre cognitive engine et execution layer
         llm_router = LLMRouter()
         embedder = Embedder(config.EMBEDDING_MODEL)
         intent_engine = IntentEngine(embedder)
+        mempalace_bridge = MempalaceBridge()   # ← instanciation ici
 
-        # Injection optionnelle pour les tests — auto-wire en production
         self.cognitive_engine = cognitive_engine or CognitiveEngine(
             llm_router=llm_router,
         )
         self.execution_dispatcher = execution_dispatcher or _build_dispatcher(
             llm_router=llm_router,
             intent_engine=intent_engine,
-        )
+            mempalace_bridge=mempalace_bridge,
 
     async def handle_event(self, event: Event) -> str:
         """

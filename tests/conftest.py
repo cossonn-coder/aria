@@ -90,3 +90,4 @@ def pytest_configure(config):
         "markers",
         "live: marque un test comme nécessitant de vrais providers LLM/réseau",
     )
+    config.addinivalue_line("markers", "integration: tests système complets — lents")
