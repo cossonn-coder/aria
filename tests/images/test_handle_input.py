@@ -16,6 +16,7 @@ def test_handle_input():
         source = "file"
         path = "/tmp/img.png"
         base64 = None
+        caption = None
 
     result = router.handle_input(Input())
 

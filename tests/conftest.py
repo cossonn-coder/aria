@@ -2,69 +2,52 @@
 #
 # Configuration pytest globale pour la suite de tests ARIA.
 #
-# Problème résolu :
-#   Plusieurs tests instancient AriaKernel() directement, ce qui déclenche
-#   de vrais appels httpx vers Groq / Mistral / Cerebras / Pollinations.
-#   Sur CI ou offline, ça fait échouer les tests. En local, ça prend 60s+
-#   pour des tests qui ne testent pas les providers LLM.
+# Mocks actifs sur tous les tests (sauf @pytest.mark.live) :
 #
-# Stratégie :
-#   On mocke httpx.post à la racine — le seul point de sortie réseau
-#   du LLMRouter. Toute la logique interne (routing table, fallback chain,
-#   construction du prompt système, injection soul/user) continue de
-#   s'exécuter. Seul l'appel réseau est intercepté.
+#   httpx.post
+#       → LLMRouter : bloque tous les appels providers texte
 #
-#   httpx.get est également mocké pour couvrir Pollinations (génération image).
+#   httpx.get
+#       → Pollinations : bloque la génération image réseau
 #
-# Portée :
-#   autouse=True → appliqué à TOUS les tests sans annotation explicite.
-#   Les tests qui veulent des vrais appels (intégration end-to-end) doivent
-#   utiliser le marker @pytest.mark.live et sont exclus via :
-#       pytest tests/ -q -m "not live"
+#   sentence_transformers.SentenceTransformer.__init__
+#       → bloque le chargement du modèle (~15s par instanciation)
+#         Le modèle all-MiniLM-L6-v2 est chargé depuis le disque
+#         à chaque AriaKernel() — sans ce mock, la suite prend 60s+
 #
-# Format de la fausse réponse :
-#   Compatible avec le parsing de LLMRouter._call() :
-#       data["choices"][0]["message"]["content"]
+#   embedding.embedder.Embedder.encode
+#       → retourne un vecteur factice de dimension 384
+#         compatible avec all-MiniLM-L6-v2
+#
+# Usage :
+#   pytest tests/ -q              → tous les tests mockés (~5s)
+#   pytest tests/ -m live -q      → tests avec vrais providers
 
 import pytest
-import json
+import numpy as np
 from unittest.mock import MagicMock, patch
 
 
-# ── Réponse HTTP factice ──────────────────────────────────────────────────────
+# ── Réponses factices ─────────────────────────────────────────────────────────
 
 def _fake_llm_response(content: str = "réponse factice aria") -> MagicMock:
     """
-    Construit un objet httpx.Response minimal compatible avec LLMRouter._call().
-
-    Structure attendue par le parser :
+    Réponse httpx compatible avec LLMRouter._call().
         response.json() → {"choices": [{"message": {"content": "..."}}]}
     """
     mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()   # ne lève rien
+    mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {
-        "choices": [
-            {
-                "message": {
-                    "content": content,
-                }
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-            "total_tokens": 15,
-        },
+        "choices": [{"message": {"content": content}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }
     return mock_response
 
 
 def _fake_image_response() -> MagicMock:
     """
-    Réponse factice pour les appels httpx.get vers Pollinations.
-    Retourne un PNG minimal (1x1 pixel) encodé en bytes.
+    Réponse httpx compatible avec Pollinations — PNG 1x1 pixel.
     """
-    # PNG 1x1 pixel transparent — valide pour les tests de pipeline
     PNG_1X1 = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
         b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
@@ -83,33 +66,24 @@ def _fake_image_response() -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def mock_network(request):
-    """
-    Intercepte tous les appels réseau sortants dans la suite de tests.
-
-    Exclure un test du mock :
-        @pytest.mark.live
-        def test_real_llm_call(): ...
-
-    Puis lancer uniquement les tests live :
-        pytest tests/ -m live -q
-    """
-    # Les tests marqués @pytest.mark.live passent sans mock
     if request.node.get_closest_marker("live"):
         yield
         return
 
-    with patch("httpx.post", return_value=_fake_llm_response()) as mock_post, \
-         patch("httpx.get",  return_value=_fake_image_response()) as mock_get:
+    # Vecteur factice dimension 384 (all-MiniLM-L6-v2)
+    fake_vector = np.array([[0.1] * 384])
 
-        # Expose les mocks dans le namespace du test via request
-        # Un test peut accéder à mock_post via la fixture mock_network
+    with patch("httpx.post", return_value=_fake_llm_response()) as mock_post, \
+         patch("httpx.get", return_value=_fake_image_response()) as mock_get, \
+         patch("embedding.embedder.Embedder.__init__", return_value=None), \
+         patch("embedding.embedder.Embedder.encode", return_value=np.array([[0.1] * 384])):
+
         yield {
             "post": mock_post,
-            "get":  mock_get,
+            "get": mock_get,
         }
 
-
-# ── Marker live — déclaration pour éviter les warnings pytest ─────────────────
+# ── Marker live ───────────────────────────────────────────────────────────────
 
 def pytest_configure(config):
     config.addinivalue_line(

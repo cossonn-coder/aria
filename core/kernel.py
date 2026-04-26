@@ -68,7 +68,6 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine) -> Exe
     # llm_router injecté pour la traduction FR→EN des prompts de génération
     registry.register("image_router", ImageExecutionRouter(
         internal_router=InternalImageRouter(),
-        llm_router=llm_router,
     ))
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)

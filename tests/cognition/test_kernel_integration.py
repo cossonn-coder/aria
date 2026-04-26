@@ -28,6 +28,7 @@ from utils.kernel_runner import KernelRunner
 #
 # Ces tests sont des tests de "system integration", pas de logique métier.
 
+@pytest.mark.integration
 def test_unknown_message():
     """
     Cas nominal minimal :
@@ -43,6 +44,7 @@ def test_unknown_message():
     assert isinstance(out, str)
 
 
+@pytest.mark.integration
 def test_planning_flow():
     """
     Cas multi-intent simple :

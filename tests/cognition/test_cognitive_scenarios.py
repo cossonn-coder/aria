@@ -37,6 +37,8 @@ def run(kernel: AriaKernel, msg: str):
 # - retour string (interface Telegram compatible)
 # - stabilité sur séquence de messages corrélés
 #
+
+@pytest.mark.integration
 def test_house_building_flow():
     k = AriaKernel()
 
@@ -56,6 +58,8 @@ def test_house_building_flow():
 # - vérifier que le pipeline ne casse pas sur enchaînement d’intents
 # - vérifier robustesse LLM (fallback possible)
 #
+
+@pytest.mark.integration
 def test_intent_stability():
     k = AriaKernel()
 

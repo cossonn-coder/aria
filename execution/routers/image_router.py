@@ -3,51 +3,42 @@
 # Router d'exécution pour les opérations image.
 #
 # Gère deux sous-cas distincts via le champ op_type du payload :
-#   - IMAGE_INPUT      : analyse d'une image reçue (vision → caption en français)
-#   - IMAGE_GENERATION : génération d'une image depuis un prompt utilisateur
+#   IMAGE_INPUT      → analyse d'une image reçue (vision → caption)
+#   IMAGE_GENERATION → génération d'une image depuis un prompt texte
 #
-# Traduction de prompt :
-#   Les modèles de génération image (Pollinations, FLUX, etc.) produisent
-#   de meilleurs résultats avec des prompts en anglais détaillés.
-#   _enhance_prompt() traduit et enrichit le prompt FR → EN via LLM
-#   avant d'appeler le router de génération.
+# Ce router est un effecteur pur : il reçoit un payload structuré,
+# délègue à InternalImageRouter (llm/image_router.py), et retourne
+# un dict de résultat.
 #
-# Ce router est un effecteur pur : pas de logique cognitive,
-# pas d'accès mémoire. Il reçoit, traduit si besoin, génère, retourne.
+# Responsabilités ajoutées (sprint 1.1) :
+#   - Transmettre la caption utilisateur au modèle de vision
+#   - Stocker chaque artefact image dans la mémoire épisodique (aria_episodic)
+#
+# Règle d'architecture :
+#   Ce router est le seul point d'écriture mémoire pour les images.
+#   Aucun client vision, aucun client génération n'écrit en mémoire.
 
 from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
-from llm.llm_role import LLMRole
-
-
-# Prompt système pour la traduction et l'enrichissement du prompt image.
-# On demande un prompt anglais optimisé pour les modèles text-to-image :
-# style, éclairage, composition, qualité — sans aucun texte superflu.
-_PROMPT_ENHANCER = """Tu es un expert en génération d'images par IA.
-Transforme la demande suivante en un prompt optimisé en anglais \
-pour un modèle text-to-image (Stable Diffusion, FLUX, etc.).
-
-Règles :
-- Réponds UNIQUEMENT avec le prompt en anglais
-- Inclus le sujet, le style, l'éclairage, la composition, la qualité
-- Pas d'explication, pas de guillemets, pas de ponctuation finale
-
-Demande : {message}"""
+from memory.mempalace_writer import store_image_artifact
 
 
 class ImageExecutionRouter(BaseRouter):
     """
     Effecteur image du pipeline d'exécution.
 
-    llm_router       : utilisé pour traduire/enrichir les prompts FR→EN
-    internal_router  : llm.image_router.ImageRouter (vision + génération)
+    Reçoit le payload construit par AriaKernel et délègue
+    à l'ImageRouter interne (llm/image_router.py).
+
+    Args:
+        internal_router : instance de llm.image_router.ImageRouter
+                          Injecté par AriaKernel pour permettre le remplacement
+                          en tests sans toucher le router lui-même.
     """
 
-    def __init__(self, internal_router, llm_router=None):
+    def __init__(self, internal_router):
         self.internal_router = internal_router
-        # llm_router optionnel — sans lui le prompt est passé tel quel
-        self.llm_router = llm_router
 
     def execute(self, payload: dict) -> dict:
         """
@@ -56,7 +47,7 @@ class ImageExecutionRouter(BaseRouter):
         payload attendu :
             op_type  : "image_input" | "image_generation"
             content  : str (prompt) ou dict {"file_path": ..., "caption": ...}
-            metadata : dict passé depuis l'Event
+            metadata : dict passé depuis l'Event (peut contenir intent_id)
         """
         op_type = payload.get("op_type", "")
         content = payload.get("content")
@@ -67,27 +58,52 @@ class ImageExecutionRouter(BaseRouter):
         if op_type == CognitiveOperation.IMAGE_GENERATION.value:
             return self._handle_generation(content, payload)
 
+        # Cas non attendu — on lève pour que ExecutionDispatcher capture l'erreur
         raise ValueError(f"ImageExecutionRouter: op_type inconnu '{op_type}'")
-
-    # =========================================================
-    # IMAGE INPUT
-    # =========================================================
 
     def _handle_input(self, content, payload: dict) -> dict:
         """
-        Analyse une image reçue via Groq vision.
-        La description est demandée en français.
+        Analyse une image reçue (photo Telegram, fichier).
+
+        Flux :
+            1. Extraction du path et de la caption utilisateur
+            2. Construction d'ImageInput avec la caption — elle sera
+               injectée dans le prompt vision par ImageRouter
+            3. Analyse par le modèle de vision
+            4. Stockage en mémoire épisodique
+            5. Retour du résultat
+
+        content attendu : dict {"file_path": str, "caption": str | None}
         """
         file_path = content.get("file_path") if isinstance(content, dict) else content
         user_caption = content.get("caption") if isinstance(content, dict) else None
 
+        # La caption est maintenant transmise à ImageInput.
+        # ImageRouter l'injecte dans le prompt vision pour contextualiser
+        # l'analyse — le modèle sait ce que l'utilisateur cherche à montrer.
         artifact = self.internal_router.handle_input(
-            ImageInput(path=str(file_path)),
+            ImageInput(
+                path=str(file_path),
+                caption=user_caption,   # contexte utilisateur → prompt vision
+            )
         )
 
+        # ── Stockage mémoire épisodique ──────────────────────────────────────
+        # On stocke l'artefact immédiatement après l'analyse.
+        # La caption vision + caption utilisateur sont indexées ensemble
+        # pour un recall sémantique riche ("ma courge", "jardin mars", etc.)
+        intent_id = payload.get("metadata", {}).get("intent_id")
+        try:
+            store_image_artifact(artifact, intent_id=intent_id)
+        except Exception as e:
+            # Erreur mémoire non bloquante — l'utilisateur reçoit quand même
+            # la description de son image
+            print(f"[MEMORY WRITE ERROR] image_input: {e}")
+
+        # Construction de la réponse : description vision en premier,
+        # puis rappel de la caption utilisateur si elle apporte du contexte
+        # supplémentaire non couvert par l'analyse.
         response = artifact.caption or ""
-        if user_caption:
-            response = f"{response}\n\n(Message : {user_caption})"
 
         return {
             "path": artifact.path,
@@ -95,58 +111,38 @@ class ImageExecutionRouter(BaseRouter):
             "text": response,
         }
 
-    # =========================================================
-    # IMAGE GENERATION
-    # =========================================================
-
     def _handle_generation(self, content, payload: dict) -> dict:
         """
-        Génère une image depuis un prompt utilisateur.
+        Génère une image depuis un prompt texte.
 
         Flux :
-            message FR → _enhance_prompt() → prompt EN enrichi
-                       → InternalImageRouter.generate()
-                       → ImageArtifact
+            1. Extraction du prompt (message utilisateur)
+            2. Génération via ImageRouter (Pollinations → HuggingFace)
+            3. Stockage en mémoire épisodique (prompt indexé)
+            4. Retour du path pour envoi Telegram
+
+        content attendu : str (message utilisateur complet, déjà traduit EN)
         """
-        user_message = content if isinstance(content, str) else str(content)
+        prompt = content if isinstance(content, str) else str(content)
         intent_id = payload.get("metadata", {}).get("intent_id")
 
-        # Traduction + enrichissement FR → EN avant génération
-        enhanced_prompt = self._enhance_prompt(user_message)
-
         artifact = self.internal_router.generate(
-            message=enhanced_prompt,
+            message=prompt,
             intent_id=intent_id,
         )
+
+        # ── Stockage mémoire épisodique ──────────────────────────────────────
+        # Le prompt est ce qui sera indexé et retrouvable plus tard.
+        # "dessine mon jardin en été" doit rester dans la mémoire d'ARIA
+        # pour que "montre-moi les images de mon jardin" fonctionne.
+        try:
+            store_image_artifact(artifact, intent_id=intent_id)
+        except Exception as e:
+            print(f"[MEMORY WRITE ERROR] image_generation: {e}")
 
         return {
             "path": artifact.path,
             "caption": artifact.caption,
+            # Telegram reçoit le path — TelegramInterface.send() l'envoie comme fichier
             "text": artifact.path,
         }
-
-    def _enhance_prompt(self, message: str) -> str:
-        """
-        Traduit et enrichit un prompt utilisateur en anglais optimisé
-        pour les modèles de génération image.
-
-        Sans llm_router : retourne le message original (mode dégradé).
-        En cas d'erreur LLM : idem, on ne bloque jamais la génération.
-        """
-        if self.llm_router is None:
-            return message
-
-        try:
-            response = self.llm_router.complete(
-                prompt=_PROMPT_ENHANCER.format(message=message),
-                role=LLMRole.CHAT,
-                temperature=0.7,
-                max_tokens=150,
-            )
-            enhanced = response.content.strip()
-            print(f"[IMAGE PROMPT] '{message}' → '{enhanced}'")
-            return enhanced
-
-        except Exception as e:
-            print(f"[IMAGE PROMPT] enhancement failed, using original: {e}")
-            return message

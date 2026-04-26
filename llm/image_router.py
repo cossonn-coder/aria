@@ -1,4 +1,18 @@
 # aria/llm/image_router.py
+#
+# Facade image du kernel cognitif.
+#
+# Responsabilité : router les opérations image vers les bons providers,
+# avec fallback automatique dans l'ordre des routing tables.
+#
+# Deux capacités distinctes :
+#   handle_input() → analyse d'une image reçue (vision → caption textuelle)
+#   generate()     → génération d'une image depuis un prompt texte
+#
+# Ce module ne connaît pas MemPalace, ni IntentEngine, ni le kernel.
+# Il reçoit des ImageInput, retourne des ImageArtifact. C'est tout.
+#
+# Pattern identique à LLMRouter : fallback automatique, clients injectables.
 
 from images.image_types import ImageArtifact, ImageInput
 from config import config
@@ -6,11 +20,12 @@ from llm.vision.groq_vision import GroqVisionClient
 from llm.vision.openrouter_vision import OpenRouterVisionClient
 from llm.image_gen.pollinations_client import PollinationsClient
 from llm.image_gen.hf_client import HuggingFaceImageClient
-from pathlib import Path
 
-# ==========================
-# ROUTING TABLES
-# ==========================
+
+# ── Routing tables ────────────────────────────────────────────────────────────
+#
+# Ordre = priorité. Le dispatcher essaie chaque entrée dans l'ordre
+# et passe au suivant en cas d'exception (rate limit, timeout, etc.).
 
 VISION_ROUTING_TABLE = [
     {
@@ -59,21 +74,14 @@ GENERATION_ROUTING_TABLE = [
 ]
 
 
-# ==========================
-# ROUTER
-# ==========================
+# ── Router ────────────────────────────────────────────────────────────────────
 
 class ImageRouter:
     """
-    Facade image du kernel.
+    Facade image — délègue aux providers via routing tables avec fallback.
 
-    Routing tables :
-    - VISION_ROUTING_TABLE     → analyse / caption d'image
-    - GENERATION_ROUTING_TABLE → génération d'image depuis prompt
-
-    Même pattern que LLMRouter : fallback automatique dans l'ordre de la table.
-    Ne connaît pas MemPalace. Ne connaît pas IntentEngine.
-    Retourne uniquement des ImageArtifact.
+    Injection de dépendances pour la testabilité :
+        ImageRouter(vision_table=[FakeVision()]) → tests unitaires sans réseau
     """
 
     def __init__(
@@ -81,27 +89,78 @@ class ImageRouter:
         vision_table=None,
         generation_table=None,
     ):
-        # Injection dépendance → testable
         self.vision_table = vision_table or VISION_ROUTING_TABLE
         self.generation_table = generation_table or GENERATION_ROUTING_TABLE
 
     def handle_input(self, image_input: ImageInput) -> ImageArtifact:
+        """
+        Analyse une image et retourne une description textuelle.
+
+        Contextalisation du prompt :
+            Si l'utilisateur a accompagné son image d'un texte (caption),
+            ce contexte est injecté dans le prompt vision. Cela permet au
+            modèle de répondre à l'intention réelle de l'utilisateur plutôt
+            que de produire une description générique de la scène.
+
+            Exemple :
+                Sans caption → "A green plant in a pot on a wooden table."
+                Avec "c'est la courge plantée en mars" →
+                    "La courge semble bien développée pour mars,
+                     les feuilles sont saines..."
+
+        Args:
+            image_input: ImageInput avec path ou base64, et optionnellement
+                         une caption utilisateur.
+
+        Returns:
+            ImageArtifact avec la description produite par le modèle de vision.
+        """
         source = image_input.path or image_input.base64
 
-        caption = self._run_vision(
-            source,
-            prompt="Describe this image."
-        )
+        # Construction du prompt : générique ou contextualisé selon la caption.
+        # La caption utilisateur devient le cadre interprétatif de l'analyse.
+        if image_input.caption:
+            prompt = (
+                f"L'utilisateur a envoyé cette image avec le message : "
+                f"« {image_input.caption} »\n"
+                f"Analyse l'image en tenant compte de ce contexte. "
+                f"Réponds directement à ce que l'utilisateur semble vouloir savoir."
+            )
+        else:
+            # Prompt de description générale si aucun contexte fourni.
+            # Volontairement en anglais : les modèles de vision performent
+            # mieux sur des prompts anglais pour la description d'images.
+            prompt = (
+                "Describe this image in detail. "
+                "Focus on the main subject, context, and any notable elements."
+            )
+
+        caption = self._run_vision(source, prompt=prompt)
 
         return ImageArtifact(
             source=image_input.source,
             path=image_input.path,
             caption=caption,
-            metadata={},
+            metadata={
+                # On conserve la caption originale de l'utilisateur
+                # pour traçabilité et éventuel stockage mémoire
+                "user_caption": image_input.caption or "",
+            },
         )
 
     def generate(self, message: str, intent_id: str | None = None) -> ImageArtifact:
+        """
+        Génère une image depuis un prompt texte.
+
+        Args:
+            message   : prompt de génération (déjà traduit en EN par l'appelant)
+            intent_id : intent cognitif associé — pour lier l'image à un projet
+
+        Returns:
+            ImageArtifact avec le chemin du fichier généré.
+        """
         result = self._run_generation(message)
+
         return ImageArtifact(
             source="generated",
             path=result.path,
@@ -111,19 +170,18 @@ class ImageRouter:
             metadata={},
         )
 
-
-    # ==========================
-    # INTERNAL DISPATCH
-    # ==========================
+    # ── Dispatch interne ─────────────────────────────────────────────────────
 
     def _dispatch(self, table, method, **kwargs):
         """
-        Dispatcher générique provider → client.
+        Dispatcher générique avec fallback automatique.
 
-        Tolère des entrées partielles afin de faciliter
-        les tests unitaires et les mocks.
+        Itère sur la routing table dans l'ordre.
+        En cas d'exception (réseau, rate limit, timeout),
+        passe au provider suivant sans interrompre le pipeline.
+
+        Lève RuntimeError si tous les providers échouent.
         """
-
         last_error = None
 
         for entry in table:
@@ -135,16 +193,17 @@ class ImageRouter:
                     api_key=entry.get("api_key", lambda: None)(),
                     output_dir=config.image_output_dir,
                 )
-
                 return getattr(client, method)(**kwargs)
 
             except Exception as e:
                 print(f"[IMAGE ROUTER FALLBACK] {entry.get('provider')} failed: {e}")
                 last_error = e
 
-        raise RuntimeError(last_error)
+        raise RuntimeError(
+            f"All image providers failed. Last error: {last_error}"
+        )
 
-    def _run_vision(self, image, prompt):
+    def _run_vision(self, image, prompt: str) -> str:
         return self._dispatch(
             self.vision_table,
             "describe",
@@ -152,7 +211,7 @@ class ImageRouter:
             prompt=prompt,
         )
 
-    def _run_generation(self, prompt):
+    def _run_generation(self, prompt: str):
         return self._dispatch(
             self.generation_table,
             "generate",
