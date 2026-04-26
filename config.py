@@ -84,7 +84,7 @@ class Config:
         self.user_path = str(BASE_DIR / "user.md")
         self.pending_path = str(BASE_DIR / "pending_memories.json")
         self.image_output_dir = str(BASE_DIR / "generated_images")
-        self.image_input_dir = str(BASE_DIR / "received_images")
+        self.image_receive_dir = str(BASE_DIR / "received_images")
 
 
 config = Config()

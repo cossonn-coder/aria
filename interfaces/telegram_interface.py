@@ -24,10 +24,10 @@ from collections import defaultdict
 import asyncio
 from pathlib import Path
 
+from config import config
 from interfaces.base_interface import BaseInterface
 from core.event import Event, EventType
 
-from config import config
 
 class TelegramInterface(BaseInterface):
 
@@ -88,9 +88,11 @@ class TelegramInterface(BaseInterface):
         async with self.user_locks[user_id]:
             photo = update.message.photo[-1]
             file = await photo.get_file()
-            received_dir = Path(config.image_input_dir)
-            received_dir.mkdir(parents=True, exist_ok=True)
-            dest = received_dir / f"{file.file_id}.jpg"
+
+            # Téléchargement dans received_images/ — pas à la racine du projet
+            image_receive_dir = Path(config.image_receive_dir)
+            image_receive_dir.mkdir(parents=True, exist_ok=True)
+            dest = image_receive_dir / f"{file.file_id}.jpg"
             file_path = await file.download_to_drive(custom_path=dest)
 
             event = Event.create(
@@ -150,7 +152,12 @@ class TelegramInterface(BaseInterface):
         else:
             text = str(message)
 
-        await self.app.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-        )
+        # Telegram limite à 4096 caractères par message
+        # On découpe proprement sans couper au milieu d'un mot
+        MAX = 4096
+        chunks = [text[i:i+MAX] for i in range(0, len(text), MAX)]
+        for chunk in chunks:
+            await self.app.bot.send_message(
+                chat_id=chat_id,
+                text=chunk,
+            )

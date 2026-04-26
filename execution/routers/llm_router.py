@@ -85,6 +85,9 @@ class LLMExecutionRouter(BaseRouter):
         """
 
         # ── 1. Mémoire globale (contexte pré-intent) ────────────────────────
+        # Résolution unique — global_memories est réutilisé à l'étape 4.
+        # top_k est fixé ici : toutes les étapes suivantes travaillent
+        # avec le même budget mémoire pour ce cycle.
         top_k = MEMORY_TOP_K.get(operation, 4)
         global_memories = retrieve_memories(message, n=top_k)
 
@@ -115,7 +118,10 @@ class LLMExecutionRouter(BaseRouter):
         )
 
         # ── 4. Mémoire de session (contexte post-intent) ────────────────────
-        # Récupère les souvenirs liés à l'intent actif — plus ciblé que global
+        # retrieve_by_intent cible les souvenirs liés à l'intent résolu —
+        # plus précis que la mémoire globale pour ancrer la réponse.
+        # global_memories est réutilisé depuis l'étape 1 : inutile de
+        # rappeler retrieve_memories avec les mêmes paramètres.
         session_memories = (
             retrieve_by_intent(query=message, intent_id=intent.id)
             if intent
@@ -123,7 +129,7 @@ class LLMExecutionRouter(BaseRouter):
         )
 
         memory_context = MemoryContext(
-            global_memories=retrieve_memories(message, n=top_k),
+            global_memories=global_memories,   # déjà résolu à l'étape 1
             session_memories=session_memories,
         )
 

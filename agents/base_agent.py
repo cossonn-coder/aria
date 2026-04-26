@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from intent.intent import Intent
-
 from cognition.cognitive_trace import CognitiveTrace
 
 
