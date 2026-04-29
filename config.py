@@ -77,7 +77,6 @@ class Config:
         self.cerebras_api_key = os.getenv("CEREBRAS_API_KEY", "")
         self.sambanova_api_key = os.getenv("SAMBANOVA_API_KEY", "")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
-        self.hf_token = os.getenv("HF_TOKEN", "")
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.chroma_path = str(BASE_DIR / "chroma_db")
         self.soul_path = str(BASE_DIR / "soul.md")
@@ -85,6 +84,10 @@ class Config:
         self.pending_path = str(BASE_DIR / "pending_memories.json")
         self.image_output_dir = str(BASE_DIR / "generated_images")
         self.image_receive_dir = str(BASE_DIR / "received_images")
+        self.hf_token = os.getenv("HF_TOKEN", "")
+        if self.hf_token:
+            os.environ["HF_TOKEN"] = self.hf_token
+            os.environ["HUGGINGFACE_HUB_TOKEN"] = self.hf_token
 
 
 config = Config()

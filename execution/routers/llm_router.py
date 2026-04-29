@@ -11,7 +11,7 @@
 #   FACT_RECALL, MEMORY_QUERY, PLANNING, REASONING, META_MEMORY,
 #   PROFILE_QUERY, CONFIRMATION, UNKNOWN.
 #
-# Pipeline interne (identique à l'ancien AriaKernel.handle_message) :
+# Pipeline interne :
 #   1. Mémoire globale (retrieve_memories)
 #   2. Intent recall (resolve)
 #   3. Intent mutation (create si nécessaire)
@@ -25,8 +25,10 @@
 
 from execution.routers.execution_base import BaseRouter
 
-from memory.mempalace_bridge import retrieve_memories, retrieve_by_intent
+from intent.intent_engine import IntentEngine
+from llm.llm_router import LLMRouter
 from memory.mempalace_writer import store_interaction
+from memory.mempalace_bridge import MempalaceBridge
 from llm.intent_namer import extract_intent_name
 from agents.base_agent import AgentContext
 from agents.registry_agent import AgentRegistry
@@ -43,21 +45,34 @@ class LLMExecutionRouter(BaseRouter):
     Reçoit un payload normalisé depuis AriaKernel et exécute
     le pipeline complet : mémoire → intents → agents → persistence.
 
-    llm_router    : LLMRouter (multi-provider avec fallback)
-    intent_engine : IntentEngine (gestion cycle de vie des intents)
+    Args:
+        llm_router       : LLMRouter (multi-provider avec fallback)
+        intent_engine    : IntentEngine (gestion cycle de vie des intents)
+        mempalace_bridge : MempalaceBridge (lecture mémoire épisodique)
     """
 
-    def __init__(self, llm_router, intent_engine):
+    def __init__(
+        self,
+        llm_router: LLMRouter,
+        intent_engine: IntentEngine,
+        mempalace_bridge: MempalaceBridge,
+    ):
         self.llm_router = llm_router
         self.intent_engine = intent_engine
+        self.mempalace_bridge = mempalace_bridge
 
-        # Registre et contrôleur agents — construits une seule fois
+        # Registre et contrôleur agents — construits une seule fois au démarrage.
+        # Ils sont stateless entre les appels : pas de risque de contamination
+        # d'état entre deux cycles cognitifs.
         self.registry = AgentRegistry()
         self.controller = AgentController(self.registry)
 
     def execute(self, payload: dict) -> dict:
         """
         Exécute le pipeline cognitif complet pour un message texte.
+
+        Contrat de sortie :
+            {"text": str}   — texte de réponse destiné à _normalize() du kernel
 
         payload attendu :
             op_type  : str (valeur de CognitiveOperation)
@@ -89,7 +104,7 @@ class LLMExecutionRouter(BaseRouter):
         # top_k est fixé ici : toutes les étapes suivantes travaillent
         # avec le même budget mémoire pour ce cycle.
         top_k = MEMORY_TOP_K.get(operation, 4)
-        global_memories = retrieve_memories(message, n=top_k)
+        global_memories = self.mempalace_bridge.retrieve_memories(message, n=top_k)
 
         memory_context = MemoryContext(
             global_memories=global_memories,
@@ -106,7 +121,8 @@ class LLMExecutionRouter(BaseRouter):
         )
 
         # ── 3. Intent mutation ──────────────────────────────────────────────
-        # Extraction du nom canonique uniquement si création d'un nouvel intent
+        # Extraction du nom canonique uniquement si création d'un nouvel intent.
+        # Ce LLM call est coûteux — on ne l'effectue qu'en cas de nécessité.
         intent_name = None
         if recall_decision.action == "create":
             intent_name = extract_intent_name(message, self.llm_router)
@@ -123,7 +139,7 @@ class LLMExecutionRouter(BaseRouter):
         # global_memories est réutilisé depuis l'étape 1 : inutile de
         # rappeler retrieve_memories avec les mêmes paramètres.
         session_memories = (
-            retrieve_by_intent(query=message, intent_id=intent.id)
+            self.mempalace_bridge.retrieve_by_intent(query=message, intent_id=intent.id)
             if intent
             else {"hits": [], "count": 0}
         )
@@ -155,6 +171,8 @@ class LLMExecutionRouter(BaseRouter):
         ctx = self.controller.run(ctx, self.llm_router)
 
         # ── 7. Résolution du résultat ────────────────────────────────────────
+        # Priorité : résultat direct du pipeline agents, puis dernier état
+        # de l'intent, puis fallback de debug explicite (jamais silencieux).
         if ctx.result:
             result = ctx.result
         elif ctx.intent and hasattr(ctx.intent, "last_state"):
@@ -171,7 +189,8 @@ class LLMExecutionRouter(BaseRouter):
         self.intent_engine.decay_if_needed()
 
         # ── 10. Écriture MemPalace ───────────────────────────────────────────
-        # Écriture après résolution complète — jamais sur un état intermédiaire
+        # Écriture après résolution complète — jamais sur un état intermédiaire.
+        # Non bloquant : une erreur mémoire ne doit pas tuer la réponse.
         try:
             if intent:
                 store_interaction(

@@ -3,24 +3,26 @@
 # Router d'exécution pour les opérations image.
 #
 # Gère deux sous-cas distincts via le champ op_type du payload :
-#   IMAGE_INPUT      → analyse d'une image reçue (vision → caption)
+#   IMAGE_INPUT      → analyse d'une image reçue (vision → description texte)
 #   IMAGE_GENERATION → génération d'une image depuis un prompt texte
 #
 # Ce router est un effecteur pur : il reçoit un payload structuré,
 # délègue à InternalImageRouter (llm/image_router.py), et retourne
-# un dict de résultat.
+# un dict de résultat conforme au contrat router→dispatcher.
 #
-# Responsabilités ajoutées (sprint 1.1) :
+# Contrat de sortie strict (règle commune à tous les routers) :
+#   IMAGE_INPUT      → {"text": str}              — description vision
+#   IMAGE_GENERATION → {"path": str, "caption": str} — image générée
+#   Jamais : {"status": ...} — c'est le rôle exclusif du dispatcher.
+#
+# Responsabilités :
 #   - Transmettre la caption utilisateur au modèle de vision
+#   - Enrichir le prompt de génération avec intents + mémoire épisodique
 #   - Stocker chaque artefact image dans la mémoire épisodique (aria_episodic)
 #
 # Règle d'architecture :
 #   Ce router est le seul point d'écriture mémoire pour les images.
 #   Aucun client vision, aucun client génération n'écrit en mémoire.
-#
-# Sprint 0.2 : _handle_generation() enrichit le prompt avec
-#   - les intents actifs (triés par salience)
-#   - les souvenirs épisodiques pertinents (retrieve_memories)
 
 from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
@@ -33,9 +35,9 @@ class ImageExecutionRouter(BaseRouter):
     Effecteur image du pipeline d'exécution.
 
     Args:
-        internal_router : llm.image_router.ImageRouter (vision + génération)
-        intent_engine   : IntentEngine — accès aux intents actifs (optionnel)
-        mempalace_bridge: MempalaceBridge — recall épisodique (optionnel)
+        internal_router  : llm.image_router.ImageRouter (vision + génération)
+        intent_engine    : IntentEngine — accès aux intents actifs (optionnel)
+        mempalace_bridge : MempalaceBridge — recall épisodique (optionnel)
 
     intent_engine et mempalace_bridge sont optionnels pour rester
     compatibles avec les tests qui n'injectent que internal_router.
@@ -59,10 +61,21 @@ class ImageExecutionRouter(BaseRouter):
         raise ValueError(f"ImageExecutionRouter: op_type inconnu '{op_type}'")
 
     # =========================================================
-    # IMAGE INPUT — inchangé
+    # IMAGE INPUT
     # =========================================================
 
     def _handle_input(self, content, payload: dict) -> dict:
+        """
+        Analyse une image reçue via la couche vision et retourne la description.
+
+        Contrat de sortie : {"text": str}
+
+        Pourquoi pas {"path": ...} ici ?
+            artifact.path est le chemin local du fichier reçu, pas un résultat
+            à renvoyer à l'utilisateur. Retourner ce path déclencherait
+            _normalize() en mode image et ferait envoyer la photo d'origine
+            par Telegram au lieu de la description vision.
+        """
         file_path = content.get("file_path") if isinstance(content, dict) else content
         user_caption = content.get("caption") if isinstance(content, dict) else None
 
@@ -70,25 +83,26 @@ class ImageExecutionRouter(BaseRouter):
             ImageInput(path=str(file_path), caption=user_caption)
         )
 
+        # Stockage épisodique — non bloquant
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
             print(f"[MEMORY WRITE ERROR] image_input: {e}")
 
-        return {
-            "path": artifact.path,
-            "caption": artifact.caption,
-            "text": artifact.caption or "",
-        }
+        # Retourne uniquement la description texte produite par le modèle vision.
+        return {"text": artifact.caption or ""}
 
     # =========================================================
-    # IMAGE GENERATION — enrichi sprint 0.2
+    # IMAGE GENERATION
     # =========================================================
 
     def _handle_generation(self, content, payload: dict) -> dict:
         """
         Génère une image depuis un prompt enrichi par le contexte cognitif.
+
+        Contrat de sortie : {"path": str, "caption": str}
+        _normalize() détecte l'extension image dans path et route vers send_photo().
 
         Flux :
             1. Extraction du prompt brut (message utilisateur)
@@ -110,15 +124,17 @@ class ImageExecutionRouter(BaseRouter):
             intent_id=intent_id,
         )
 
+        # Stockage épisodique — non bloquant
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
             print(f"[MEMORY WRITE ERROR] image_generation: {e}")
 
+        # Retourne path + caption : _normalize() détectera l'extension image
+        # et produira le signal {"type": "image", ...} pour TelegramInterface.
         return {
             "path": artifact.path,
             "caption": artifact.caption,
-            "text": artifact.path,
         }
 
     # =========================================================
@@ -159,9 +175,11 @@ class ImageExecutionRouter(BaseRouter):
                     query=prompt,
                     n=3,
                 )
-                if memories:
-                    mem_lines = [f"- {m}" for m in memories]
-                    parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
+                hits = memories.get("hits", [])
+                if hits:
+                    mem_lines = [f"- {h.get('text', '')}" for h in hits if h.get("text")]
+                    if mem_lines:
+                        parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
             except Exception as e:
                 print(f"[CONTEXT BUILD ERROR] episodic recall: {e}")
 
@@ -181,7 +199,8 @@ def _inject_context(prompt: str, context: str) -> str:
     comme information de fond plutôt que comme contrainte directe.
 
     Format :
-        [Contexte : ...]
+        [Contexte :
+        ...]
 
         <prompt utilisateur>
     """

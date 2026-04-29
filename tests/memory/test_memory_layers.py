@@ -3,20 +3,22 @@
 # Vérifie l'architecture mémoire 3 couches d'ARIA.
 #
 # Ce qu'on teste :
-#   store_interaction   → écrit dans wing="aria_episodic"
-#   store_semantic_fact → écrit dans wing="aria_semantic"
+#   store_interaction    → écrit dans wing="aria_episodic"
+#   store_semantic_fact  → écrit dans wing="aria_semantic"
 #   store_image_artifact → écrit dans wing="aria_episodic" avec bon type
-#   retrieve_memories   → lit aria_episodic par défaut
-#   retrieve_semantic   → lit aria_semantic
-#   retrieve_by_intent  → filtre sur aria_episodic + room=intent_id
+#   retrieve_memories    → lit aria_episodic par défaut
+#   retrieve_semantic    → lit aria_semantic
+#   retrieve_by_intent   → filtre sur aria_episodic + room=intent_id
 #
 # Stratégie de mock :
-#   ChromaDB est mocké via get_collection().
-#   On inspecte les appels upsert() pour vérifier le schéma de métadonnées.
-#   On mocke search() pour tester les fonctions de lecture.
+#   Écriture  : ChromaDB mocké via get_collection() — on inspecte upsert().
+#   Lecture   : MempalaceBridge instancié avec un store callable fake.
+#               On n'importe plus les fonctions globales (supprimées).
+#               On ne patche plus memory.mempalace_bridge.search au niveau
+#               module — le store est injecté directement au constructeur.
 
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
 from memory.mempalace_writer import (
@@ -24,11 +26,7 @@ from memory.mempalace_writer import (
     store_semantic_fact,
     store_image_artifact,
 )
-from memory.mempalace_bridge import (
-    retrieve_memories,
-    retrieve_semantic,
-    retrieve_by_intent,
-)
+from memory.mempalace_bridge import MempalaceBridge
 from images.image_types import ImageArtifact
 
 
@@ -56,6 +54,35 @@ def extract_upsert_document(col_mock) -> str:
     return documents[0]
 
 
+def make_bridge(results: list) -> MempalaceBridge:
+    """
+    Crée un MempalaceBridge avec un store fake retournant les résultats fournis.
+
+    Args:
+        results : liste de hits à retourner par le store fake
+    """
+    def fake_store(**kwargs):
+        return {"results": results}
+
+    return MempalaceBridge(store=fake_store)
+
+
+def make_bridge_capturing() -> tuple[MempalaceBridge, list]:
+    """
+    Crée un MempalaceBridge dont le store capture les kwargs d'appel.
+
+    Retourne le bridge et la liste des appels capturés.
+    Utile pour vérifier que les bons paramètres sont transmis au store.
+    """
+    captured = []
+
+    def fake_store(**kwargs):
+        captured.append(kwargs)
+        return {"results": []}
+
+    return MempalaceBridge(store=fake_store), captured
+
+
 # ── Tests : store_interaction ─────────────────────────────────────────────────
 
 class TestStoreInteraction:
@@ -81,9 +108,7 @@ class TestStoreInteraction:
 
     @patch("memory.mempalace_writer.get_collection")
     def test_room_equals_intent_id(self, mock_get_col):
-        """
-        Le room doit être l'intent_id — pour le recall ciblé par projet.
-        """
+        """Le room doit être l'intent_id — pour le recall ciblé par projet."""
         col = make_collection_mock()
         mock_get_col.return_value = col
 
@@ -116,7 +141,6 @@ class TestStoreInteraction:
 
         meta = extract_upsert_metadata(col)
         assert isinstance(meta["timestamp"], str)
-        # Vérifie que c'est un isoformat parseable
         datetime.fromisoformat(meta["timestamp"])
 
     @patch("memory.mempalace_writer.get_collection")
@@ -158,12 +182,7 @@ class TestStoreSemanticFact:
 
     @patch("memory.mempalace_writer.get_collection")
     def test_room_equals_subject(self, mock_get_col):
-        """
-        Le room doit être le subject — pour le recall ciblé par domaine.
-
-        retrieve_semantic("santé") retrouve les faits sur la santé,
-        retrieve_semantic("localisation") les faits de localisation, etc.
-        """
+        """Le room doit être le subject — pour le recall ciblé par domaine."""
         col = make_collection_mock()
         mock_get_col.return_value = col
 
@@ -261,9 +280,6 @@ class TestStoreImageArtifact:
         """
         Pour une image générée, c'est le prompt qui est indexé —
         pas la caption (qui peut être vide).
-
-        Permet de retrouver "montre-moi les images de mon jardin"
-        par similarité avec le prompt original.
         """
         col = make_collection_mock()
         mock_get_col.return_value = col
@@ -276,9 +292,7 @@ class TestStoreImageArtifact:
 
     @patch("memory.mempalace_writer.get_collection")
     def test_input_image_indexes_caption(self, mock_get_col):
-        """
-        Pour une image reçue, c'est la description vision qui est indexée.
-        """
+        """Pour une image reçue, c'est la description vision qui est indexée."""
         col = make_collection_mock()
         mock_get_col.return_value = col
 
@@ -331,154 +345,141 @@ class TestStoreImageArtifact:
 
 class TestRetrieveMemories:
 
-    @patch("memory.mempalace_bridge.search")
-    def test_default_wing_is_episodic(self, mock_search):
+    def test_default_wing_is_episodic(self):
         """
         retrieve_memories doit cibler aria_episodic par défaut.
 
-        Migration : l'ancien code ciblait wing="aria".
+        Le store fake capture les kwargs pour vérifier le wing transmis.
         """
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_memories("test query")
+        bridge.retrieve_memories("test query")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["wing"] == "aria_episodic"
+        assert captured[0]["wing"] == "aria_episodic"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_n_zero_returns_empty(self, mock_search):
-        """n=0 doit retourner vide sans appeler ChromaDB."""
-        result = retrieve_memories("query", n=0)
+    def test_n_zero_returns_empty(self):
+        """n=0 doit retourner vide sans appeler le store."""
+        calls = []
 
-        mock_search.assert_not_called()
+        def fake_store(**kwargs):
+            calls.append(kwargs)
+            return {"results": []}
+
+        bridge = MempalaceBridge(store=fake_store)
+        result = bridge.retrieve_memories("query", n=0)
+
+        assert calls == [], "Le store ne doit pas être appelé pour n=0"
         assert result["hits"] == []
         assert result["count"] == 0
 
-    @patch("memory.mempalace_bridge.search")
-    def test_filters_high_distance(self, mock_search):
-        """
-        Les résultats avec distance >= 0.8 doivent être filtrés.
-        Un souvenir trop distant n'est pas pertinent.
-        """
-        mock_search.return_value = {
-            "results": [
-                {"text": "pertinent", "distance": 0.3, "room": "intent-001"},
-                {"text": "trop loin", "distance": 0.9, "room": "intent-001"},
-            ]
-        }
+    def test_filters_high_distance(self):
+        """Les résultats avec distance >= 0.8 doivent être filtrés."""
+        bridge = make_bridge([
+            {"text": "pertinent",  "distance": 0.3, "room": "intent-001"},
+            {"text": "trop loin",  "distance": 0.9, "room": "intent-001"},
+        ])
 
-        result = retrieve_memories("query", n=5)
+        result = bridge.retrieve_memories("query", n=5)
 
         assert result["count"] == 1
         assert result["hits"][0]["text"] == "pertinent"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_filters_general_room(self, mock_search):
-        """
-        Les résultats de room='general' doivent être exclus.
-        Ce room est trop peu spécifique pour le contexte cognitif.
-        """
-        mock_search.return_value = {
-            "results": [
-                {"text": "spécifique", "distance": 0.3, "room": "intent-001"},
-                {"text": "générique", "distance": 0.3, "room": "general"},
-            ]
-        }
+    def test_filters_general_room(self):
+        """Les résultats de room='general' doivent être exclus."""
+        bridge = make_bridge([
+            {"text": "spécifique", "distance": 0.3, "room": "intent-001"},
+            {"text": "générique",  "distance": 0.3, "room": "general"},
+        ])
 
-        result = retrieve_memories("query", n=5)
+        result = bridge.retrieve_memories("query", n=5)
 
         assert result["count"] == 1
         assert result["hits"][0]["text"] == "spécifique"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_custom_wing_is_passed_through(self, mock_search):
-        """
-        On peut cibler une wing spécifique, ex: "aria" pour les anciennes entrées.
-        """
-        mock_search.return_value = {"results": []}
+    def test_custom_wing_is_passed_through(self):
+        """On peut cibler une wing spécifique, ex: 'aria' pour les anciennes entrées."""
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_memories("query", wing="aria")
+        bridge.retrieve_memories("query", wing="aria")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["wing"] == "aria"
+        assert captured[0]["wing"] == "aria"
+
+    def test_type_filter(self):
+        """type_filter doit retenir uniquement les hits du type demandé."""
+        bridge = make_bridge([
+            {"text": "img",  "distance": 0.2, "room": "r", "type": "image_generated"},
+            {"text": "txt",  "distance": 0.1, "room": "r", "type": "interaction"},
+        ])
+
+        result = bridge.retrieve_memories("query", n=10, type_filter=["image_generated"])
+
+        assert result["count"] == 1
+        assert result["hits"][0]["type"] == "image_generated"
 
 
 # ── Tests : retrieve_semantic ─────────────────────────────────────────────────
 
 class TestRetrieveSemantic:
 
-    @patch("memory.mempalace_bridge.search")
-    def test_targets_aria_semantic_wing(self, mock_search):
+    def test_targets_aria_semantic_wing(self):
         """retrieve_semantic doit toujours cibler aria_semantic."""
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_semantic("allergie gluten")
+        bridge.retrieve_semantic("allergie gluten")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["wing"] == "aria_semantic"
+        assert captured[0]["wing"] == "aria_semantic"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_subject_filter_passed_as_room(self, mock_search):
+    def test_subject_filter_passed_as_room(self):
         """Le subject optionnel doit être passé comme room."""
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_semantic("santé", subject="santé")
+        bridge.retrieve_semantic("santé", subject="santé")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["room"] == "santé"
+        assert captured[0]["room"] == "santé"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_no_subject_passes_none_room(self, mock_search):
+    def test_no_subject_passes_none_room(self):
         """Sans subject, room=None — recherche dans toute la couche sémantique."""
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_semantic("préférences")
+        bridge.retrieve_semantic("préférences")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["room"] is None
+        assert captured[0]["room"] is None
 
 
 # ── Tests : retrieve_by_intent ────────────────────────────────────────────────
 
 class TestRetrieveByIntent:
 
-    @patch("memory.mempalace_bridge.search")
-    def test_targets_aria_episodic(self, mock_search):
+    def test_targets_aria_episodic(self):
         """retrieve_by_intent doit cibler aria_episodic."""
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_by_intent("query", intent_id="intent-jardin")
+        bridge.retrieve_by_intent("query", intent_id="intent-jardin")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["wing"] == "aria_episodic"
+        assert captured[0]["wing"] == "aria_episodic"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_room_equals_intent_id(self, mock_search):
+    def test_room_equals_intent_id(self):
         """Le room doit être l'intent_id pour le recall ciblé."""
-        mock_search.return_value = {"results": []}
+        bridge, captured = make_bridge_capturing()
 
-        retrieve_by_intent("query", intent_id="intent-maison-123")
+        bridge.retrieve_by_intent("query", intent_id="intent-maison-123")
 
-        call_kwargs = mock_search.call_args[1]
-        assert call_kwargs["room"] == "intent-maison-123"
+        assert captured[0]["room"] == "intent-maison-123"
 
-    @patch("memory.mempalace_bridge.search")
-    def test_returns_all_results_without_distance_filter(self, mock_search):
+    def test_returns_all_results_without_distance_filter(self):
         """
         retrieve_by_intent ne filtre PAS par distance.
 
         Contrairement à retrieve_memories, on veut tout ce qui est
-        lié à l'intent — même les souvenirs un peu éloignés thématiquement
-        mais qui appartiennent au même projet.
+        lié à l'intent — même les souvenirs éloignés thématiquement
+        mais appartenant au même projet.
         """
-        mock_search.return_value = {
-            "results": [
-                {"text": "proche", "distance": 0.2},
-                {"text": "moins proche", "distance": 0.75},
-                {"text": "loin", "distance": 0.95},
-            ]
-        }
+        bridge = make_bridge([
+            {"text": "proche",       "distance": 0.2},
+            {"text": "moins proche", "distance": 0.75},
+            {"text": "loin",         "distance": 0.95},
+        ])
 
-        result = retrieve_by_intent("query", intent_id="intent-001")
+        result = bridge.retrieve_by_intent("query", intent_id="intent-001")
 
         assert result["count"] == 3

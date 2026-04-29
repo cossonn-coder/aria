@@ -22,6 +22,7 @@ from cognition.cognitive_engine import CognitiveEngine, CognitiveResult
 from cognition.cognitive_context import CognitiveOperation
 
 from memory.mempalace_bridge import MempalaceBridge
+from memory.mempalace_store import search as mempalace_search
 
 from embedding.embedder import Embedder
 from intent.intent_engine import IntentEngine
@@ -57,7 +58,7 @@ _ROUTING_TABLE = RoutingTable({
 })
 
 
-def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine) -> ExecutionDispatcher:
+def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempalace_bridge: MempalaceBridge) -> ExecutionDispatcher:
     """
     Construit et câble le registre de routers d'exécution.
 
@@ -71,13 +72,14 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine) -> Exe
     registry.register("image_router", ImageExecutionRouter(
         internal_router=InternalImageRouter(),
         intent_engine=intent_engine,
-        mempalace_bridge=self.mempalace_bridge,
+        mempalace_bridge=mempalace_bridge,
     ))
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
     registry.register("llm_router", LLMExecutionRouter(
         llm_router=llm_router,
         intent_engine=intent_engine,
+        mempalace_bridge=mempalace_bridge,
     ))
 
     # Router ingestion : stockage direct sans pipeline cognitif
@@ -106,7 +108,7 @@ class AriaKernel:
         llm_router = LLMRouter()
         embedder = Embedder(config.EMBEDDING_MODEL)
         intent_engine = IntentEngine(embedder)
-        mempalace_bridge = MempalaceBridge()   # ← instanciation ici
+        mempalace_bridge = MempalaceBridge(store=mempalace_search)
 
         self.cognitive_engine = cognitive_engine or CognitiveEngine(
             llm_router=llm_router,
@@ -115,6 +117,7 @@ class AriaKernel:
             llm_router=llm_router,
             intent_engine=intent_engine,
             mempalace_bridge=mempalace_bridge,
+        )
 
     async def handle_event(self, event: Event) -> str:
         """
