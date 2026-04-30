@@ -6,14 +6,28 @@
 #   IMAGE_INPUT      → analyse d'une image reçue (vision → description texte)
 #   IMAGE_GENERATION → génération d'une image depuis un prompt texte
 #
-# Ce router est un effecteur pur : il reçoit un payload structuré,
-# délègue à InternalImageRouter (llm/image_router.py), et retourne
-# un dict de résultat conforme au contrat router→dispatcher.
-#
 # Contrat de sortie strict (règle commune à tous les routers) :
 #   IMAGE_INPUT      → {"text": str}              — description vision
 #   IMAGE_GENERATION → {"path": str, "caption": str} — image générée
 #   Jamais : {"status": ...} — c'est le rôle exclusif du dispatcher.
+#
+# Pipeline IMAGE_INPUT — deux modes :
+#
+#   Mode standard (caption descriptive ou absente) :
+#     photo → vision → {"text": description brute}
+#
+#   Mode enrichi (caption interrogative : "c'est quoi ?", "tu reconnais ?") :
+#     photo → vision → description injectée dans LLMExecutionRouter
+#              → réponse enrichie par mémoire + intents actifs
+#
+#   Le mode est détecté dans _handle_input() via is_interrogative_caption().
+#   is_interrogative_caption() est la source de vérité — pas le kernel,
+#   pas CognitiveResult — pour éviter de toucher kernel.py.
+#
+# Activation du mode enrichi :
+#   Nécessite llm_execution_router injecté au constructeur.
+#   Sans lui, _handle_input() retourne toujours la description brute
+#   (dégradation gracieuse).
 #
 # Responsabilités :
 #   - Transmettre la caption utilisateur au modèle de vision
@@ -27,6 +41,7 @@
 from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
+from cognition.cognitive_classifier import is_interrogative_caption
 from memory.mempalace_writer import store_image_artifact
 
 
@@ -35,18 +50,25 @@ class ImageExecutionRouter(BaseRouter):
     Effecteur image du pipeline d'exécution.
 
     Args:
-        internal_router  : llm.image_router.ImageRouter (vision + génération)
-        intent_engine    : IntentEngine — accès aux intents actifs (optionnel)
-        mempalace_bridge : MempalaceBridge — recall épisodique (optionnel)
-
-    intent_engine et mempalace_bridge sont optionnels pour rester
-    compatibles avec les tests qui n'injectent que internal_router.
+        internal_router      : llm.image_router.ImageRouter (vision + génération)
+        intent_engine        : IntentEngine — accès aux intents actifs (optionnel)
+        mempalace_bridge     : MempalaceBridge — recall épisodique (optionnel)
+        llm_execution_router : LLMExecutionRouter — pipeline cognitif texte (optionnel)
+                               Requis pour le mode enrichi (caption interrogative).
+                               Sans lui, IMAGE_INPUT retourne toujours la description brute.
     """
 
-    def __init__(self, internal_router, intent_engine=None, mempalace_bridge=None):
-        self.internal_router = internal_router
-        self.intent_engine = intent_engine
-        self.mempalace_bridge = mempalace_bridge
+    def __init__(
+        self,
+        internal_router,
+        intent_engine=None,
+        mempalace_bridge=None,
+        llm_execution_router=None,
+    ):
+        self.internal_router      = internal_router
+        self.intent_engine        = intent_engine
+        self.mempalace_bridge     = mempalace_bridge
+        self.llm_execution_router = llm_execution_router
 
     def execute(self, payload: dict) -> dict:
         op_type = payload.get("op_type", "")
@@ -66,9 +88,19 @@ class ImageExecutionRouter(BaseRouter):
 
     def _handle_input(self, content, payload: dict) -> dict:
         """
-        Analyse une image reçue via la couche vision et retourne la description.
+        Analyse une image reçue via la couche vision.
 
-        Contrat de sortie : {"text": str}
+        Deux modes selon la caption :
+
+        Mode standard — caption absente ou descriptive ("substrats usés") :
+            → retourne {"text": description_vision}
+
+        Mode enrichi — caption interrogative ("c'est quoi ?", "tu reconnais ?") :
+            → description vision injectée dans LLMExecutionRouter comme contexte
+            → retourne {"text": réponse_enrichie_mémoire_intents}
+            → nécessite llm_execution_router injecté au constructeur
+
+        Contrat de sortie : {"text": str} dans les deux cas.
 
         Pourquoi pas {"path": ...} ici ?
             artifact.path est le chemin local du fichier reçu, pas un résultat
@@ -76,22 +108,74 @@ class ImageExecutionRouter(BaseRouter):
             _normalize() en mode image et ferait envoyer la photo d'origine
             par Telegram au lieu de la description vision.
         """
-        file_path = content.get("file_path") if isinstance(content, dict) else content
-        user_caption = content.get("caption") if isinstance(content, dict) else None
+        file_path    = content.get("file_path") if isinstance(content, dict) else content
+        user_caption = content.get("caption")   if isinstance(content, dict) else None
 
         artifact = self.internal_router.handle_input(
             ImageInput(path=str(file_path), caption=user_caption)
         )
 
-        # Stockage épisodique — non bloquant
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
             print(f"[MEMORY WRITE ERROR] image_input: {e}")
 
-        # Retourne uniquement la description texte produite par le modèle vision.
+        # ── Mode enrichi : caption interrogative + LLM router disponible ────
+        # is_interrogative_caption() est réévalué ici (source de vérité locale).
+        # Pas de dépendance au flag CognitiveResult.interrogative du kernel —
+        # évite le couplage et simplifie les tests.
+        if is_interrogative_caption(user_caption) and self.llm_execution_router is not None:
+            vision_text = artifact.caption or ""
+            if vision_text:
+                return self._handle_input_enriched(
+                    vision_text=vision_text,
+                    user_caption=user_caption,
+                    payload=payload,
+                )
+
+        # Mode standard : description vision brute
         return {"text": artifact.caption or ""}
+
+    def _handle_input_enriched(
+        self,
+        vision_text: str,
+        user_caption: str,
+        payload: dict,
+    ) -> dict:
+        """
+        Pipeline vision enrichi pour les captions interrogatives.
+
+        Injecte la description vision comme contexte factuel dans
+        LLMExecutionRouter pour bénéficier de la mémoire + intents actifs.
+
+        Pourquoi REASONING et pas FACT_RECALL ?
+            TOP_K REASONING = 8 vs FACT_RECALL = 3.
+            Une question sur une image peut mobiliser des souvenirs variés
+            (jardinage, santé, activités) — le budget mémoire large est justifié.
+            REASONING est aussi le rôle LLM le plus puissant (Cerebras qwen-3-235b).
+
+        Format du message injecté :
+            [Analyse visuelle : <description modèle vision>]
+
+            <question originale de l'utilisateur>
+
+        Le bloc [Analyse visuelle] donne au LLM les faits visuels bruts.
+        La question utilisateur oriente l'angle de réponse.
+        La mémoire + intents enrichissent le contexte personnel.
+        """
+        enriched_message = (
+            f"[Analyse visuelle : {vision_text}]\n\n"
+            f"{user_caption}"
+        )
+
+        print(f"[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
+
+        return self.llm_execution_router.execute({
+            "op_type" : CognitiveOperation.REASONING.value,
+            "content" : enriched_message,
+            "metadata": payload.get("metadata", {}),
+        })
 
     # =========================================================
     # IMAGE GENERATION
@@ -107,16 +191,23 @@ class ImageExecutionRouter(BaseRouter):
         Flux :
             1. Extraction du prompt brut (message utilisateur)
             2. Construction du contexte : intents actifs + mémoire épisodique
-            3. Enrichissement du prompt si contexte disponible
+            3. Enrichissement du prompt (pour le générateur uniquement)
             4. Génération via ImageRouter
             5. Stockage épisodique
-            6. Retour du path pour Telegram
+            6. Retour path + caption basée sur raw_prompt (pas le prompt enrichi)
+
+        Pourquoi séparer raw_prompt et enriched_prompt pour la caption ?
+            Le bloc [Contexte :...] est multi-lignes et peut dépasser 100 chars.
+            L'afficher dans la caption Telegram produit un texte debug illisible
+            tronqué à 79 chars. La caption doit refléter l'intention utilisateur,
+            pas le contexte cognitif interne.
         """
         raw_prompt = content if isinstance(content, str) else str(content)
-        intent_id = payload.get("metadata", {}).get("intent_id")
+        intent_id  = payload.get("metadata", {}).get("intent_id")
 
-        # ── Enrichissement du prompt ─────────────────────────────────────────
-        context_block = self._build_generation_context(raw_prompt)
+        # ── Enrichissement du prompt pour le générateur ──────────────────────
+        # raw_prompt est conservé séparément pour la caption finale.
+        context_block   = self._build_generation_context(raw_prompt)
         enriched_prompt = _inject_context(raw_prompt, context_block)
 
         artifact = self.internal_router.generate(
@@ -130,11 +221,12 @@ class ImageExecutionRouter(BaseRouter):
         except Exception as e:
             print(f"[MEMORY WRITE ERROR] image_generation: {e}")
 
-        # Retourne path + caption : _normalize() détectera l'extension image
-        # et produira le signal {"type": "image", ...} pour TelegramInterface.
+        # Caption basée sur raw_prompt — lisible, sans le bloc contexte interne.
+        caption = raw_prompt[:100] if raw_prompt else artifact.caption or ""
+
         return {
-            "path": artifact.path,
-            "caption": artifact.caption,
+            "path"    : artifact.path,
+            "caption" : caption,
         }
 
     # =========================================================

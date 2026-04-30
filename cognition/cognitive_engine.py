@@ -9,13 +9,24 @@
 # ni aucun router d'exécution. Il classifie, c'est tout.
 #
 # Entrée  : Event (type + content + metadata)
-# Sortie  : CognitiveResult (type string + operation enum + short_circuit flag)
+# Sortie  : CognitiveResult (type string + operation enum + flags)
+#
+# Champ CognitiveResult.interrogative :
+#   True si l'event est IMAGE_INPUT avec une caption interrogative
+#   ("c'est quoi ?", "tu reconnais ?", etc.).
+#   Utilisé par ImageExecutionRouter pour basculer vers le pipeline
+#   vision enrichi (description vision → LLMExecutionRouter).
+#   Transmis via payload["metadata"]["interrogative"] par le kernel.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from core.event import Event, EventType
-from cognition.cognitive_classifier import classify_operation, detect_generation_intent_from_caption
+from cognition.cognitive_classifier import (
+    classify_operation,
+    detect_generation_intent_from_caption,
+    is_interrogative_caption,
+)
 from cognition.cognitive_context import CognitiveOperation
 
 
@@ -29,11 +40,14 @@ class CognitiveResult:
     operation     : enum CognitiveOperation pour les lookups (TOP_K, LLM_ROLE, etc.)
     short_circuit : si True, le kernel retourne `result` directement sans dispatch
     result        : réponse pré-calculée en cas de short_circuit
+    interrogative : True si IMAGE_INPUT + caption = question sur le contenu
+                    → signal pour ImageExecutionRouter de déclencher le pipeline enrichi
     """
     type: str
     operation: CognitiveOperation
     short_circuit: bool = False
     result: Optional[Any] = None
+    interrogative: bool = False
 
 
 class CognitiveEngine:
@@ -50,6 +64,11 @@ class CognitiveEngine:
 
     Le llm_router est optionnel : sans lui, le classifier tombe sur UNKNOWN
     pour les cas ambigus. Utile pour les tests sans API.
+
+    Pour les events IMAGE, trois cas :
+      caption de génération ("transforme en aquarelle")  → IMAGE_GENERATION
+      caption interrogative ("c'est quoi ?")             → IMAGE_INPUT  + interrogative=True
+      caption descriptive ou absente                     → IMAGE_INPUT  + interrogative=False
     """
 
     def __init__(self, llm_router=None):
@@ -70,10 +89,16 @@ class CognitiveEngine:
                     operation=CognitiveOperation.IMAGE_GENERATION,
                 )
 
-            # Pas de caption ou caption descriptive → analyse de l'image reçue
+            # Caption = question sur le contenu → IMAGE_INPUT enrichi
+            # Le flag interrogative est transmis au kernel pour injection
+            # dans payload["metadata"] → ImageExecutionRouter bascule vers
+            # le pipeline vision enrichi.
+            interrogative = is_interrogative_caption(caption)
+
             return CognitiveResult(
                 type=CognitiveOperation.IMAGE_INPUT.value,
                 operation=CognitiveOperation.IMAGE_INPUT,
+                interrogative=interrogative,
             )
 
         # ── Événements texte ─────────────────────────────────────────────────

@@ -147,7 +147,9 @@ class AriaKernel:
             payload={
                 "op_type": cognitive_result.type,
                 "content": event.content,
-                "metadata": event.metadata,
+                "metadata": {**event.metadata,
+                             "interrogative": cognitive_result.interrogative,
+                },
             },
             metadata=event.metadata,
         )

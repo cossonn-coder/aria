@@ -1,3 +1,4 @@
+#aria/tests/images/test_architecture_rules.py
 import inspect
 
 from llm.vision.groq_vision import GroqVisionClient
@@ -15,9 +16,12 @@ CLIENTS = [
 
 
 def test_clients_do_not_import_config():
+    # On vérifie l'import, pas l'occurrence du mot —
+    # "config" peut apparaître légitimement dans des commentaires.
     for client in CLIENTS:
         source = inspect.getsource(client)
-        assert "config" not in source
+        assert "import config" not in source
+        assert "from config" not in source
 
 
 def test_clients_are_transport_only():

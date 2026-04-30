@@ -7,14 +7,17 @@
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
 #   2. Heuristique texte image generation           → IMAGE_GENERATION
-#   3. Ingestion (message long > 150 chars)          → INGESTION
-#   4. Cache MemPalace (pattern déjà vu)             → opération mise en cache
-#   5. Classifieur LLM                               → opération LLM
-#   6. Fallback                                      → UNKNOWN
+#   3. Message court → CONFIRMATION                 ← anti-intents parasites
+#   4. Ingestion (message long > 150 chars)          → INGESTION
+#   5. Cache MemPalace (pattern déjà vu)             → opération mise en cache
+#   6. Classifieur LLM                               → opération LLM
+#   7. Fallback                                      → UNKNOWN
 #
-# Règle :
-#   Ce module ne décide pas de l'exécution — il retourne une CognitiveOperation.
-#   Toute logique d'exécution vit dans les routers.
+# Fonctions exportées :
+#   classify_operation()              — mapping message → CognitiveOperation
+#   detect_image_generation_intent()  — heuristique génération image (texte pur)
+#   detect_generation_intent_from_caption() — génération depuis caption photo
+#   is_interrogative_caption()        — caption = question sur le contenu de l'image
 
 import json
 from cognition.cognitive_context import CognitiveOperation
@@ -23,21 +26,28 @@ from memory.mempalace_writer import store_interaction
 
 
 # =========================================================
+# SEUILS
+# =========================================================
+
+# Messages plus courts que ce seuil sont traités comme CONFIRMATION.
+# Évite la création d'intents parasites sur les salutations et
+# les réponses brèves ("Ok", "Merci", "Les deux", "Salut").
+MIN_MESSAGE_LENGTH = 10
+
+
+# =========================================================
 # HEURISTIQUES IMAGE
 # =========================================================
 
 # Mots-clés déclenchant IMAGE_GENERATION pour un message texte pur.
-# Liste conservative — les faux positifs sont plus gênants que les faux négatifs
-# (un faux positif génère une image non souhaitée ; un faux négatif donne
-# une réponse texte là où on attendait une image, rattrapable par reformulation).
 _TEXT_GENERATION_KEYWORDS = [
     # Verbes de création directe
     "génère", "generé", "genere",
     "dessine", "illustre",
-    "crée une image", "cree une image", "créé une image",
+    "crée une image", "cree une image",
     "génère une image", "genere une image",
-    "fais une image", "fais moi une image", "fait une image",
-    "produis une image", "produit une image",
+    "fais une image", "fais moi une image",
+    "produis une image",
     # Formats spécifiques — très peu ambigus
     "meme", "mème",
     "illustration",
@@ -45,14 +55,14 @@ _TEXT_GENERATION_KEYWORDS = [
     "logo",
     "affiche",
     "bannière",
+    # Visualisation explicite
+    "visualise", "montre moi",
     # Anglais
     "generate image", "draw", "make an image",
     "create image", "render",
 ]
 
-# Mots-clés indiquant une demande de génération dans une caption accompagnant une photo.
-# Plus permissifs que les keywords texte : l'utilisateur a déjà fourni une image
-# comme référence visuelle, donc l'intention de transformation est plus probable.
+# Mots-clés indiquant une demande de génération dans une caption photo.
 _CAPTION_GENERATION_KEYWORDS = [
     "génère", "generé", "genere",
     "dessine", "crée", "cree",
@@ -60,6 +70,26 @@ _CAPTION_GENERATION_KEYWORDS = [
     "produis", "render", "generate",
     "draw", "create", "make",
     "version", "style", "comme ça mais",
+]
+
+# Marqueurs signalant que la caption est une question sur le contenu de l'image.
+# Une caption interrogative déclenche le pipeline enrichi (vision → LLM cognitif)
+# plutôt que la description vision brute.
+#
+# Exemples positifs : "c'est quoi ?", "tu reconnais ?", "qu'est-ce que c'est ?"
+# Exemples négatifs : "substrats de shiitakes usés", "jardin 2024", "photo du verger"
+_INTERROGATIVE_MARKERS = [
+    "?",
+    "c'est quoi", "c est quoi", "c'est quoi ça", "c'est koi",
+    "kesako", "kezako",
+    "qu'est-ce", "qu est ce", "qu'est ce",
+    "qu'est-ce que c'est", "qu'est ce que c'est",
+    "c'est quoi ce", "c'est quoi ces",
+    "tu reconnais", "tu sais ce que c'est", "tu vois quoi",
+    "what is", "what's", "what are", "what do you see",
+    "c'est quoi là", "ça ressemble à quoi",
+    "tu peux identifier", "tu identifies",
+    "comment ça s'appelle",
 ]
 
 
@@ -84,14 +114,32 @@ def detect_generation_intent_from_caption(caption: str | None) -> bool:
     Utilisé par CognitiveEngine.classify() pour les events IMAGE :
     une photo envoyée avec une caption de transformation → IMAGE_GENERATION.
     Une photo envoyée avec une description neutre       → IMAGE_INPUT.
-
-    Exemples positifs  : "génère une version estivale", "dessine ça en aquarelle"
-    Exemples négatifs  : "c'est ma courge", "qu'est-ce que c'est ?", None
     """
     if not caption:
         return False
     lower = caption.lower()
     return any(k in lower for k in _CAPTION_GENERATION_KEYWORDS)
+
+
+def is_interrogative_caption(caption: str | None) -> bool:
+    """
+    Retourne True si la caption d'une photo est une question sur son contenu.
+
+    Distinction critique avec detect_generation_intent_from_caption() :
+      - génération   : "transforme-la en aquarelle", "refais dans le style Monet"
+      - interrogative: "c'est quoi ?", "tu reconnais ça ?", "qu'est-ce que c'est ?"
+
+    Quand True, ImageExecutionRouter._handle_input() bascule vers le pipeline
+    enrichi : description vision → LLMExecutionRouter (mémoire + intents).
+    Quand False, retour direct de la description vision brute.
+
+    Exemples positifs  : "c'est quoi ?", "qu'est-ce que c'est ?", "tu reconnais ?"
+    Exemples négatifs  : "substrats de shiitakes usés", "jardin 2024", None
+    """
+    if not caption:
+        return False
+    lower = caption.lower().strip()
+    return any(marker in lower for marker in _INTERROGATIVE_MARKERS)
 
 
 # =========================================================
@@ -143,32 +191,31 @@ def classify_operation(
     metadata = metadata or {}
 
     # ── 1. Image reçue via Telegram ─────────────────────────────────────────
-    # Priorité maximale : si une photo est jointe, c'est une entrée image.
-    # La distinction INPUT vs GENERATION est faite dans CognitiveEngine
-    # via detect_generation_intent_from_caption().
     if metadata.get("image") is not None:
         return CognitiveOperation.IMAGE_INPUT
 
     # ── 2. Heuristique génération image ─────────────────────────────────────
-    # Court-circuite le LLM pour les demandes de génération les plus explicites.
-    # Rapide, offline, sans consommation de tokens.
     if detect_image_generation_intent(message):
         return CognitiveOperation.IMAGE_GENERATION
 
-    # ── 3. Ingestion (message long) ──────────────────────────────────────────
-    # Un message > 150 chars sans question est traité comme fourniture
-    # d'information brute à stocker directement.
+    # ── 3. Message court → CONFIRMATION ────────────────────────────────────
+    # Les salutations ("Salut", "Ok"), réponses brèves ("Les deux", "Oui"),
+    # et continuations contextuelles ne doivent pas créer d'intent.
+    # CONFIRMATION est routé vers llm_router mais n'implique pas de création
+    # d'intent dans LLMExecutionRouter (recall_decision.action != "create").
+    if len(message.strip()) <= MIN_MESSAGE_LENGTH:
+        return CognitiveOperation.CONFIRMATION
+
+    # ── 4. Ingestion (message long) ──────────────────────────────────────────
     if len(message) > 150:
         return CognitiveOperation.INGESTION
 
-    # ── 4. Cache MemPalace ───────────────────────────────────────────────────
-    # Si ce pattern a déjà été vu et classifié avec haute confiance,
-    # réutiliser le résultat sans appel LLM.
+    # ── 5. Cache MemPalace ───────────────────────────────────────────────────
     cached = _search_cache(message)
     if cached:
         return cached
 
-    # ── 5. Classifieur LLM ───────────────────────────────────────────────────
+    # ── 6. Classifieur LLM ───────────────────────────────────────────────────
     if llm_router is None:
         return CognitiveOperation.UNKNOWN
 
@@ -187,10 +234,9 @@ def classify_operation(
             raw = "{" + raw + "}"
         data = json.loads(raw)
 
-        operation = _parse_operation(data.get("operation", "unknown"))
+        operation  = _parse_operation(data.get("operation", "unknown"))
         confidence = float(data.get("confidence", 0.0))
 
-        # Mise en cache si confiance suffisante et opération non ambiguë
         if confidence >= CONFIDENCE_THRESHOLD and operation != CognitiveOperation.UNKNOWN:
             _store_cache(message, operation)
 
@@ -206,12 +252,7 @@ def classify_operation(
 # =========================================================
 
 def store_confirmed_operation(message: str, operation: CognitiveOperation):
-    """
-    Stocke un mapping confirmé explicitement par l'utilisateur.
-
-    Utilisé pour renforcer le cache sur des patterns récurrents
-    après validation humaine (feedback loop).
-    """
+    """Stocke un mapping confirmé explicitement par l'utilisateur."""
     _store_cache(message, operation, confirmed=True)
 
 
@@ -219,19 +260,11 @@ def _search_cache(message: str) -> CognitiveOperation | None:
     """
     Recherche un pattern similaire dans le cache classifier de MemPalace.
 
-    Seuil de similarité strict (0.92) pour éviter les faux positifs :
-    deux messages cognitivement différents peuvent être lexicalement proches.
-
-    Returns:
-        CognitiveOperation si un pattern similaire est trouvé, None sinon.
+    Seuil strict (0.92) pour éviter les faux positifs.
     """
     try:
-        results = search(
-            query=message,
-            wing="aria_classifier",
-            n=1,
-        )
-        hits = results.get("results", [])
+        results = search(query=message, wing="aria_classifier", n=1)
+        hits    = results.get("results", [])
         if not hits:
             return None
 
@@ -239,8 +272,7 @@ def _search_cache(message: str) -> CognitiveOperation | None:
         if hit.get("similarity", 0) < 0.92:
             return None
 
-        text = hit.get("text", "")
-        data = json.loads(text)
+        data = json.loads(hit.get("text", ""))
         return _parse_operation(data.get("operation", "unknown"))
 
     except Exception:
@@ -248,23 +280,16 @@ def _search_cache(message: str) -> CognitiveOperation | None:
 
 
 def _store_cache(message: str, operation: CognitiveOperation, confirmed: bool = False):
-    """
-    Stocke un mapping message → operation dans le cache classifier de MemPalace.
-
-    Args:
-        message   : message source
-        operation : opération classifiée
-        confirmed : True si validé par l'utilisateur (feedback loop)
-    """
+    """Stocke un mapping message → operation dans le cache classifier."""
     try:
         store_interaction(
             text=json.dumps({"message": message, "operation": operation.value}),
             intent_id="classifier_cache",
             metadata={
-                "wing": "aria_classifier",
-                "room": "classifier_cache",
-                "confirmed": confirmed,
-                "type": "classifier_cache",
+                "wing"      : "aria_classifier",
+                "room"      : "classifier_cache",
+                "confirmed" : confirmed,
+                "type"      : "classifier_cache",
             },
         )
     except Exception as e:
@@ -276,12 +301,7 @@ def _store_cache(message: str, operation: CognitiveOperation, confirmed: bool = 
 # =========================================================
 
 def _parse_operation(s: str) -> CognitiveOperation:
-    """
-    Convertit une string en CognitiveOperation.
-
-    Retourne UNKNOWN si la valeur ne correspond à aucune opération connue,
-    plutôt que de lever une exception.
-    """
+    """Convertit une string en CognitiveOperation, UNKNOWN si invalide."""
     try:
         return CognitiveOperation(s.lower())
     except ValueError:
