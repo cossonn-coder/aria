@@ -63,7 +63,10 @@ class IntentRecallEngine:
 
         if memory_context and memory_context.get("hits"):
             for h in memory_context["hits"]:
-                intent_id = h.get("metadata", {}).get("intent")
+                # Convention : mempalace_writer stocke l'intent_id dans le champ `room`.
+                # Si cette convention change (ex. migration vers metadata Chroma),
+                # ce mapping casse silencieusement — à auditer en cas de régression mémoire.
+                intent_id = h.get("room")
                 if intent_id:
                     mem_score_map[intent_id] = mem_score_map.get(intent_id, 0.0) + 1.0
 
@@ -93,7 +96,7 @@ class IntentRecallEngine:
             cosine = self._cosine(msg_emb, intent.embedding)
             mem_score = mem_score_map.get(intent.id, 0.0)
 
-            final_score = (0.8 * cosine) + (0.2 * mem_score)
+            final_score = min(1.0, cosine + (0.2 * mem_score))
 
             scored.append((intent, final_score))
 

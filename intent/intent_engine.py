@@ -1,5 +1,6 @@
 #aria/intent/intent_engine.py
 
+import numpy as np
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -82,6 +83,36 @@ class IntentEngine:
             if intent.name.lower() == name.lower() and intent.status == "active":
                 return intent
         return None
+
+    # =========================================================
+    # FIND BY NAME (SEMANTIC MATCH, ACTIVE ONLY)
+    # =========================================================
+    def _find_by_name_semantic(self, name: str, threshold: float = 0.55) -> Optional[Intent]:
+        """
+        Autorité finale pour les décisions CREATE : si un intent existant est
+        sémantiquement proche du nom canonique extrait, on attache plutôt que
+        de créer un doublon — même si le recall message-based n'a pas franchi
+        le seuil (signal différent, moins stable pour les noms courts).
+        """
+        if not name:
+            return None
+        name_emb = np.array(self.embedder.encode([name])[0], dtype=np.float32)
+        best_intent = None
+        best_score = threshold
+        for intent in self.intents.values():
+            if intent.status != "active":
+                continue
+            if not hasattr(intent, "embedding") or intent.embedding is None:
+                continue
+            b = np.array(intent.embedding, dtype=np.float32)
+            denom = np.linalg.norm(name_emb) * np.linalg.norm(b)
+            if denom == 0:
+                continue
+            score = float(np.dot(name_emb, b) / denom)
+            if score > best_score:
+                best_score = score
+                best_intent = intent
+        return best_intent
     
     # =========================================================
     # APPLY (STRICT MUTATION ZONE)
@@ -100,9 +131,17 @@ class IntentEngine:
         # CREATE
         # -------------------------
         if decision.action == IntentActionType.CREATE:
-            # déduplication par nom canonique
+            # Déduplication par nom canonique — autorité finale pour CREATE.
+            # Le recall message-based peut manquer un intent proche (seuil +
+            # bruit embedding) ; la similarité nom-à-nom offre un signal plus
+            # stable. Exact match d'abord, sémantique ensuite.
             if intent_name:
                 existing = self._find_by_name(intent_name)
+                if existing:
+                    existing.add_action(message)
+                    self.compression_cycle_if_needed()
+                    return existing
+                existing = self._find_by_name_semantic(intent_name)
                 if existing:
                     existing.add_action(message)
                     self.compression_cycle_if_needed()
