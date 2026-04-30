@@ -23,6 +23,7 @@ class Config:
     cerebras_api_key: str = ""
     sambanova_api_key: str = ""
     openrouter_api_key: str = ""
+    anthropic_api_key: str = ""
     hf_token: str = ""
 
     # ── Modèles texte ─────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ class Config:
         self.cerebras_api_key = os.getenv("CEREBRAS_API_KEY", "")
         self.sambanova_api_key = os.getenv("SAMBANOVA_API_KEY", "")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+        self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.chroma_path = str(BASE_DIR / "chroma_db")
         self.soul_path = str(BASE_DIR / "soul.md")

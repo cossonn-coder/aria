@@ -75,6 +75,12 @@ ROUTING_TABLE = {
             "base_url": "https://api.cerebras.ai/v1",
             "api_key": lambda: config.cerebras_api_key,
         },
+        {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": lambda: config.anthropic_api_key,
+        },
     ],
     # ... reste inchangé
     LLMRole.PLANNING: [
@@ -95,7 +101,12 @@ ROUTING_TABLE = {
             "base_url": "https://openrouter.ai/api/v1",
             "api_key": lambda: config.openrouter_api_key,
         },
-
+        {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": lambda: config.anthropic_api_key,
+        },
     ],
     LLMRole.REASONING: [
         {
@@ -110,6 +121,12 @@ ROUTING_TABLE = {
             "base_url": "https://openrouter.ai/api/v1",
             "api_key": lambda: config.openrouter_api_key,
         },
+        {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": lambda: config.anthropic_api_key,
+        },
     ],
     LLMRole.REFLECTION: [
         {
@@ -123,6 +140,12 @@ ROUTING_TABLE = {
             "model": "nvidia/nemotron-3-super-120b-a12b:free",
             "base_url": "https://openrouter.ai/api/v1",
             "api_key": lambda: config.openrouter_api_key,
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-haiku-4-5",
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": lambda: config.anthropic_api_key,
         },
     ],
 }
@@ -174,9 +197,47 @@ class LLMRouter:
         max_tokens: int,
     ) -> LLMResponse:
 
-        url = f"{provider_cfg['base_url']}/chat/completions"
         api_key = provider_cfg["api_key"]()
 
+        # system prompt = soul + user (commun aux deux formats)
+        system_parts = [_SOUL]
+        if _USER:
+            system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
+        system_prompt = "\n".join(system_parts)
+
+        if provider_cfg["provider"] == "anthropic":
+            from logger import get_logger
+            log = get_logger(__name__)
+
+            url = f"{provider_cfg['base_url']}/messages"
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": provider_cfg["model"],
+                "max_tokens": max_tokens,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+            }
+            response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+            content = data["content"][0]["text"]
+            log.info("[LLM] Anthropic (%s) a répondu.", provider_cfg["model"])
+            return LLMResponse(
+                content=content,
+                metadata={
+                    "provider": provider_cfg["provider"],
+                    "model": provider_cfg["model"],
+                },
+                usage=data.get("usage"),
+            )
+
+        # ── Format OpenAI-compatible ──────────────────────────────────────────
+        url = f"{provider_cfg['base_url']}/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -187,23 +248,10 @@ class LLMRouter:
             headers["HTTP-Referer"] = "https://aria.local"
             headers["X-Title"] = "Aria"
 
-        messages = []
-
-        # system prompt = soul + user
-        system_parts = [_SOUL]
-        if _USER:
-            system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
-
-        messages.append({
-            "role": "system",
-            "content": "\n".join(system_parts),
-        })
-
-        messages.append({
-            "role": "user",
-            "content": prompt,
-        })
-
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
 
         payload = {
             "model": provider_cfg["model"],
