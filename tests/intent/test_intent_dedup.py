@@ -139,3 +139,78 @@ def test_below_threshold_creates_new(engine):
 
     assert len(eng.intents) == 2, "un nouvel intent doit être créé"
     assert result.id != list(eng.intents.keys())[0], "l'intent retourné doit être le nouveau"
+
+
+# ── Régression bug E — embedder réel ─────────────────────────────────────────
+
+def test_regression_bug_e_real_embeddings():
+    """
+    Régression bug E end-to-end via resolve().
+    Avec le vrai embedder, le message "Pourquoi ils ne germent pas"
+    doit franchir le seuil 0.45 face à un intent "problème de germination"
+    existant — démontrant que la formule corrigée (cosine + boost)
+    fait le job sur le cas réel qui a déclenché le sprint.
+
+    Ce test utilise SentenceTransformer réel — pas de mock — pour
+    protéger contre une régression silencieuse en cas de changement
+    d'embedder ou de modèle.
+
+    # MESURE OBSERVÉE (avril 2026, all-MiniLM-L6-v2) : score = 0.4889 sans mem_score.
+    # Marge de 0.04 au-dessus du seuil — fragile à un changement d'embedder.
+    # En prod, le boost mem_score (+0.2 max) compense largement quand l'intent a
+    # déjà de la mémoire ; le test isole volontairement le cas le plus défavorable
+    # (memory_context=None) pour faire échec si le scoring nu se dégrade.
+    """
+    SentenceTransformer = pytest.importorskip("sentence_transformers").SentenceTransformer
+
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    engine = IntentRecallEngine(embedder, threshold=0.45)
+
+    intent_emb = embedder.encode(["problème de germination"])[0].tolist()
+    intent = SimpleNamespace(id="x1", status="active", embedding=intent_emb)
+
+    decision, scored = engine.resolve(
+        "Pourquoi ils ne germent pas",
+        [intent],
+        memory_context=None,  # on teste le scoring SANS aide mémoire
+    )
+    
+    assert scored, "scored ne doit pas être vide"
+    score = scored[0][1]
+    print(f"\n>>> score obtenu = {score:.4f} (seuil = 0.45)")
+    assert score >= 0.45, (
+        f"régression bug E : score {score:.4f} < 0.45, "
+        f"l'attach ne se déclenchera pas"
+    )
+    assert decision.action == "attach", (
+        f"attendu 'attach', obtenu '{decision.action}' (score={score:.4f})"
+    )
+
+
+# ── Rooms non-intent ignorées ─────────────────────────────────────────────────
+
+def test_non_intent_rooms_dont_corrupt_scoring(recall_engine):
+    """
+    Les hits avec room ∈ {general, knowledge_ingest, ...} (pas un intent_id)
+    sont collectés dans mem_score_map mais aucun intent n'ayant cet ID,
+    ils ne boostent rien. Ce test gèle ce contrat : un changement futur
+    qui filtrerait par room valide ne doit pas casser le comportement,
+    et un changement qui les utiliserait à tort doit faire échouer ce test.
+    """
+    engine, embedder = recall_engine
+    embedder.encode.return_value = [[1.0, 0.0, 0.0]]
+
+    intent = SimpleNamespace(id="x1", status="active", embedding=[0.6, 0.8, 0.0])
+    memory_context = {"hits": [
+        {"room": "general"},
+        {"room": "knowledge_ingest"},
+        {"room": "agents"},
+    ]}
+
+    _, scored = engine.resolve("msg", [intent], memory_context=memory_context)
+
+    # cosine pur attendu (≈0.6), pas de boost car aucun hit ne pointe vers x1
+    assert scored, "scored ne doit pas être vide"
+    assert abs(scored[0][1] - 0.6) < 0.01, (
+        f"score corrompu par rooms non-intent : {scored[0][1]:.4f} (attendu ≈0.6)"
+    )

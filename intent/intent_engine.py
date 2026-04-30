@@ -87,6 +87,10 @@ class IntentEngine:
     # =========================================================
     # FIND BY NAME (SEMANTIC MATCH, ACTIVE ONLY)
     # =========================================================
+    # DETTE: cosine recalculé à chaud à chaque CREATE pour chaque intent actif (O(N)).
+    # Avec ~50 intents actifs c'est négligeable. Si le nombre croît,
+    # précalculer la norme dans Intent.embedding ou cacher dans un index sprint 3.
+
     def _find_by_name_semantic(self, name: str, threshold: float = 0.55) -> Optional[Intent]:
         """
         Autorité finale pour les décisions CREATE : si un intent existant est
