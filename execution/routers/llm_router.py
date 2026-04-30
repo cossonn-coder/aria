@@ -158,7 +158,6 @@ class LLMExecutionRouter(BaseRouter):
             session_memories=session_memories,
             global_memories=global_memories,
         )
-        from logger import get_logger as _gl; _gl(__name__).info("CTX_BLOCK (%d chars):\n%s", len(context_block), context_block)
 
         # ── 5. Construction du contexte agent ───────────────────────────────
         trace = CognitiveTrace()

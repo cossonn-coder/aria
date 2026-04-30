@@ -25,12 +25,28 @@
 #   Métadonnées : str, int, float, bool, None uniquement.
 #   Les datetime sont convertis en isoformat() avant stockage.
 
+import hashlib
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from config import config
 from mempalace.palace import get_collection
 from images.image_types import ImageArtifact
+
+
+# ── Idempotence ───────────────────────────────────────────────────────────────
+
+def _idempotent_doc_id(text: str, intent_id: str) -> str:
+    """
+    Doc_id stable sur une fenêtre de 60 secondes.
+    Deux appels identiques (même text, même intent_id) dans la même minute
+    produisent le même ID → upsert idempotent → pas de doublon.
+    Hors fenêtre, ID différent → répétitions légitimes préservées.
+    """
+    bucket = int(time.time()) // 60
+    h = hashlib.sha256(f"{intent_id}|{text}|{bucket}".encode()).hexdigest()[:16]
+    return f"interaction_{intent_id}_{h}"
 
 
 # ── Champs obligatoires du schéma ─────────────────────────────────────────────
@@ -74,7 +90,7 @@ def store_interaction(
         metadata  : champs supplémentaires libres (intent_name, source, etc.)
     """
     col = get_collection(config.mempalace_path)
-    doc_id = f"interaction_{intent_id}_{uuid4().hex[:8]}"
+    doc_id = _idempotent_doc_id(text, intent_id)
 
     meta = {
         "wing": "aria_episodic",   # couche épisodique — événements temporels
