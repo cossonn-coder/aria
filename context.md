@@ -156,10 +156,13 @@ Plan Pro = Claude Code + claude.ai (séparé de l'API).
 
 ## Dettes identifiées sprint 2
 
-1. **mem_score normalisation biaisée par doublons** (`intent/intent_recall_engine.py`)
-   Confirmé en prod : query "vols pour Paris" boost +1.0 pour `construire une
-   maison` (7 hits parasites) vs +0.286 pour `réservation voyage` (2 hits
-   pertinents). À ré-évaluer après bug B (dédup MemPalace).
+1. **mem_score normalisation biaisée par doublons** ✓ RÉSOLU (cleanup MemPalace)
+   ~~Confirmé en prod : query "vols pour Paris" boost +1.0 pour `construire une
+   maison` (7 hits parasites) vs +0.286 pour `réservation voyage`.~~
+   Cleanup effectué : aria_episodic 724 → 118, suppression rooms test,
+   wing `aria` orphelin (66) et `general`/`agents` (399 archives obsolètes).
+   Idempotence ajoutée dans `store_interaction` (fenêtre 60s sha256).
+   Le boost mem_score peut désormais opérer sur des données propres.
 
 2. **Cosine recalculé O(N) à chaque CREATE** (`intent/intent_engine.py:_find_by_name_semantic`)
    Négligeable à 50 intents, à indexer si croissance.
@@ -170,3 +173,23 @@ Plan Pro = Claude Code + claude.ai (séparé de l'API).
 
 4. **Marge fragile sur scoring nu** (`tests/intent/test_intent_dedup.py:test_regression_bug_e_real_embeddings`)
    Score 0.4889 vs seuil 0.45 — robuste seulement avec mem_score actif et propre.
+
+5. **Suivi des opérations sur la donnée** (dette de processus)
+   Pendant le sprint 2 cleanup, les comptages ont mélangé `col.count()` (toutes wings)
+   et `col.get(where=wing=...)` (wing isolée). 23 entrées n'ont pas pu être tracées
+   dans la chronologie des suppressions. Pour les futurs scripts touchant la donnée
+   prod : logger chaque ID supprimé dans un fichier audit, et toujours mesurer
+   before/after par wing+room avec filtre explicite.
+
+---
+
+### Backlog reporté sprint 3+
+
+- **Métacognition** : Aria doit pouvoir lire son propre code source. Reconstruire
+  proprement via une wing dédiée (`aria_self`) avec ingestion contrôlée du repo,
+  plutôt que via collage manuel sur Telegram.
+- **Idempotence sur store_image_artifact et store_semantic_fact** : ces fonctions
+  utilisent encore uuid4. À aligner si elles deviennent exposées aux retries.
+- **Unification des deux mécanismes de matching d'intent** (`recall_engine` +
+  `_find_by_name_semantic`) en une seule autorité.
+- **Précalcul des normes d'embedding** dans `Intent.embedding` pour O(1) au lieu de O(N).
