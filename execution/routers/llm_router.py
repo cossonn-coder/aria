@@ -204,9 +204,13 @@ class LLMExecutionRouter(BaseRouter):
                     },
                 )
         except Exception as e:
-            print(f"[MEMORY WRITE ERROR] {e}")
+            from logger import get_logger
+            log = get_logger(__name__)
+            log.error("[MEMORY WRITE ERROR] : %s", e)
 
-        print("\n[COGNITIVE TRACE]")
+        from logger import get_logger
+        log = get_logger(__name__)
+        log.error("[COGNITIVE TRACE] : %s", e)
         for step in ctx.trace.as_dict():
             print(step)
 

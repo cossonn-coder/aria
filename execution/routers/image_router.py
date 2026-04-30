@@ -119,7 +119,9 @@ class ImageExecutionRouter(BaseRouter):
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
-            print(f"[MEMORY WRITE ERROR] image_input: {e}")
+            from logger import get_logger
+            log = get_logger(__name__)
+            log.error("memory write error: %s", e)
 
         # ── Mode enrichi : caption interrogative + LLM router disponible ────
         # is_interrogative_caption() est réévalué ici (source de vérité locale).
@@ -169,7 +171,9 @@ class ImageExecutionRouter(BaseRouter):
             f"{user_caption}"
         )
 
-        print(f"[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
+        from logger import get_logger
+        log = get_logger(__name__)
+        log.error("[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
 
         return self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
@@ -219,7 +223,9 @@ class ImageExecutionRouter(BaseRouter):
         try:
             store_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
-            print(f"[MEMORY WRITE ERROR] image_generation: {e}")
+            from logger import get_logger
+            log = get_logger(__name__)
+            log.error("memory write error: %s", e)
 
         # Caption basée sur raw_prompt — lisible, sans le bloc contexte interne.
         caption = raw_prompt[:100] if raw_prompt else artifact.caption or ""
@@ -273,7 +279,9 @@ class ImageExecutionRouter(BaseRouter):
                     if mem_lines:
                         parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
             except Exception as e:
-                print(f"[CONTEXT BUILD ERROR] episodic recall: {e}")
+                from logger import get_logger
+                log = get_logger(__name__)
+                log.error("[CONTEXT BUILD ERROR] episodic recall: %s", e)
 
         return "\n\n".join(parts)
 

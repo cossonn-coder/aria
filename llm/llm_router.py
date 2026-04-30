@@ -157,7 +157,9 @@ class LLMRouter:
                     max_tokens=max_tokens,
                 )
             except Exception as e:
-                print(f"[LLM FALLBACK] {provider_cfg['provider']} failed: {e}")
+                from logger import get_logger
+                log = get_logger(__name__)
+                log.error("[LLM FALLBACK] {provider_cfg['provider']} failed: %s", e)
                 last_error = e
                 if i < len(chain) - 1:  # pas de sleep après le dernier
                     time.sleep(1)
@@ -201,6 +203,7 @@ class LLMRouter:
             "role": "user",
             "content": prompt,
         })
+
 
         payload = {
             "model": provider_cfg["model"],

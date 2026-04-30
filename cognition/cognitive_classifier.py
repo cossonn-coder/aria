@@ -243,7 +243,9 @@ def classify_operation(
         return operation
 
     except Exception as e:
-        print(f"[CLASSIFIER ERROR] {e}")
+        from logger import get_logger
+        log = get_logger(__name__)
+        log.error("[CLASSIFIER ERROR] : %s", e)
         return CognitiveOperation.UNKNOWN
 
 
@@ -293,7 +295,9 @@ def _store_cache(message: str, operation: CognitiveOperation, confirmed: bool = 
             },
         )
     except Exception as e:
-        print(f"[CLASSIFIER STORE ERROR] {e}")
+        from logger import get_logger
+        log = get_logger(__name__)
+        log.error("[CLASSIFIER STORE ERROR] : %s", e)
 
 
 # =========================================================

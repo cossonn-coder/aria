@@ -54,4 +54,7 @@ class IngestionExecutionRouter(BaseRouter):
 
         except Exception as e:
             print(f"[INGESTION ERROR] {e}")
+            from logger import get_logger
+            log = get_logger(__name__)
+            log.error("[INGESTION ERROR] : %s", e)
             return {"text": "[INGESTION] Échec de l'enregistrement."}
