@@ -210,8 +210,8 @@ class LLMExecutionRouter(BaseRouter):
 
         from logger import get_logger
         log = get_logger(__name__)
-        log.error("[COGNITIVE TRACE] : %s", e)
+        log.info("pipeline done → %d chars", len(result))
         for step in ctx.trace.as_dict():
-            print(step)
+            log.debug("trace: %s", step)
 
         return result
