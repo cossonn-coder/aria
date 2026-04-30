@@ -67,20 +67,24 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
     """
     registry = RouterRegistry()
 
+     # Router LLM construit EN PREMIER — injecté dans image_router
+    llm_execution_router = LLMExecutionRouter(
+        llm_router=llm_router,
+        intent_engine=intent_engine,
+        mempalace_bridge=mempalace_bridge,
+    )
+
     # Router image : analyse (IMAGE_INPUT) et génération (IMAGE_GENERATION)
     # llm_router injecté pour la traduction FR→EN des prompts de génération
     registry.register("image_router", ImageExecutionRouter(
         internal_router=InternalImageRouter(),
         intent_engine=intent_engine,
         mempalace_bridge=mempalace_bridge,
+        llm_execution_router=llm_execution_router,
     ))
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
-    registry.register("llm_router", LLMExecutionRouter(
-        llm_router=llm_router,
-        intent_engine=intent_engine,
-        mempalace_bridge=mempalace_bridge,
-    ))
+    registry.register("llm_router", llm_execution_router)
 
     # Router ingestion : stockage direct sans pipeline cognitif
     registry.register("ingestion_router", IngestionExecutionRouter())
