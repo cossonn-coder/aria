@@ -61,6 +61,7 @@ def make_context(
         extra={
             "cognitive_operation" : operation,
             "active_intents"      : [],
+            "context_block"       : "souvenir A injecté par le router",
         },
     )
 

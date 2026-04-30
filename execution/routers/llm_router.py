@@ -36,6 +36,7 @@ from agents.controller.controller_agent import AgentController
 from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOperation
 from cognition.memory_context import MemoryContext
 from cognition.cognitive_trace import CognitiveTrace
+from cognition.context_builder import build_context_block
 
 
 class LLMExecutionRouter(BaseRouter):
@@ -149,6 +150,14 @@ class LLMExecutionRouter(BaseRouter):
             session_memories=session_memories,
         )
 
+        # ── 4b. Context builder (sémantique + intents + budget tokens) ─────────
+        context_block = build_context_block(
+            query=message,
+            bridge=self.mempalace_bridge,
+            active_intents=self.intent_engine.list_attention_active(),
+            global_memories=global_memories,
+        )
+
         # ── 5. Construction du contexte agent ───────────────────────────────
         trace = CognitiveTrace()
 
@@ -159,6 +168,7 @@ class LLMExecutionRouter(BaseRouter):
             session_memory=memory_context.session_memories,
             trace=trace,
             extra={
+                "context_block": context_block,
                 "memory_context": memory_context,
                 "recall": recall_decision,
                 "active_intents": self.intent_engine.list_active(),
