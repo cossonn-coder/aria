@@ -59,6 +59,13 @@ class IntentRecallEngine:
         # =====================================================
         # 2. MEMORY SIGNAL (OPTIONAL BOOST)
         # =====================================================
+        # LIMITE CONNUE (avril 2026) : la normalisation par max_val avantage l'intent
+        # avec le plus de hits, indépendamment de leur pertinence sémantique.
+        # Tant que MemPalace contient des doublons (cf. bug B sprint 2) et des entrées
+        # hors-sujet pour les rooms peuplées, ce boost peut renforcer un intent
+        # parasite. Le boost est conservé pour son utilité long-terme une fois la
+        # mémoire propre, mais sa contribution est volontairement faible (+0.2 max).
+        # À ré-évaluer après dédoublonnage MemPalace.
         mem_score_map = {}
 
         if memory_context and memory_context.get("hits"):
