@@ -184,6 +184,22 @@ Plan Pro = Claude Code + claude.ai (séparé de l'API).
    prod : logger chaque ID supprimé dans un fichier audit, et toujours mesurer
    before/after par wing+room avec filtre explicite.
 
+6. **Écriture mémoire silencieusement skippée sur certaines branches**
+   (`execution/routers/llm_router.py` étape 10)
+   Test live 30/04 : deux échanges "Tu te rappelles des choux rouges ?" n'ont pas
+   incrémenté aria_episodic (118 → 118 alors que doc_ids attendus distincts).
+   À diagnostiquer sprint 3 — instrumenter l'étape 10 avec un log explicite
+   `memory_write: SKIPPED (reason=...)` / `memory_write: OK (id=...)`.
+   Impact : la méta-mémoire ("on en a parlé hier") peut être incomplète selon
+   l'opération cognitive.
+
+7. **Pollution contextuelle par injection [Projets actifs] complète**
+   Test live 30/04 : Aria a généré "la sécurité avec tes choux rouges" — sujet
+   absent du message et des souvenirs. Hypothèse : la liste exhaustive des intents
+   actifs (50+ noms dans le prompt) fait contaminer la réponse par voisinage.
+   À traiter sprint 3 — limiter [Projets actifs] aux N intents les plus saillants
+   pour la query (top-k cosine sur le message), pas tous les actifs.
+
 ---
 
 ### Backlog reporté sprint 3+
