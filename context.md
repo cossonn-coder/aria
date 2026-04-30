@@ -1,6 +1,6 @@
 # ARIA — Reprise de session
-**Mis à jour : 30 Avril 2026 — 12h45**
-**État : sprint 1.3 livré, bugs en cascade découverts pendant test live**
+**Mis à jour : 30 Avril 2026 — fin de journée**
+**État : sprint 2 clos — bugs A/B/E résolus, mémoire propre, 183 tests verts**
 
 ---
 
@@ -15,21 +15,25 @@ Compte Claude Code : `dodgemyspoon@gmail.com` (Pro), session active dans
 
 ---
 
-## Ce qui a été fait dans la session du 30/04 (matin + midi)
+## Ce qui a été fait dans la session du 30/04 (journée complète)
 
+### Sprint 1.x (matin)
 ✅ **Sprint 0.2** — wiring kernel : `llm_execution_router` injecté dans `ImageExecutionRouter`
 ✅ **Logging structuré** — module `logger.py`, `PYTHONUNBUFFERED=1` dans aria.service
 ✅ **Bug NameError** dans cognitive trace de `execution/routers/llm_router.py` corrigé
-✅ **Anthropic en dernier fallback** — config + ROUTING_TABLE (CHAT/PLANNING/REASONING/REFLECTION) avec `claude-haiku-4-5`. Clé dans `.env` sous `ANTHROPIC_API_KEY`
-✅ **Claude Code installé** sur Debian, `CLAUDE.md` à la racine du repo
-✅ **`.gitignore`** propre (`.claude/`, `.env`, `chroma_db/`, etc.)
-✅ **Sprint 1.3 — Context builder token budget** : `cognition/context_builder.py` + 10 tests, intégré dans `LLMExecutionRouter` étape 4b, `AnalystAgent` refacto avec `{context_block}` unique
-✅ **Migration MemPalace** wing=`aria` (719 entrées) → wing=`aria_episodic`
-✅ **Cleanup 74 résidus de tests** (`test_intent` / "hello world")
-✅ **Cleanup 15 intents poubelles** (65 → 50 dans `~/.aria/intents.json`)
-✅ **Validation `aria_semantic`** opérationnel pour écriture/lecture
+✅ **Anthropic en dernier fallback** — config + ROUTING_TABLE avec `claude-haiku-4-5`
+✅ **Sprint 1.3 — Context builder token budget** : `cognition/context_builder.py` + tests
+✅ **Migration MemPalace** wing=`aria` → `aria_episodic` (719 entrées)
+✅ **Cleanup 74 résidus de tests** + **15 intents poubelles** (65 → 50)
 
-**Tests : 169/169 verts**
+### Sprint 2 — bugs en cascade (après-midi)
+✅ **Bug A** — retrieval contextuel : `session_memories` comme source primaire, `global_memories` en fallback sparse dans `context_builder`
+✅ **Bug E** — doublons d'intents : formule `min(1.0, cosine + 0.2*mem_score)`, `_find_by_name_semantic(threshold=0.55)`, fix `room` dans `mem_score_map` — 9 tests
+✅ **Bug B** — cleanup MemPalace : aria_episodic 724 → 118 (suppression `general`/`agents`/rooms test/wing orphelin), idempotence `store_interaction` fenêtre 60s sha256
+✅ **Logs temporaires** CTX_BLOCK + PROMPT FINAL retirés
+✅ **Validation prod** : retrieval choux rouges ✓, pas de pollution mémoire ✓
+
+**Tests : 183/183 verts**
 
 ---
 
@@ -142,15 +146,14 @@ Plan Pro = Claude Code + claude.ai (séparé de l'API).
 
 ## Premier message à envoyer dans la nouvelle session Claude
 
-> Reprise sur ARIA, sprint 2 bugs en cascade découverts en test live.
-> Voici le context.md complet [PIÈCE JOINTE].
-> 
-> J'ai validé l'option A : on fix d'abord le retrieval mémoire contextuel.
-> Les logs CTX_BLOCK + PROMPT FINAL sont toujours actifs, on les retire 
-> en dernier.
-> 
-> Avant de proposer un plan, lis le diagnostic complet du bug A dans 
-> context.md et demande-moi les fichiers dont tu as besoin.
+> Reprise sur ARIA, sprint 2 clos. Voici le context.md [PIÈCE JOINTE].
+>
+> Branche active : `feat/sprint2-image-pipeline`.
+> 183 tests verts. aria_episodic propre (118 entrées, 0 doublon).
+>
+> Prochaine priorité : sprint 3. Lire la section "Backlog reporté sprint 3+"
+> et "Dettes identifiées sprint 2" (dettes 2, 3, 4 ouvertes).
+> Proposer un plan avant d'implémenter.
 
 ---
 
