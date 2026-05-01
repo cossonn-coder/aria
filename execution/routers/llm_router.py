@@ -24,6 +24,7 @@
 #   10. Écriture MemPalace
 
 from execution.routers.execution_base import BaseRouter
+from logger import get_logger
 
 from intent.intent_engine import IntentEngine
 from llm.llm_router import LLMRouter
@@ -37,6 +38,8 @@ from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOpe
 from cognition.memory_context import MemoryContext
 from cognition.cognitive_trace import CognitiveTrace
 from cognition.context_builder import build_context_block
+
+log = get_logger(__name__)
 
 
 class LLMExecutionRouter(BaseRouter):
@@ -202,8 +205,10 @@ class LLMExecutionRouter(BaseRouter):
         # ── 10. Écriture MemPalace ───────────────────────────────────────────
         # Écriture après résolution complète — jamais sur un état intermédiaire.
         # Non bloquant : une erreur mémoire ne doit pas tuer la réponse.
-        try:
-            if intent:
+        if intent is None:
+            log.info("memory_write SKIPPED reason=no_intent_resolved")
+        else:
+            try:
                 store_interaction(
                     text=f"USER:\n{message}\n\nARIA:\n{result}",
                     intent_id=intent.id,
@@ -214,13 +219,16 @@ class LLMExecutionRouter(BaseRouter):
                         "source": "llm_execution_router",
                     },
                 )
-        except Exception as e:
-            from logger import get_logger
-            log = get_logger(__name__)
-            log.error("[MEMORY WRITE ERROR] : %s", e)
+                log.info(
+                    "memory_write OK intent_id=%s intent_name=%s",
+                    intent.id, intent.name,
+                )
+            except Exception:
+                log.exception(
+                    "memory_write ERROR intent_id=%s intent_name=%s",
+                    intent.id, intent.name,
+                )
 
-        from logger import get_logger
-        log = get_logger(__name__)
         log.info("pipeline done → %d chars", len(result))
         for step in ctx.trace.as_dict():
             log.debug("trace: %s", step)
