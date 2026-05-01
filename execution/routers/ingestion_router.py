@@ -2,18 +2,22 @@
 #
 # Router d'exécution pour l'opération INGESTION.
 #
-# L'ingestion est une opération terminale simple :
-# l'utilisateur fournit de l'information brute (liste, catalogue,
-# contexte long) sans poser de question.
+# ⚠️  DÉSACTIVÉ DU WIRING KERNEL depuis le sprint 3.0 (fix #2).
 #
-# Ce router stocke directement dans MemPalace sans pipeline cognitif,
-# sans intent engine, sans agents. La donnée est enregistrée telle quelle.
+# Pourquoi désactivé :
+#   La branche len(message) > 150 → INGESTION dans cognitive_classifier.py
+#   court-circuitait silencieusement toute question longue (> 150 chars)
+#   sans appel LLM ni réponse cognitive. Le classifier LLM (étape 5) est
+#   plus adapté pour distinguer un vrai dump d'information d'une question
+#   élaborée. La mémorisation est déjà un effet de bord systématique de
+#   LLMExecutionRouter (étape 10).
 #
-# Cas typiques :
-#   - catalogue d'huiles essentielles
-#   - liste de courses
-#   - copie d'un document texte
-#   - contexte de projet à mémoriser
+# Ce fichier est conservé pour une future commande /ingest explicite
+# (ingestion volontaire de documents longs, déclenchée par l'utilisateur).
+# CognitiveOperation.INGESTION reste dans l'enum à cet effet.
+#
+# Pour réactiver : ajouter l'entrée dans _ROUTING_TABLE de core/kernel.py
+# et réimporter IngestionExecutionRouter.
 
 from execution.routers.execution_base import BaseRouter
 from memory.mempalace_writer import store_interaction

@@ -8,10 +8,9 @@
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
 #   2. Heuristique texte image generation           → IMAGE_GENERATION
 #   3. Message court → CONFIRMATION                 ← anti-intents parasites
-#   4. Ingestion (message long > 150 chars)          → INGESTION
-#   5. Cache MemPalace (pattern déjà vu)             → opération mise en cache
-#   6. Classifieur LLM                               → opération LLM
-#   7. Fallback                                      → UNKNOWN
+#   4. Cache MemPalace (pattern déjà vu)             → opération mise en cache
+#   5. Classifieur LLM                               → opération LLM
+#   6. Fallback                                      → UNKNOWN
 #
 # Fonctions exportées :
 #   classify_operation()              — mapping message → CognitiveOperation
@@ -158,7 +157,6 @@ Classe ce message dans UNE des catégories suivantes :
 - reasoning        : analyse, comparaison, explication ("analyse mon jardin", "compare", "pourquoi")
 - meta_memory      : synthèse globale ("quels sujets on a abordé", "résume notre conversation")
 - profile_query    : question sur soi-même ("est ce que je peux manger ça", "suis-je allergique")
-- ingestion        : fourniture d'information brute sans question (listes, catalogues, contexte)
 - unknown          : aucune des catégories ci-dessus
 
 Réponds UNIQUEMENT avec un JSON :
@@ -206,16 +204,12 @@ def classify_operation(
     if len(message.strip()) <= MIN_MESSAGE_LENGTH:
         return CognitiveOperation.CONFIRMATION
 
-    # ── 4. Ingestion (message long) ──────────────────────────────────────────
-    if len(message) > 150:
-        return CognitiveOperation.INGESTION
-
-    # ── 5. Cache MemPalace ───────────────────────────────────────────────────
+    # ── 4. Cache MemPalace ───────────────────────────────────────────────────
     cached = _search_cache(message)
     if cached:
         return cached
 
-    # ── 6. Classifieur LLM ───────────────────────────────────────────────────
+    # ── 5. Classifieur LLM ───────────────────────────────────────────────────
     if llm_router is None:
         return CognitiveOperation.UNKNOWN
 

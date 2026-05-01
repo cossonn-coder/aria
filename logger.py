@@ -4,26 +4,8 @@ import sys
 
 
 def get_logger(name: str) -> logging.Logger:
-    """
-    Retourne un logger configuré pour le module donné.
-
-    Usage :
-        from logger import get_logger
-        log = get_logger(__name__)
-        log.info("message")
-    """
-    logger = logging.getLogger(name)
-
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(logging.Formatter(
-            fmt="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-            datefmt="%H:%M:%S",
-        ))
-        logger.addHandler(handler)
-
-    return logger
-
+    """Retourne un logger qui hérite du handler configuré sur le root."""
+    return logging.getLogger(name)
 
 def configure_root(level: str = "INFO"):
     """

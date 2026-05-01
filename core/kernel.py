@@ -35,18 +35,17 @@ from execution.routing_table import RoutingTable
 from execution.router_registry import RouterRegistry
 from execution.routers.image_router import ImageExecutionRouter
 from execution.routers.llm_router import LLMExecutionRouter
-from execution.routers.ingestion_router import IngestionExecutionRouter
 
 
 # ── Table de routing opération → nom de router ──────────────────────────────
 #
-# Toutes les CognitiveOperation doivent avoir une entrée ici.
 # Ajouter une capacité = ajouter 1 ligne + 1 router. Le kernel ne change pas.
+# Note : INGESTION est intentionnellement absent — voir sprint 3.0.
+# Le classifier ne l'émet plus automatiquement (branche len>150 supprimée).
 
 _ROUTING_TABLE = RoutingTable({
     CognitiveOperation.IMAGE_GENERATION.value : "image_router",
     CognitiveOperation.IMAGE_INPUT.value       : "image_router",
-    CognitiveOperation.INGESTION.value         : "ingestion_router",
     CognitiveOperation.FACT_RECALL.value       : "llm_router",
     CognitiveOperation.MEMORY_QUERY.value      : "llm_router",
     CognitiveOperation.PLANNING.value          : "llm_router",
@@ -85,9 +84,6 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
     registry.register("llm_router", llm_execution_router)
-
-    # Router ingestion : stockage direct sans pipeline cognitif
-    registry.register("ingestion_router", IngestionExecutionRouter())
 
     return ExecutionDispatcher(
         registry=registry._routers,

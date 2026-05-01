@@ -10,7 +10,8 @@ class CognitiveOperation(Enum):
     REASONING     = "reasoning"      # "analyse / compare / explique"
     META_MEMORY   = "meta_memory"    # "quels sujets on a abordé"
     PROFILE_QUERY = "profile_query"  # "est ce que je peux manger..."
-    INGESTION     = "ingestion"      # message > 300 chars
+    # Reserved for explicit ingestion commands. NOT auto-classified — see Sprint 3.0.
+    INGESTION     = "ingestion"
     CONFIRMATION  = "confirmation"
     UNKNOWN       = "unknown"
     IMAGE_INPUT = "image_input"
@@ -24,8 +25,9 @@ MEMORY_TOP_K = {
     CognitiveOperation.PLANNING:      4,
     CognitiveOperation.REASONING:     8,
     CognitiveOperation.META_MEMORY:   0,  # ← intents actifs suffisent
-    CognitiveOperation.CONFIRMATION:  0, 
+    CognitiveOperation.CONFIRMATION:  0,
     CognitiveOperation.PROFILE_QUERY: 3,
+    CognitiveOperation.INGESTION:     4,  # defense in depth — non auto-classifié
     CognitiveOperation.UNKNOWN:       4,
 }
 
@@ -40,5 +42,6 @@ LLM_ROLE_MAP = {
     CognitiveOperation.META_MEMORY:   LLMRole.CHAT,
     CognitiveOperation.PROFILE_QUERY: LLMRole.CHAT,
     CognitiveOperation.CONFIRMATION:  LLMRole.CHAT,
+    CognitiveOperation.INGESTION:     LLMRole.CHAT,  # defense in depth — non auto-classifié
     CognitiveOperation.UNKNOWN:       LLMRole.CHAT,
 }

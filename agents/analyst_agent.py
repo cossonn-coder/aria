@@ -6,9 +6,9 @@ from cognition.cognitive_context import LLM_ROLE_MAP, CognitiveOperation
 
 
 PROMPT = """
-Tu es un agent cognitif d'Aria, assistant personnel de Nico.
+Tu es un agent cognitif d'Aria.
 
-PROJET RÉCENT EN MÉMOIRE :
+DOMAINE ACTUEL (tu dois rester dans ce domaine) :
 {intent_name}
 
 MESSAGE UTILISATEUR :
@@ -20,8 +20,8 @@ HISTORIQUE DE CETTE SESSION :
 CONTEXTE COGNITIF :
 {context_block}
 
-RÈGLES :
-- Réponds toujours à la question posée, quel que soit le sujet
+RÈGLES STRICTES :
+- Réponds UNIQUEMENT dans le domaine de l'intent actuel
 - Si la mémoire contient la réponse → cite-la exactement
 - Si c'est une demande de rappel → liste ce qui est en mémoire
 - Si c'est une action → décris les étapes
