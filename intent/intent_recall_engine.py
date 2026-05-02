@@ -26,10 +26,17 @@ class RecallDecision:
 
 class IntentRecallEngine:
     """
-    Moteur de rappel d'intents basé sur :
-    - similarité embedding
-    - signal mémoire (co-occurrence MemPalace)
+    Moteur de rappel d'intents basé sur la similarité embedding (scoring cosine pur).
     """
+    # Note F1 (sprint 3.1, 1er mai 2026) :
+    # Le boost mem_score (+0.2 × hits_normalized) a été retiré.
+    # Cause : il favorisait les rooms à fort volume mémoire,
+    # indépendamment de la pertinence sémantique, créant des
+    # mismatches en cascade (cf. log run live 1er mai : choux
+    # rouges → construire une maison).
+    # Si un signal mémoire devient utile, le réintroduire en F2
+    # (pondéré par le score de similarité du hit, pas par le
+    # nombre de hits).
 
     def __init__(self, embedder, threshold: float = 0.45):
         self.embedder = embedder
@@ -43,9 +50,13 @@ class IntentRecallEngine:
         self,
         message: str,
         intents: List,
-        memory_context: Optional[dict] = None,
+        memory_context: Optional[dict] = None,  # conservé pour compat call-site, ignoré
+        # depuis F1 (sprint 3.1). À retirer si on confirme que le
+        # boost ne sera jamais réintroduit.
     ) -> Tuple[RecallDecision, List[Tuple]]:
         """
+        Scoring purement sémantique (cosine). Pas de signal mémoire.
+
         Retourne :
             - RecallDecision
             - scored intents [(intent, score), ...]
@@ -57,34 +68,7 @@ class IntentRecallEngine:
         msg_emb = self.embedder.encode([message])[0]
 
         # =====================================================
-        # 2. MEMORY SIGNAL (OPTIONAL BOOST)
-        # =====================================================
-        # LIMITE CONNUE (avril 2026) : la normalisation par max_val avantage l'intent
-        # avec le plus de hits, indépendamment de leur pertinence sémantique.
-        # Tant que MemPalace contient des doublons (cf. bug B sprint 2) et des entrées
-        # hors-sujet pour les rooms peuplées, ce boost peut renforcer un intent
-        # parasite. Le boost est conservé pour son utilité long-terme une fois la
-        # mémoire propre, mais sa contribution est volontairement faible (+0.2 max).
-        # À ré-évaluer après dédoublonnage MemPalace.
-        mem_score_map = {}
-
-        if memory_context and memory_context.get("hits"):
-            for h in memory_context["hits"]:
-                # Convention : mempalace_writer stocke l'intent_id dans le champ `room`.
-                # Si cette convention change (ex. migration vers metadata Chroma),
-                # ce mapping casse silencieusement — à auditer en cas de régression mémoire.
-                intent_id = h.get("room")
-                if intent_id:
-                    mem_score_map[intent_id] = mem_score_map.get(intent_id, 0.0) + 1.0
-
-        # normalize memory signal
-        if mem_score_map:
-            max_val = max(mem_score_map.values())
-            for k in mem_score_map:
-                mem_score_map[k] /= max_val
-
-        # =====================================================
-        # 3. FILTER ACTIVE INTENTS
+        # 2. FILTER ACTIVE INTENTS
         # =====================================================
         active_intents = [i for i in intents if i.status == "active"]
 
@@ -92,7 +76,7 @@ class IntentRecallEngine:
             return RecallDecision(action="create"), []
 
         # =====================================================
-        # 4. SCORING
+        # 3. SCORING
         # =====================================================
         scored: List[Tuple] = []
 
@@ -101,9 +85,7 @@ class IntentRecallEngine:
                 continue
 
             cosine = self._cosine(msg_emb, intent.embedding)
-            mem_score = mem_score_map.get(intent.id, 0.0)
-
-            final_score = min(1.0, cosine + (0.2 * mem_score))
+            final_score = cosine
 
             scored.append((intent, final_score))
 
@@ -111,13 +93,13 @@ class IntentRecallEngine:
             return RecallDecision(action="create"), []
 
         # =====================================================
-        # 5. BEST MATCH
+        # 4. BEST MATCH
         # =====================================================
         scored.sort(key=lambda x: x[1], reverse=True)
         best_intent, best_score = scored[0]
 
         # =====================================================
-        # 6. DECISION LOGIC (STABLE TRIANGLE)
+        # 5. DECISION LOGIC (STABLE TRIANGLE)
         # =====================================================
 
         # CASE 1 — strong match → attach

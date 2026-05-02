@@ -78,25 +78,22 @@ def test_formula_no_penalty_when_no_memory(recall_engine):
     assert abs(score - 0.48) > 0.05, "score ne doit PAS égaler 0.8×cosine (ancienne formule)"
 
 
-def test_formula_boost_capped_at_1(recall_engine):
-    """cosine élevé + boost mémoire ne doit pas dépasser 1.0."""
+def test_score_never_exceeds_one(recall_engine):
+    """Invariant : le score final est borné par 1.0.
+    Même sans boost actif (F1, sprint 3.1), cette propriété
+    reste utile comme garde-fou pour de futurs mécanismes
+    de scoring composé.
+    """
     engine, embedder = recall_engine
     embedder.encode.return_value = [[1.0, 0.0, 0.0]]
-
-    # cosine([1,0,0], [0.95, 0.312, 0]) ≈ 0.95
     intent = SimpleNamespace(
         id="x1",
         status="active",
-        embedding=[0.95, 0.312, 0.0],
+        embedding=[1.0, 0.0, 0.0],  # cosine = 1.0
     )
-    # 2 hits room=x1 → mem_score normalisé = 1.0
-    memory_context = {"hits": [{"room": "x1"}, {"room": "x1"}]}
-
-    _, scored = engine.resolve("msg", [intent], memory_context=memory_context)
-
+    _, scored = engine.resolve("msg", [intent], memory_context=None)
     score = scored[0][1]
     assert score <= 1.0, f"score dépasse 1.0 : {score}"
-    assert abs(score - 1.0) < 0.01, f"attendu ≈1.0 après clamp, obtenu {score:.4f}"
 
 
 # ── Tests déduplication IntentEngine ─────────────────────────────────────────
@@ -155,11 +152,10 @@ def test_regression_bug_e_real_embeddings():
     protéger contre une régression silencieuse en cas de changement
     d'embedder ou de modèle.
 
-    # MESURE OBSERVÉE (avril 2026, all-MiniLM-L6-v2) : score = 0.4889 sans mem_score.
+    # MESURE OBSERVÉE (avril 2026, all-MiniLM-L6-v2) : score = 0.4889 (cosine pur).
     # Marge de 0.04 au-dessus du seuil — fragile à un changement d'embedder.
-    # En prod, le boost mem_score (+0.2 max) compense largement quand l'intent a
-    # déjà de la mémoire ; le test isole volontairement le cas le plus défavorable
-    # (memory_context=None) pour faire échec si le scoring nu se dégrade.
+    # Depuis F1 (sprint 3.1), le scoring est toujours cosine pur : ce test couvre
+    # le cas réel sans aide mémoire et protège contre une régression du scoring nu.
     """
     SentenceTransformer = pytest.importorskip("sentence_transformers").SentenceTransformer
 
@@ -189,13 +185,12 @@ def test_regression_bug_e_real_embeddings():
 
 # ── Rooms non-intent ignorées ─────────────────────────────────────────────────
 
-def test_non_intent_rooms_dont_corrupt_scoring(recall_engine):
-    """
-    Les hits avec room ∈ {general, knowledge_ingest, ...} (pas un intent_id)
-    sont collectés dans mem_score_map mais aucun intent n'ayant cet ID,
-    ils ne boostent rien. Ce test gèle ce contrat : un changement futur
-    qui filtrerait par room valide ne doit pas casser le comportement,
-    et un changement qui les utiliserait à tort doit faire échouer ce test.
+def test_non_intent_rooms_ignored(recall_engine):
+    """Les hits avec room ∈ {general, knowledge_ingest, ...}
+    n'ont aucun effet sur le scoring. Trivial après F1
+    (boost retiré), mais garde-fou utile : si un futur
+    mécanisme réintroduit un signal mémoire, il devra
+    continuer à ignorer les rooms non-intent.
     """
     engine, embedder = recall_engine
     embedder.encode.return_value = [[1.0, 0.0, 0.0]]
@@ -209,7 +204,7 @@ def test_non_intent_rooms_dont_corrupt_scoring(recall_engine):
 
     _, scored = engine.resolve("msg", [intent], memory_context=memory_context)
 
-    # cosine pur attendu (≈0.6), pas de boost car aucun hit ne pointe vers x1
+    # cosine pur attendu (≈0.6) — memory_context ignoré depuis F1, aucun boost possible
     assert scored, "scored ne doit pas être vide"
     assert abs(scored[0][1] - 0.6) < 0.01, (
         f"score corrompu par rooms non-intent : {scored[0][1]:.4f} (attendu ≈0.6)"
