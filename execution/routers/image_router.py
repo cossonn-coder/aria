@@ -42,7 +42,7 @@ from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
 from cognition.cognitive_classifier import is_interrogative_caption
-from memory.mempalace_writer import store_image_artifact
+from memory.writer import write_image_artifact
 
 
 class ImageExecutionRouter(BaseRouter):
@@ -117,7 +117,7 @@ class ImageExecutionRouter(BaseRouter):
 
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
-            store_image_artifact(artifact, intent_id=intent_id)
+            write_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
             from logger import get_logger
             log = get_logger(__name__)
@@ -221,7 +221,7 @@ class ImageExecutionRouter(BaseRouter):
 
         # Stockage épisodique — non bloquant
         try:
-            store_image_artifact(artifact, intent_id=intent_id)
+            write_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
             from logger import get_logger
             log = get_logger(__name__)

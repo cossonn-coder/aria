@@ -92,7 +92,7 @@ def test_generation_without_context_passes_raw_prompt():
     Sans intent engine ni bridge, le prompt brut doit être passé sans modification.
     """
     router, internal = _make_router()
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         router.execute({
             "op_type"  : "image_generation",
             "content"  : "dessine mon jardin",
@@ -107,7 +107,7 @@ def test_generation_with_intents_injects_context():
     Le nom des intents actifs doit apparaître dans le prompt enrichi.
     """
     router, internal = _make_router(intent_names=["jardin potager"])
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         router.execute({
             "op_type"  : "image_generation",
             "content"  : "dessine mon jardin",
@@ -126,7 +126,7 @@ def test_generation_with_memories_injects_context():
     _build_generation_context lit hits[n]["text"] pour construire le bloc contexte.
     """
     router, internal = _make_router(memories=["Nico a planté des tomates en mars"])
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         router.execute({
             "op_type"  : "image_generation",
             "content"  : "mon potager",
@@ -145,7 +145,7 @@ def test_generation_memory_error_is_non_blocking():
     router.mempalace_bridge = MagicMock()
     router.mempalace_bridge.retrieve_memories.side_effect = Exception("ChromaDB down")
 
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         result = router.execute({
             "op_type"  : "image_generation",
             "content"  : "test",
@@ -161,7 +161,7 @@ def test_generation_with_empty_memories_passes_raw_prompt():
     Le prompt original doit être transmis intact.
     """
     router, internal = _make_router(memories=[])
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         router.execute({
             "op_type"  : "image_generation",
             "content"  : "dessine une forêt",
@@ -177,7 +177,7 @@ def test_generation_result_contains_path_and_caption():
     pour que _normalize() du kernel route correctement vers send_photo().
     """
     router, internal = _make_router()
-    with patch("execution.routers.image_router.store_image_artifact"):
+    with patch("execution.routers.image_router.write_image_artifact"):
         result = router.execute({
             "op_type"  : "image_generation",
             "content"  : "test",

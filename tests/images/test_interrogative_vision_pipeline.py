@@ -195,7 +195,7 @@ class TestImageRouterEnrichedMode:
         }
 
     # Mode enrichi activé
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_caption_interrogative_appelle_llm_router(self, mock_store):
         router, internal, llm_exec = self._router(with_llm_router=True)
         result = router.execute(self._payload("c'est quoi ?"))
@@ -207,14 +207,14 @@ class TestImageRouterEnrichedMode:
         assert self.VISION_DESCRIPTION in call_payload["content"]
         assert "c'est quoi ?" in call_payload["content"]
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_caption_interrogative_retourne_reponse_enrichie(self, mock_store):
         router, _, _ = self._router(with_llm_router=True)
         result = router.execute(self._payload("c'est quoi ?"))
         assert result == {"text": self.ENRICHED_RESPONSE}
 
     # Mode standard — caption descriptive
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_caption_descriptive_retourne_vision_brute(self, mock_store):
         router, internal, llm_exec = self._router(with_llm_router=True)
         result = router.execute(self._payload("substrats de shiitakes usés"))
@@ -225,7 +225,7 @@ class TestImageRouterEnrichedMode:
         llm_exec.execute.assert_not_called()
 
     # Mode standard — caption absente
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_caption_none_retourne_vision_brute(self, mock_store):
         router, _, llm_exec = self._router(with_llm_router=True)
         result = router.execute(self._payload(None))
@@ -235,14 +235,14 @@ class TestImageRouterEnrichedMode:
         llm_exec.execute.assert_not_called()
 
     # Dégradation gracieuse — pas de llm_execution_router
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_sans_llm_router_retourne_vision_brute(self, mock_store):
         router, _, _ = self._router(with_llm_router=False)
         result = router.execute(self._payload("c'est quoi ?"))
         assert result == {"text": self.VISION_DESCRIPTION}
 
     # Dégradation gracieuse — vision retourne une description vide
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_vision_vide_pas_dappel_llm(self, mock_store):
         """Si la description vision est vide, on ne passe pas au pipeline enrichi."""
         from execution.routers.image_router import ImageExecutionRouter
@@ -258,7 +258,7 @@ class TestImageRouterEnrichedMode:
         assert result == {"text": ""}
 
     # Contrat sortie : toujours {"text": str}
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_contrat_sortie_text_key(self, mock_store):
         router, _, _ = self._router(with_llm_router=True)
         result_interro  = router.execute(self._payload("c'est quoi ?"))
@@ -269,7 +269,7 @@ class TestImageRouterEnrichedMode:
         assert "path" not in result_standard
 
     # Message enrichi injecté dans LLMExecutionRouter
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_message_enrichi_contient_analyse_visuelle(self, mock_store):
         router, _, llm_exec = self._router(with_llm_router=True)
         router.execute(self._payload("qu'est-ce que c'est ?"))
@@ -278,7 +278,7 @@ class TestImageRouterEnrichedMode:
         assert "[Analyse visuelle :" in call_payload["content"]
 
     # Mémoire toujours écrite
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_artifact_stocke_meme_mode_enrichi(self, mock_store):
         router, _, _ = self._router(with_llm_router=True)
         router.execute(self._payload("c'est quoi ?"))

@@ -203,8 +203,8 @@ class TestImageExecutionRouterCaption:
 
         return ImageExecutionRouter(internal_router=internal), captured
 
-    @patch("execution.routers.image_router.store_image_artifact")
-    def test_caption_transmitted_to_image_input(self, mock_store):
+    @patch("execution.routers.image_router.write_image_artifact")
+    def test_caption_transmitted_to_image_input(self, mock_write):
         """
         ImageExecutionRouter doit transmettre la caption de l'Event
         à ImageInput — pour que ImageRouter puisse contextualiser le prompt.
@@ -227,8 +227,8 @@ class TestImageExecutionRouterCaption:
             "Régression du fix caption."
         )
 
-    @patch("execution.routers.image_router.store_image_artifact")
-    def test_none_caption_transmitted_as_none(self, mock_store):
+    @patch("execution.routers.image_router.write_image_artifact")
+    def test_none_caption_transmitted_as_none(self, mock_write):
         """
         Si l'Event ne contient pas de caption, ImageInput.caption doit être None.
         Pas de chaîne vide, pas de valeur par défaut silencieuse.

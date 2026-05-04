@@ -64,7 +64,7 @@ def make_router(input_artifact=None, generated_artifact=None) -> ImageExecutionR
 
 class TestImageInputMemoryStorage:
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_store_called_after_image_input(self, mock_store):
         """
         store_image_artifact doit être appelé une fois après analyse d'image.
@@ -81,7 +81,7 @@ class TestImageInputMemoryStorage:
 
         assert mock_store.call_count == 1
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_store_receives_correct_artifact(self, mock_store):
         """
         L'artifact transmis à store_image_artifact doit être celui
@@ -103,7 +103,7 @@ class TestImageInputMemoryStorage:
         stored_artifact = mock_store.call_args[0][0]
         assert stored_artifact is artifact
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_intent_id_transmitted_to_store(self, mock_store):
         """
         L'intent_id du payload doit être transmis à store_image_artifact
@@ -121,7 +121,7 @@ class TestImageInputMemoryStorage:
         intent_id_passed = call_kwargs[1].get("intent_id") or call_kwargs[0][1]
         assert intent_id_passed == "intent-jardin-42"
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_memory_error_does_not_crash_response(self, mock_store):
         """
         Si store_image_artifact lève une exception (ChromaDB down),
@@ -141,7 +141,7 @@ class TestImageInputMemoryStorage:
         # Le résultat doit quand même être présent
         assert "text" in result or "caption" in result
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_response_contains_vision_description(self, mock_store):
         """
         La réponse retournée doit contenir la description du modèle vision,
@@ -167,7 +167,7 @@ class TestImageInputMemoryStorage:
 
 class TestImageGenerationMemoryStorage:
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_store_called_after_generation(self, mock_store):
         """
         store_image_artifact doit être appelé après chaque génération.
@@ -185,7 +185,7 @@ class TestImageGenerationMemoryStorage:
 
         assert mock_store.call_count == 1
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_generated_artifact_has_correct_source(self, mock_store):
         """L'artifact d'une image générée doit avoir source='generated'."""
         artifact = make_artifact(
@@ -204,7 +204,7 @@ class TestImageGenerationMemoryStorage:
         stored_artifact = mock_store.call_args[0][0]
         assert stored_artifact.source == "generated"
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_generation_memory_error_does_not_crash(self, mock_store):
         """
         Une erreur mémoire pendant la génération ne doit pas crasher.
@@ -221,7 +221,7 @@ class TestImageGenerationMemoryStorage:
 
         assert "path" in result
 
-    @patch("execution.routers.image_router.store_image_artifact")
+    @patch("execution.routers.image_router.write_image_artifact")
     def test_intent_id_transmitted_for_generation(self, mock_store):
         """L'intent_id est transmis pour lier l'image générée à un projet."""
         router = make_router()
