@@ -146,3 +146,16 @@ def test_write_classifier_cache_wing_and_document_format(fake_col):
     data = json.loads(fake_col.last_doc)
     assert data["message"] == "Tu te rappelles des carottes ?"
     assert data["operation"] == "fact_recall"
+
+
+# ── 11. write_classifier_cache — enum non sérialisable → TypeError visible ────
+
+def test_write_classifier_cache_rejects_non_string_operation(fake_col):
+    """Garde-fou : passer un enum (ou autre objet non-str) à operation
+    produit une TypeError visible, pas un trou silencieux.
+    Documente le contrat : operation doit être str (.value côté caller)."""
+    from enum import Enum
+    class FakeEnum(Enum):
+        FOO = "foo"
+    with pytest.raises(TypeError):
+        w.write_classifier_cache("msg", FakeEnum.FOO)

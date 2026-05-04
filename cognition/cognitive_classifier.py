@@ -21,7 +21,7 @@
 import json
 from cognition.cognitive_context import CognitiveOperation
 from memory.mempalace_store import search
-from memory.mempalace_writer import store_interaction
+from memory.writer import write_classifier_cache
 
 
 # =========================================================
@@ -278,16 +278,7 @@ def _search_cache(message: str) -> CognitiveOperation | None:
 def _store_cache(message: str, operation: CognitiveOperation, confirmed: bool = False):
     """Stocke un mapping message → operation dans le cache classifier."""
     try:
-        store_interaction(
-            text=json.dumps({"message": message, "operation": operation.value}),
-            intent_id="classifier_cache",
-            metadata={
-                "wing"      : "aria_classifier",
-                "room"      : "classifier_cache",
-                "confirmed" : confirmed,
-                "type"      : "classifier_cache",
-            },
-        )
+        write_classifier_cache(message, operation.value, confirmed=confirmed)
     except Exception as e:
         from logger import get_logger
         log = get_logger(__name__)
