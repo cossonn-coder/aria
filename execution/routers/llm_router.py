@@ -28,7 +28,7 @@ from logger import get_logger
 
 from intent.intent_engine import IntentEngine
 from llm.llm_router import LLMRouter
-from memory.mempalace_writer import store_interaction
+from memory.writer import write_interaction
 from memory.mempalace_bridge import MempalaceBridge
 from llm.intent_namer import extract_intent_name
 from agents.base_agent import AgentContext
@@ -209,18 +209,14 @@ class LLMExecutionRouter(BaseRouter):
             log.info("memory_write SKIPPED reason=no_intent_resolved")
         else:
             try:
-                store_interaction(
+                write_interaction(
                     text=f"USER:\n{message}\n\nARIA:\n{result}",
                     intent_id=intent.id,
-                    metadata={
-                        "intent_name": intent.name,
-                        "wing": "aria",
-                        "room": intent.id,
-                        "source": "llm_execution_router",
-                    },
+                    intent_name=intent.name,
+                    source="llm_execution_router",
                 )
                 log.info(
-                    "memory_write OK intent_id=%s intent_name=%s",
+                    "memory_write OK wing=aria_episodic intent_id=%s intent_name=%s",
                     intent.id, intent.name,
                 )
             except Exception:
