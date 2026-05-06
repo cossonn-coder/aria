@@ -20,7 +20,7 @@
 
 import json
 from cognition.cognitive_context import CognitiveOperation
-from memory.mempalace_store import search
+from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
 
 
@@ -172,6 +172,7 @@ def classify_operation(
     message: str,
     llm_router=None,
     metadata: dict | None = None,
+    bridge: MempalaceBridge | None = None,
 ) -> CognitiveOperation:
     """
     Classe un message entrant dans une CognitiveOperation.
@@ -205,7 +206,7 @@ def classify_operation(
         return CognitiveOperation.CONFIRMATION
 
     # ── 4. Cache MemPalace ───────────────────────────────────────────────────
-    cached = _search_cache(message)
+    cached = _search_cache(message, bridge)
     if cached:
         return cached
 
@@ -252,15 +253,25 @@ def store_confirmed_operation(message: str, operation: CognitiveOperation):
     _store_cache(message, operation, confirmed=True)
 
 
-def _search_cache(message: str) -> CognitiveOperation | None:
+def _search_cache(
+    message: str,
+    bridge: MempalaceBridge | None,
+) -> CognitiveOperation | None:
     """
-    Recherche un pattern similaire dans le cache classifier de MemPalace.
+    Recherche un pattern similaire dans le cache classifier via MempalaceBridge.
 
-    Seuil strict (0.92) pour éviter les faux positifs.
+    Seuil strict (0.92) ré-appliqué localement car le bridge filtre à
+    distance<0.8 (≈ similarity>0.2), beaucoup plus permissif.
     """
+    if bridge is None:
+        return None
     try:
-        results = search(query=message, wing="aria_classifier", n=1)
-        hits    = results.get("results", [])
+        result = bridge.retrieve_memories(
+            query=message,
+            wing="aria_classifier",
+            n=1,
+        )
+        hits = result.get("hits", [])
         if not hits:
             return None
 

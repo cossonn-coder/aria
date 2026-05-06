@@ -112,6 +112,7 @@ class AriaKernel:
 
         self.cognitive_engine = cognitive_engine or CognitiveEngine(
             llm_router=llm_router,
+            bridge=mempalace_bridge,
         )
         self.execution_dispatcher = execution_dispatcher or _build_dispatcher(
             llm_router=llm_router,

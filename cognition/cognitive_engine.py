@@ -28,6 +28,7 @@ from cognition.cognitive_classifier import (
     is_interrogative_caption,
 )
 from cognition.cognitive_context import CognitiveOperation
+from memory.mempalace_bridge import MempalaceBridge
 
 
 @dataclass
@@ -71,9 +72,14 @@ class CognitiveEngine:
       caption descriptive ou absente                     → IMAGE_INPUT  + interrogative=False
     """
 
-    def __init__(self, llm_router=None):
-        # llm_router injecté par AriaKernel — None autorisé (tests, mode offline)
+    def __init__(
+        self,
+        llm_router=None,
+        bridge: MempalaceBridge | None = None,
+    ):
+        # llm_router et bridge injectés par AriaKernel — None autorisé (tests, mode offline)
         self.llm_router = llm_router
+        self.bridge = bridge
 
     def classify(self, event: Event) -> CognitiveResult:
 
@@ -108,6 +114,7 @@ class CognitiveEngine:
                 message=message,
                 llm_router=self.llm_router,
                 metadata=event.metadata or {},
+                bridge=self.bridge,
             )
             return CognitiveResult(
                 type=operation.value,
