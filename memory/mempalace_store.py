@@ -6,7 +6,7 @@ from config import config
 
 def search(
     query: str,
-    wing: str = "aria",
+    wing: str,
     room: str | None = None,
     n: int = 5,
 ):
