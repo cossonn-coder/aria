@@ -22,6 +22,9 @@ import json
 from cognition.cognitive_context import CognitiveOperation
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 # =========================================================
@@ -260,8 +263,9 @@ def _search_cache(
     """
     Recherche un pattern similaire dans le cache classifier via MempalaceBridge.
 
-    Seuil strict (0.92) ré-appliqué localement car le bridge filtre à
-    distance<0.8 (≈ similarity>0.2), beaucoup plus permissif.
+    Seuil strict (0.92) appliqué côté caller — le bridge est appelé avec
+    max_distance=None pour ne pas rejeter les hits de l'aria_classifier
+    avant que le seuil métier puisse les évaluer.
     """
     if bridge is None:
         return None
@@ -270,19 +274,32 @@ def _search_cache(
             query=message,
             wing="aria_classifier",
             n=1,
+            max_distance=None,
         )
         hits = result.get("hits", [])
         if not hits:
+            log.debug("classifier cache MISS empty for %r", message[:50])
             return None
 
         hit = hits[0]
-        if hit.get("similarity", 0) < 0.92:
+        sim = hit.get("similarity", 0)
+        if sim < 0.92:
+            log.debug(
+                "classifier cache MISS sim=%.3f for %r",
+                sim, message[:50],
+            )
             return None
 
         data = json.loads(hit.get("text", ""))
-        return _parse_operation(data.get("operation", "unknown"))
+        op = _parse_operation(data.get("operation", "unknown"))
+        log.info(
+            "classifier cache HIT sim=%.3f op=%s for %r",
+            sim, op.value, message[:50],
+        )
+        return op
 
-    except Exception:
+    except Exception as e:
+        log.warning("classifier cache error: %s", e)
         return None
 
 

@@ -108,3 +108,26 @@ def test_retrieve_memories_filters_general_room():
 
     assert res["count"] == 1
     assert res["hits"][0]["text"] == "ciblé"
+
+
+def test_retrieve_memories_max_distance_none_skips_filter():
+    """Garde-fou : max_distance=None laisse passer les hits que le filtre
+    distance < 0.8 aurait rejetés. Utilisé par le cache classifier."""
+    bridge = make_bridge([
+        {"text": "loin",   "distance": 0.95, "room": "x"},
+        {"text": "proche", "distance": 0.5,  "room": "y"},
+    ])
+
+    # Comportement par défaut (max_distance=0.8) : "loin" rejeté
+    r1 = bridge.retrieve_memories(query="q", wing="any", n=2)
+    assert len(r1["hits"]) == 1
+    assert r1["hits"][0]["text"] == "proche"
+
+    # max_distance=None : filtre distance désactivé, les deux passent
+    r2 = bridge.retrieve_memories(query="q", wing="any", n=2, max_distance=None)
+    assert len(r2["hits"]) == 2
+
+    # max_distance personnalisé (0.6) : seul "proche" passe
+    r3 = bridge.retrieve_memories(query="q", wing="any", n=2, max_distance=0.6)
+    assert len(r3["hits"]) == 1
+    assert r3["hits"][0]["text"] == "proche"

@@ -59,22 +59,27 @@ class MempalaceBridge:
         room: str | None = None,
         n: int = 5,
         type_filter: list[str] | None = None,
+        max_distance: float | None = 0.8,
     ) -> dict:
         """
         Recall sémantique dans la mémoire épisodique.
 
         Recherche par similarité vectorielle dans wing (défaut: aria_episodic).
-        Filtre les résultats trop distants (distance > 0.8) et les rooms
-        génériques ("general") qui polluent le contexte.
+        Filtre les résultats trop distants et les rooms génériques ("general")
+        qui polluent le contexte.
 
         Args:
-            query       : texte de la requête (message utilisateur)
-            wing        : wing MemPalace cible. Défaut "aria_episodic".
-                          Passer "aria" pour lire les anciennes entrées.
-            room        : filtre optionnel sur un room spécifique (intent_id)
-            n           : nombre maximum de résultats souhaités
-            type_filter : liste de types à garder ("interaction", "image_input", etc.)
-                          None = pas de filtre
+            query        : texte de la requête (message utilisateur)
+            wing         : wing MemPalace cible. Défaut "aria_episodic".
+                           Passer "aria" pour lire les anciennes entrées.
+            room         : filtre optionnel sur un room spécifique (intent_id)
+            n            : nombre maximum de résultats souhaités
+            type_filter  : liste de types à garder ("interaction", "image_input", etc.)
+                           None = pas de filtre
+            max_distance : seuil de distance maximal (défaut 0.8).
+                           None = désactive le filtre distance — le caller
+                           applique son propre seuil métier (ex : cache
+                           classifier avec similarity ≥ 0.92).
 
         Returns:
             dict {"query", "hits", "count"}
@@ -95,8 +100,9 @@ class MempalaceBridge:
             h for h in result.get("results", [])
             # Exclut la room "general" — trop générique, nuit à la pertinence
             if h.get("room", "") != "general"
-            # Seuil de distance : au-delà de 0.8 le souvenir n'est plus pertinent
-            and h.get("distance", 1.0) < 0.8
+            # Seuil de distance paramétrable — None = pas de filtre distance
+            and (max_distance is None
+                 or h.get("distance", 1.0) < max_distance)
         ][:n]
 
         # Filtre optionnel par type de document

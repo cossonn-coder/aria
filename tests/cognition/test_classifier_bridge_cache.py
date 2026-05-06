@@ -36,6 +36,7 @@ def test_classify_operation_uses_bridge_cache():
         query="quelles graines n'ont pas germé ?",
         wing="aria_classifier",
         n=1,
+        max_distance=None,
     )
 
 
