@@ -14,20 +14,29 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 
 ## Règles d'architecture INVIOLABLES
 
-1. **Une opération = un handler = un seul point d'écriture mémoire**
-2. **Les agents reçoivent un AgentContext pré-assemblé** — ils ne font
+1. Une opération = un handler = un seul point d'écriture mémoire.
+   Toute écriture passe par memory/writer.py (write_interaction,
+   write_image_artifact, write_semantic_fact, write_classifier_cache).
+   Wing/room/type sont structurels, jamais surchargeables via metadata.
+2. Toute lecture mémoire passe par memory/mempalace_bridge.py (un seul
+   point d'accès en lecture). Aucun fichier prod n'importe
+   mempalace_store directement.
+3. Les agents reçoivent un AgentContext pré-assemblé — ils ne font
    AUCUNE requête mémoire eux-mêmes. Le kernel assemble tout.
-3. **Les routers retournent `{"text": str}` ou `{"path": str, "caption": str}`** —
-   jamais `{"status": ...}` (c'est le rôle du dispatcher).
-4. **Le kernel ne décide rien, n'exécute rien, ne stocke rien.**
+4. Les routers retournent {"text": str} ou {"path": str, "caption": str} —
+   jamais {"status": ...} (c'est le rôle du dispatcher).
+5. Le kernel ne décide rien, n'exécute rien, ne stocke rien.
    Il séquence : classify → dispatch → normalize.
-5. **CognitiveEngine ne touche pas MemPalace, ni les agents, ni les routers.**
-   Il classifie, c'est tout.
+6. CognitiveEngine peut tenir des dépendances injectées (llm_router,
+   bridge) mais ne fait pas elle-même de retrieval ni de stockage.
+   Elle transmet ses dépendances aux composants stateless qui en
+   ont besoin (classify_operation, etc.).
 
 ## Couches mémoire
 - `aria_episodic` : interactions, images, types `interaction|image_input|image_generated`
 - `aria_semantic` : faits stables (allergies, localisation, préférences)
 - `aria_intentual` : réservé intents sérialisés (pas implémenté)
+# État cible — la réalité diverge actuellement, voir sprint 4.
 
 ## Style de code
 - Commentaires en français, professionnels et pédagogiques, code en anglais
@@ -43,8 +52,7 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 
 ## Backlog en cours
 Voir le doc de contexte complet pour le sprint actuel.
-Priorité immédiate : 1.3 Context builder token budget
-(injecter `retrieve_semantic` dans `LLMExecutionRouter`).
+Priorité immédiate : Voir context_sprint_5_kickoff.md à la racine pour la priorité actuelle.
 
 ## Ne JAMAIS faire
 - Modifier `soul.md` sans demander explicitement à Nico
@@ -52,3 +60,70 @@ Priorité immédiate : 1.3 Context builder token budget
 - Faire écrire la mémoire par un agent ou un client LLM
 - Utiliser `print()` à la place du logger
 - Lancer `git push` sans confirmation
+- Modifier le prompt AnalystAgent sans faire passer le test garde-fou tests/agents/test_analyst_prompt_guard.py
+
+## Délégation DeepSeek V4 Flash — Économie de tokens
+ 
+Ces outils sont dans `~/.local/bin/` (sur le PATH). Les utiliser **sans demander** dès que les critères ci-dessous sont remplis.
+ 
+### `ask-deepseek` — Lecture de fichiers volumineux
+ 
+```bash
+ask-deepseek --paths <fichier1> <fichier2> ... --question "<question>"
+# Avec raisonnement (fichiers complexes, interactions de threads, etc.) :
+ask-deepseek --paths <fichier1> --question "<question>" --think
+```
+ 
+**Quand l'utiliser :**
+- Lire ≥ 1 fichier de plus de 300 lignes pour répondre à une question
+- Lire ≥ 3 fichiers quelle que soit leur taille
+- Comprendre des interactions entre modules (ex : quel port, quelle clé de config, quel handler)
+- Résumés de modules avant refactoring
+**Ce que ça retourne :** texte structuré. Lire ce texte (~300-500 tokens) au lieu des fichiers.
+ 
+---
+ 
+### `write-deepseek` — Génération de boilerplate
+ 
+```bash
+write-deepseek --spec "<description précise>" \
+               --context <fichier_reference.py> \
+               --target <fichier_sortie.py>
+```
+ 
+**Quand l'utiliser :**
+- Générer un fichier de tests pytest pour un module existant
+- Générer des docstrings pour des fonctions publiques
+- Scaffolding de nouveaux handlers/routers en suivant le pattern existant
+- Mise à jour de documentation après une session de travail
+**Workflow doc (OBLIGATOIRE après chaque session feature) :**
+```bash
+# 1. Extraire le transcript
+extract-chat ~/.claude/projects/aria/<session>.jsonl -o /tmp/chat.txt
+ 
+# 2. Demander les mises à jour à DeepSeek
+ask-deepseek --paths /tmp/chat.txt docs/architecture.md \
+             --question "Quelles mises à jour de doc sont nécessaires ? Donne les éditions exactes."
+ 
+# 3. Appliquer les suggestions (coût Claude minimal)
+```
+ 
+---
+ 
+### Frontière stricte : Claude = raisonnement, DeepSeek = I/O
+ 
+| Tâche | Qui fait quoi |
+|---|---|
+| Déboguer une race condition | **Claude** |
+| Décision d'architecture | **Claude** |
+| Vérifier la stabilité numérique | **Claude** |
+| Lire 5 fichiers pour trouver un port | **DeepSeek** |
+| Générer un fichier de tests | **DeepSeek** |
+| Mettre à jour la doc après une session | **DeepSeek** |
+| Scaffolding d'un nouveau handler | **DeepSeek** |
+ 
+### Ne PAS déléguer si
+- La tâche fait < 1500 tokens au total (overhead non justifié)
+- Il faut des numéros de ligne exacts pour un `str_replace`
+- C'est du code safety-critical (guidance, MAVLink critique)
+- Le raisonnement sur l'intent est nécessaire
