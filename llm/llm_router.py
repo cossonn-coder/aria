@@ -159,6 +159,42 @@ DEFAULT_CHAIN = ROUTING_TABLE[LLMRole.CHAT]
 # ==========================
 
 class LLMRouter:
+    """
+    Router LLM avec fallback chain et cache négatif des 429.
+
+    Cache négatif (dette #8) : un provider qui renvoie 429 est skippé
+    sur les requêtes suivantes pendant `config.negative_cache_ttl_seconds`
+    (défaut 5 min) — évite de retenter et de tomber en fallback à chaque
+    message le temps que le quota free tier se libère. Détails et
+    justification : docs/sprint5/audit_negative_cache.md.
+    """
+
+    def __init__(self):
+        # {provider_name: expires_at_monotonic}
+        # time.monotonic() pour être immune aux changements d'horloge.
+        self._negative_cache: dict[str, float] = {}
+
+    def _is_rate_limited(self, provider: str) -> bool:
+        """True si le provider a un 429 récent encore valide.
+        Purge lazy : une entrée expirée est supprimée au lookup."""
+        expires_at = self._negative_cache.get(provider)
+        if expires_at is None:
+            return False
+        if time.monotonic() >= expires_at:
+            del self._negative_cache[provider]
+            return False
+        return True
+
+    def _mark_rate_limited(self, provider: str) -> None:
+        """Pose le provider en cache négatif pour TTL secondes."""
+        from logger import get_logger
+        log = get_logger(__name__)
+        ttl = config.negative_cache_ttl_seconds
+        self._negative_cache[provider] = time.monotonic() + ttl
+        log.warning(
+            "[LLM] provider %s rate-limited (429), caching for %ds",
+            provider, ttl,
+        )
 
     def complete(
         self,
@@ -168,10 +204,20 @@ class LLMRouter:
         max_tokens: int = 1000,
     ) -> LLMResponse:
 
+        from logger import get_logger
+        log = get_logger(__name__)
+
         chain = ROUTING_TABLE.get(role, DEFAULT_CHAIN)
         last_error = None
 
         for i, provider_cfg in enumerate(chain):
+            provider = provider_cfg["provider"]
+
+            # Skip direct si récemment 429 — pas de tentative HTTP.
+            if self._is_rate_limited(provider):
+                log.info("[LLM] provider %s skipped (cached 429)", provider)
+                continue
+
             try:
                 return self._call(
                     prompt=prompt,
@@ -180,9 +226,12 @@ class LLMRouter:
                     max_tokens=max_tokens,
                 )
             except Exception as e:
-                from logger import get_logger
-                log = get_logger(__name__)
-                log.error("[LLM FALLBACK] {provider_cfg['provider']} failed: %s", e)
+                log.error("[LLM FALLBACK] %s failed: %s", provider, e)
+                # Cache uniquement les 429 explicites — un crash réseau
+                # ou un 5xx ne bloque pas le provider 5 min.
+                if (isinstance(e, httpx.HTTPStatusError)
+                        and e.response.status_code == 429):
+                    self._mark_rate_limited(provider)
                 last_error = e
                 if i < len(chain) - 1:  # pas de sleep après le dernier
                     time.sleep(1)

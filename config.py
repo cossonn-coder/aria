@@ -67,6 +67,11 @@ class Config:
     # ── Conversation ──────────────────────────────────────────────────────────
     max_history_turns: int = 10
 
+    # ── Cache négatif providers LLM (sprint 5 / dette #8) ────────────────────
+    # TTL après lequel un provider rate-limited (429) est ré-essayé.
+    # Cf. docs/sprint5/audit_negative_cache.md.
+    negative_cache_ttl_seconds: int = 300
+
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")
         self.allowed_user_id = int(os.getenv("ALLOWED_USER_ID", "0"))
