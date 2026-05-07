@@ -25,6 +25,7 @@ class Config:
     openrouter_api_key: str = ""
     anthropic_api_key: str = ""
     hf_token: str = ""
+    deepseek_api_key: str = ""
 
     # ── Modèles texte ─────────────────────────────────────────────────────────
     groq_model: str = "llama-3.3-70b-versatile"
@@ -32,7 +33,7 @@ class Config:
     gemini_model: str = "gemini-2.0-flash"
     mistral_model: str = "mistral-small-latest"
     sambanova_model: str = "Meta-Llama-3.3-70B-Instruct"
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    EMBEDDING_MODEL = "yilunzhang/all-mpnet-base-v2-onnx"
 
     # ── Modèles vision ────────────────────────────────────────────────────────
     groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -91,6 +92,9 @@ class Config:
         self.pending_path = str(BASE_DIR / "pending_memories.json")
         self.image_output_dir = str(BASE_DIR / "generated_images")
         self.image_receive_dir = str(BASE_DIR / "received_images")
+        self.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "")
+        if self.deepseek_api_key:
+            os.environ["DEEPSEEK_API_KEY"] = self.deepseek_api_key
         self.hf_token = os.getenv("HF_TOKEN", "")
         if self.hf_token:
             os.environ["HF_TOKEN"] = self.hf_token
