@@ -16,7 +16,7 @@
 #   - retrieve_memories est appelé exactement UNE fois par cycle (pas de doublon)
 #   - global_memories est transmis intact à AgentContext
 #   - session_memories (retrieve_by_intent) est appelé après résolution d'intent
-#   - store_interaction est appelé en fin de pipeline (write unique)
+#   - write_interaction est appelé en fin de pipeline (write unique)
 #   - le résultat de ctx.result est retourné tel quel
 #   - un op_type inconnu ne crash pas (fallback UNKNOWN)
 
@@ -85,7 +85,7 @@ def _fake_ctx(fake_intent, result="réponse aria"):
 
 # ── Tests : appels mémoire ────────────────────────────────────────────────────
 
-@patch("execution.routers.llm_router.store_interaction")
+@patch("execution.routers.llm_router.write_interaction")
 def test_retrieve_memories_called_exactly_once(mock_store):
     """
     retrieve_memories NE DOIT être appelé qu'une seule fois par cycle.
@@ -104,7 +104,7 @@ def test_retrieve_memories_called_exactly_once(mock_store):
     )
 
 
-@patch("execution.routers.llm_router.store_interaction")
+@patch("execution.routers.llm_router.write_interaction")
 def test_retrieve_memories_called_with_correct_top_k(mock_store):
     """
     retrieve_memories doit utiliser le top_k correspondant à l'opération.
@@ -125,7 +125,7 @@ def test_retrieve_memories_called_with_correct_top_k(mock_store):
 
 # ── Tests : transmission du contexte aux agents ───────────────────────────────
 
-@patch("execution.routers.llm_router.store_interaction")
+@patch("execution.routers.llm_router.write_interaction")
 def test_agent_context_receives_preloaded_memories(mock_store):
     """
     AgentContext doit contenir global_memories et session_memories
@@ -155,10 +155,10 @@ def test_agent_context_receives_preloaded_memories(mock_store):
 
 # ── Tests : persistence mémoire ───────────────────────────────────────────────
 
-@patch("execution.routers.llm_router.store_interaction")
-def test_store_interaction_called_once_after_resolution(mock_store):
+@patch("execution.routers.llm_router.write_interaction")
+def test_write_interaction_called_once_after_resolution(mock_store):
     """
-    store_interaction doit être appelé exactement une fois,
+    write_interaction doit être appelé exactement une fois,
     après résolution complète du pipeline — jamais sur un état intermédiaire.
     """
     router, _, _, fake_intent, _ = make_router()
@@ -175,11 +175,11 @@ def test_store_interaction_called_once_after_resolution(mock_store):
     assert "résultat final" in stored_text
 
 
-@patch("execution.routers.llm_router.store_interaction")
-def test_store_interaction_not_called_without_intent(mock_store):
+@patch("execution.routers.llm_router.write_interaction")
+def test_write_interaction_not_called_without_intent(mock_store):
     """
     Si intent_engine.apply() retourne None (aucun intent résolu),
-    store_interaction NE doit PAS être appelé.
+    write_interaction NE doit PAS être appelé.
 
     Évite d'écrire des interactions orphelines en mémoire.
     """
@@ -199,7 +199,7 @@ def test_store_interaction_not_called_without_intent(mock_store):
 
 # ── Tests : robustesse ────────────────────────────────────────────────────────
 
-@patch("execution.routers.llm_router.store_interaction")
+@patch("execution.routers.llm_router.write_interaction")
 def test_unknown_op_type_does_not_crash(mock_store):
     """
     execute() avec un op_type inconnu doit fallback sur UNKNOWN
@@ -218,10 +218,10 @@ def test_unknown_op_type_does_not_crash(mock_store):
     assert "text" in result
 
 
-@patch("execution.routers.llm_router.store_interaction", side_effect=Exception("ChromaDB down"))
-def test_store_interaction_failure_does_not_propagate(mock_store):
+@patch("execution.routers.llm_router.write_interaction", side_effect=Exception("ChromaDB down"))
+def test_write_interaction_failure_does_not_propagate(mock_store):
     """
-    Une erreur dans store_interaction (ex: ChromaDB indisponible)
+    Une erreur dans write_interaction (ex: ChromaDB indisponible)
     NE doit PAS faire crasher le pipeline.
 
     Le résultat doit quand même être retourné à l'utilisateur.
