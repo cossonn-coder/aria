@@ -263,6 +263,11 @@ def _search_cache(
     """
     Recherche un pattern similaire dans le cache classifier via MempalaceBridge.
 
+    Schéma post-T2 sprint 5 (fix dette #20) : l'operation est portée par
+    hit["room"] (cf. docs/sprint5/audit_cache_classifier.md). Plus de
+    json.loads sur le document — le hit propage `room` via le wrapper
+    mempalace.searcher.search_memories sans transformation custom.
+
     Seuil strict (0.92) appliqué côté caller — le bridge est appelé avec
     max_distance=None pour ne pas rejeter les hits de l'aria_classifier
     avant que le seuil métier puisse les évaluer.
@@ -290,8 +295,7 @@ def _search_cache(
             )
             return None
 
-        data = json.loads(hit.get("text", ""))
-        op = _parse_operation(data.get("operation", "unknown"))
+        op = _parse_operation(hit.get("room", "unknown"))
         log.info(
             "classifier cache HIT sim=%.3f op=%s for %r",
             sim, op.value, message[:50],

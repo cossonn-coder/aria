@@ -134,18 +134,18 @@ def test_write_semantic_fact_wing_and_room(fake_col):
     assert fake_col.last_meta["type"] == "semantic_fact"
 
 
-# ── 10. write_classifier_cache — wing, room et format document JSON ───────────
+# ── 10. write_classifier_cache — schéma post-T2 (dette #20) ───────────────────
 
 def test_write_classifier_cache_wing_and_document_format(fake_col):
+    """Post-T2 sprint 5 : document = message brut, operation portée par room.
+    Cf. docs/sprint5/audit_cache_classifier.md §4 (Option A)."""
     w.write_classifier_cache("Tu te rappelles des carottes ?", "fact_recall")
     meta = fake_col.last_meta
     assert meta["wing"] == "aria_classifier"
-    assert meta["room"] == "classifier_cache"
+    assert meta["room"] == "fact_recall"
     assert meta["type"] == "classifier_cache"
-    # le document doit être parseable en JSON avec les bons champs
-    data = json.loads(fake_col.last_doc)
-    assert data["message"] == "Tu te rappelles des carottes ?"
-    assert data["operation"] == "fact_recall"
+    # Document = message brut (plus de JSON sérialisé)
+    assert fake_col.last_doc == "Tu te rappelles des carottes ?"
 
 
 # ── 11. write_classifier_cache — enum non sérialisable → TypeError visible ────
@@ -159,3 +159,36 @@ def test_write_classifier_cache_rejects_non_string_operation(fake_col):
         FOO = "foo"
     with pytest.raises(TypeError):
         w.write_classifier_cache("msg", FakeEnum.FOO)
+
+
+# ── 12. write_classifier_cache — garde-fou anti-régression dette #20 ──────────
+
+def test_write_classifier_cache_indexes_message_brut(fake_col):
+    """Garde-fou direct du fix dette #20 (sprint 5 / T2).
+
+    Régression à éviter : retomber dans le format JSON sérialisé qui
+    décalait l'embedding écrit vs l'embedding query (cosine 0.47-0.60
+    sur des messages identiques, jamais de hit > 0.92).
+
+    Vérifie :
+      - document indexé == message brut (pas un JSON)
+      - metadata.room == operation (Option A : pas de metadata.operation)
+      - aucune clé "message" ou "operation" ne pollue metadata
+    """
+    msg = "tu te rappelles des carottes ?"
+    w.write_classifier_cache(msg, "fact_recall")
+
+    # Document = message brut
+    assert fake_col.last_doc == msg, (
+        f"Document doit être le message brut, pas un JSON. Got: {fake_col.last_doc!r}"
+    )
+    # Tentative de json.loads doit échouer (sauf coïncidence : un message
+    # qui ressemble à du JSON valide). Pour ce message-test, échec garanti.
+    with pytest.raises((json.JSONDecodeError, ValueError)):
+        json.loads(fake_col.last_doc)
+
+    # operation portée par room
+    assert fake_col.last_meta["room"] == "fact_recall"
+    # Pas de pollution metadata
+    assert "message" not in fake_col.last_meta
+    assert "operation" not in fake_col.last_meta

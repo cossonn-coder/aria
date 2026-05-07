@@ -2,8 +2,11 @@
 #
 # Garde-fou R5 : classify_operation doit passer par MempalaceBridge
 # pour le cache classifier, sans importer mempalace_store directement.
+#
+# Schéma cache classifier post-T2 sprint 5 (fix dette #20, Option A) :
+# operation portée par hits[].room — plus de json.loads sur le document.
+# Cf. docs/sprint5/audit_cache_classifier.md.
 
-import json
 from unittest.mock import MagicMock
 
 from cognition.cognitive_classifier import classify_operation
@@ -15,7 +18,8 @@ def _make_bridge(similarity: float, operation: str = "fact_recall") -> MagicMock
     bridge.retrieve_memories.return_value = {
         "hits": [{
             "similarity": similarity,
-            "text": json.dumps({"message": "test", "operation": operation}),
+            "room": operation,
+            "text": "test",
         }]
     }
     return bridge

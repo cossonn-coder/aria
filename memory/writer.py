@@ -176,20 +176,32 @@ def write_classifier_cache(
     """
     Stocke un mapping message→operation dans le cache classifier.
 
-    Le document indexé est json.dumps({"message": ..., "operation": ...}) —
-    format hérité préservé pour compatibilité avec _search_cache() dans
-    cognitive_classifier.py.
+    Schéma post-T2 sprint 5 (fix dette #20) :
+      - document indexé : message brut. L'embedding est aligné avec celui
+        que produit _search_cache() (qui query=message brut). Avant ce fix,
+        le document était json.dumps({"message", "operation"}) → cosine
+        similarity 0.47-0.60 sur des messages identiques, jamais de hit.
+      - room : operation. Récupérable depuis hits[].room sans dépendre du
+        wrapper search() pour propager metadata.operation (cf.
+        docs/sprint5/audit_cache_classifier.md §4 et spot-check T2).
+
+    operation doit être str (.value côté caller). wing/room/type sont
+    structurels et non overridables.
     """
+    if not isinstance(operation, str):
+        raise TypeError(
+            f"operation must be str (got {type(operation).__name__}). "
+            f"Pass operation.value if you have a CognitiveOperation enum."
+        )
     col = get_collection(config.mempalace_path)
-    json_text = json.dumps({"message": message, "operation": operation})
-    doc_id = _idempotent_doc_id(json_text, "classifier_cache")
+    doc_id = _idempotent_doc_id(message, "classifier_cache")
 
     meta = {
         "wing": "aria_classifier",
-        "room": "classifier_cache",
+        "room": operation,
         "type": "classifier_cache",
         "timestamp": _now_iso(),
         "confirmed": confirmed,
     }
     _validate(meta)
-    col.upsert(documents=[json_text], ids=[doc_id], metadatas=[meta])
+    col.upsert(documents=[message], ids=[doc_id], metadatas=[meta])
