@@ -1,0 +1,6 @@
+# Normalisation EOL — anti-régression CRLF parasite
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.zip binary

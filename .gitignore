@@ -28,3 +28,7 @@ Thumbs.db
 
 chroma_db/
 .claude/
+
+# Backups éditeur
+*.bak
+*~
