@@ -168,13 +168,11 @@ def main() -> dict:
         "stores": [],
     }
 
-    # A. ChromaDB legacy (chroma_db/ à la racine)
-    report["stores"].append(inspect_chroma_store(config.chroma_path, "chroma_db_root"))
-
-    # B. MemPalace (mempalace_path)
+    # MemPalace (mempalace_path) — seul store vectoriel actif depuis
+    # le décommissionnement de chroma_db/ legacy (T-Embedder2 Tâche B).
     report["stores"].append(inspect_chroma_store(config.mempalace_path, "mempalace_palace"))
 
-    # C. intents.json
+    # intents.json — pas un store vectoriel, embeddings reconstruits au boot.
     intents_path = os.path.expanduser("~/.aria/intents.json")
     report["intents_json"] = inspect_intents_json(intents_path)
 
