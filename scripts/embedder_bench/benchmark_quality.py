@@ -114,6 +114,13 @@ CASES = [
 # ──────────────────────────────────────────────────────────────────────────────
 
 def load_intents(path: str = os.path.expanduser("~/.aria/intents.json")) -> list[dict]:
+    """
+    Charge les intents actifs depuis ~/.aria/intents.json.
+
+    Filtre `status == "active"` pour modéliser la prod : IntentRecallEngine
+    n'opère le recall que sur les intents actifs (intent_recall_engine.py:73).
+    Les intents `completed` ou `abandoned` sont exclus du corpus de matching.
+    """
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if isinstance(data, dict):
         items = list(data.values())
@@ -124,7 +131,7 @@ def load_intents(path: str = os.path.expanduser("~/.aria/intents.json")) -> list
     return [
         {"id": it.get("id"), "name": it.get("name"), "status": it.get("status")}
         for it in items
-        if isinstance(it, dict) and it.get("name")
+        if isinstance(it, dict) and it.get("name") and it.get("status") == "active"
     ]
 
 
