@@ -379,6 +379,382 @@ Un assistant personnel persistant fonctionne mieux si la taxonomie distingue :
 Tes 4 catégories couvrent seulement les trois premières dimensions. Les ajouts complètent le modèle comportemental nécessaire à un agent long-terme single-user.
 
 
+# AUDIT — Taxonomie pragmatique des messages
+## Destination : Claude Code — assistant personnel à mémoire persistante (single-user)
+### Version : 2.0 — Mai 2026
+
+---
+
+## 0. Contexte et objectif
+
+Ce document est un audit architectural de la taxonomie pragmatique utilisée pour router les messages entrants dans un assistant personnel local à mémoire persistante. Il remplace la V1 issue d'une génération LLM antérieure, en identifie les défauts structurels, et propose une V2 opérationnelle.
+
+**Périmètre :** assistant single-user, mémoire persistante, comportements distincts (ATTACH, CREATE, STORE_FACT, STORE_EPISODE, RESPOND, WEB_SEARCH, SYSTEM_EXEC, UPDATE_PREF, ROLLBACK).
+
+**Objectif de la taxonomie :** router chaque message vers le bon comportement **avant** le matching d'intent, en amont du pipeline principal.
+
+---
+
+## 1. Défauts structurels de la V1
+
+### 1.1 Classification dure sur des catégories non exclusives
+
+La V1 reconnaît l'ambiguïté des catégories mais maintient une classification dure — contradiction architecturale directe. Elle ne propose aucune règle de tie-break, aucune hiérarchie de priorité en cas de conflit.
+
+### 1.2 Catégories plates sans sous-typage
+
+La catégorie D (Mémoriel) fusionne deux comportements de stockage radicalement différents (factuel vs épisodique). La catégorie H (Réflexion) traite de façon homogène des états qui appellent des rôles opposés de l'assistant (empathie vs interlocuteur épistémique vs accompagnement décisionnel).
+
+### 1.3 Axes orthogonaux absents
+
+La V1 est mono-axiale (axe pragmatique uniquement). Trois axes critiques pour le routing complet sont ignorés : modalité, temporalité, sensibilité.
+
+### 1.4 Messages composites non traités
+
+La V1 classe chaque message dans une catégorie unique. Elle ne dispose d'aucun mécanisme pour les messages multi-types, ni séquentiels ni entrelacés.
+
+### 1.5 Catégories E et I redondantes au premier niveau
+
+Les catégories "Commande système" et "Feedback agent" partagent la même nature méta-directive et peuvent être unifiées au niveau du router avec discrimination interne en aval.
+
+### 1.6 Classe résiduelle absente
+
+Aucune catégorie n'attrape les messages sans intention détectable (bruit, fragments, hors-sujet). Risque : pollution mémorielle et création d'intents fantômes.
+
+---
+
+## 2. Taxonomie V2
+
+### 2.1 Architecture générale
+
+La V2 adopte une structure à deux niveaux :
+- **8 catégories de premier niveau** (nœuds du router principal)
+- **Sous-types discriminés en aval** pour les catégories hétérogènes (D, F, G, H)
+
+Trois **slots orthogonaux** accompagnent systématiquement chaque message classifié, traités en pré- ou post-processing, jamais comme catégories :
+
+| Slot | Valeurs | Impact |
+|---|---|---|
+| **Modalité** | texte / image / voix / fichier | Pipeline de pré-traitement (OCR, transcription, analyse) |
+| **Temporalité** | immédiat / différé / récurrent / rétrospectif | Politique de scheduling et de persistance |
+| **Sensibilité** | standard / sensible | Politique de chiffrement, confirmation avant stockage |
+
+---
+
+### 2.2 Catégories de premier niveau
+
+---
+
+#### A — INTENT ACTIONNABLE
+
+**Définition.** L'utilisateur attend une aide opérationnelle, un plan, un diagnostic ou un accompagnement structuré nécessitant un état de tâche actif et un suivi potentiellement multi-tours.
+
+**Critère discriminant.** La réponse seule ne suffit pas — un état persistant doit être créé ou mis à jour.
+
+**Sous-types (router aval).** CREATE si aucun intent existant ne matche ; ATTACH si un intent pertinent est ouvert.
+
+**Exemples canoniques.**
+- "Aide-moi à organiser mon potager sur 20 m²"
+- "J'ai une erreur I²C intermittente, aide-moi à la diagnostiquer"
+- "Planifie un road-trip de 5 jours dans le Vercors"
+
+---
+
+#### B — DEMANDE INFORMATIVE
+
+**Définition.** Recherche de connaissance, explication ou vérification factuelle dont la réponse est complète en un tour.
+
+**Critère discriminant.** Aucune attente de suivi structuré ; la réponse clôt l'échange sur ce point.
+
+**Exemples canoniques.**
+- "Quelle différence entre /hot et /best sur Reddit ?"
+- "Combien de temps se conserve le saumon mariné ?"
+- "Qu'est-ce que l'IPM dans un capteur d'image ?"
+
+---
+
+#### C — CONVERSATIONNEL / SOCIAL
+
+**Définition.** Interaction phatique, relationnelle ou méta-discursive sans objectif opérationnel ni informationnel.
+
+**Critère discriminant.** Contenu non actionnable, non mémoriel, sans attente de suivi. Distinguer de H par l'absence de contenu introspectif.
+
+**Exemples canoniques.**
+- "Salut"
+- "Tu me décrirais comment ?"
+- "Dis-moi un fait amusant"
+
+---
+
+#### D — MÉMORIEL
+
+**Définition.** Transmission d'information destinée à la persistance, sans action attendue hors enregistrement.
+
+**Critère de discrimination D-FACT / D-EPIS.** Présence d'un ancrage temporel explicite ou implicite → D-EPIS. Absence → D-FACT par défaut.
+
+| Sous-type | Définition | Comportement | Persistance |
+|---|---|---|---|
+| **D-FACT** | Information atemporelle, atomique | STORE_FACT (key-value) | Infinie par défaut |
+| **D-EPIS** | Information datée, narrative, contextuelle | STORE_EPISODE (log horodaté) + tentative ATTACH | Longue durée, pertinence décroissante |
+
+**Différence de retrieval.** D-FACT : recherche par correspondance sémantique directe, sémantique de mise à jour (valeur la plus récente). D-EPIS : recherche par fenêtre temporelle ou rattachement d'intent, sémantique de journal (toutes les occurrences).
+
+**Exemples canoniques.**
+- D-FACT : "Code portail : 9041", "Mon chat s'appelle Orion", "Nouveau serveur : 192.168.1.42"
+- D-EPIS : "J'ai semé des carottes aujourd'hui", "Début du jeûne intermittent le 3 mai"
+
+---
+
+#### E — GESTION MÉMOIRE EXISTANTE
+
+**Définition.** L'utilisateur manipule un fait ou épisode déjà stocké : correction, suppression, reclassification, mise à jour.
+
+**Critère discriminant.** Référence à une information antérieurement connue + verbe de mutation (corriger, supprimer, mettre à jour, changer, annuler). Distinguer de D par cette intention de modification.
+
+**Comportement.** UPSERT ou DELETE sur le store mémoriel, avec confirmation si la valeur existante diffère de la nouvelle.
+
+**Exemples canoniques.**
+- "Corrige : je n'habite plus Lyon"
+- "Supprime l'adresse que je t'ai donnée"
+- "Mets à jour : nouveau job lundi"
+
+---
+
+#### F — META — DIRECTIVE SUR L'AGENT
+
+**Définition.** Message portant sur le fonctionnement, le comportement ou les préférences de l'assistant lui-même.
+
+| Sous-type | Définition | Comportement | Persistance |
+|---|---|---|---|
+| **F-COMMANDE** | Effet immédiat et déterministe sur l'état système | SYSTEM_EXEC | Transitoire (effet sur état) |
+| **F-CALIBRATION** | Mise à jour de préférence latente, effet adaptatif différé | UPDATE_PREF | Longue durée |
+
+**Critère de discrimination.** Impératif à effet binaire immédiat → COMMANDE. Évaluation qualitative du comportement → CALIBRATION.
+
+**Exemples canoniques.**
+- F-COMMANDE : "Oublie cette information", "Réinitialise la conversation", "Montre ce que tu sais sur moi"
+- F-CALIBRATION : "Tes réponses sont trop longues", "Arrête les emojis", "Continue comme ça"
+
+---
+
+#### G — CLARIFICATION / RÉPARATION
+
+**Définition.** Message servant à restaurer ou corriger la compréhension mutuelle.
+
+| Sous-type | Définition | Comportement | Persistance |
+|---|---|---|---|
+| **G-REPAIR** | Reformulation ou précision sans invalidation de l'état mémoriel | RESPOND (contexte corrigé) | Transitoire |
+| **G-RETRACT** | Rétraction explicite pouvant déclencher un rollback mémoriel ou l'abandon d'un intent | ROLLBACK? + RESPOND | Annule la persistance précédente |
+
+**Note d'implémentation.** G-RETRACT nécessite l'accès à l'historique récent de l'agent (N derniers tours) pour identifier l'acte mémoriel ou d'intent à annuler. La décision de rollback ne peut pas reposer uniquement sur le contenu du message.
+
+**Exemples canoniques.**
+- G-REPAIR : "Non, je parlais du capteur B", "Reformule plus simplement"
+- G-RETRACT : "Ignore mon dernier message", "Ce n'est pas du tout ce que je voulais dire"
+
+---
+
+#### H — RÉFLEXION COGNITIVE
+
+**Définition.** L'utilisateur externalise une pensée en cours sans demander d'action directe. Contenu introspectif pouvant ultérieurement devenir actionnable, mémoriel ou informationnel — mais ne l'étant pas encore au moment du message.
+
+**Principe général.** H est la catégorie qui appelle le rôle de **partenaire de réflexion**, pas de service. Le comportement de l'assistant varie radicalement selon le sous-type — l'erreur la plus fréquente est de traiter H de façon homogène avec une "écoute active" générique.
+
+| Sous-type | Définition | Comportement | Persistance |
+|---|---|---|---|
+| **H-AFFECT** | Partage d'un état émotionnel sans demande de résolution immédiate | Empathique et réceptif — accuser l'émotion sans sauter à la résolution | Transitoire — flag si récurrent |
+| **H-HYPOTHESE** | Formulation d'une hypothèse sur le monde, soi, ou une situation, sans certitude | Épistémique — tester la solidité, identifier les angles morts, proposer une reformulation plus précise | Transitoire — surveillance vers B ou A |
+| **H-DELIBERATION** | Pesée active d'une décision, options en tension | Structurant — cartographier les critères implicites, externaliser les trade-offs, accompagner sans trancher | Session — surveillance active vers A |
+
+**Transitions inter-sous-types.**
+- H-AFFECT → H-DELIBERATION : l'émotion nommée révèle un choix sous-jacent
+- H-HYPOTHESE → B : l'hypothèse appelle une vérification factuelle immédiate
+- H-DELIBERATION → A : la décision converge, un plan est demandé
+
+**Règle critique.** L'assistant ne force pas la transition de registre prématurément. Passer en mode résolution avant que l'utilisateur soit prêt est une erreur de lecture aussi grave que rester en mode empathique quand il veut qu'on teste son raisonnement.
+
+**Exemples canoniques.**
+- H-AFFECT : "J'en ai marre de ce projet", "Je me sens dispersé en ce moment"
+- H-HYPOTHESE : "J'ai l'impression que le problème vient de nos priorités", "Peut-être que je devrais automatiser ça"
+- H-DELIBERATION : "J'hésite entre changer de poste ou rester encore un an", "Une partie de moi veut simplifier mais je sais que c'est risqué"
+
+---
+
+#### AMBIGU / SUSPENDU — classe résiduelle
+
+**Définition.** Message sans intention détectable ou hors-sujet complet : copier-coller sans instruction, fragment incomplet, digression sans ancrage, bruit.
+
+**Comportement.** Aucun stockage, aucun intent créé. Accusé de réception neutre + demande de clarification légère si le message semble intentionnel.
+
+**Raison d'existence.** Bloquer la pollution mémorielle par des messages bruités et empêcher la création d'intents fantômes.
+
+---
+
+### 2.3 Tableau de décision complet
+
+| Catégorie / Sous-type | Action principale | Persistance |
+|---|---|---|
+| A — Intent actionnable | ATTACH ou CREATE | Longue durée (intent actif) |
+| B — Demande informative | RESPOND (+ WEB_SEARCH si nécessaire) | Transitoire |
+| C — Conversationnel | RESPOND | Transitoire |
+| D-FACT — Mémoriel factuel | STORE_FACT | Longue durée (infinie) |
+| D-EPIS — Mémoriel épisodique | STORE_EPISODE + ATTACH? | Longue durée (décroissante) |
+| E — Gestion mémoire | UPDATE / DELETE + confirmation | Met à jour la persistance existante |
+| F-COMMANDE | SYSTEM_EXEC | Transitoire (effet système) |
+| F-CALIBRATION | UPDATE_PREF | Longue durée (préférences) |
+| G-REPAIR | RESPOND (contexte corrigé) | Transitoire |
+| G-RETRACT | ROLLBACK? + RESPOND | Annule persistance précédente |
+| H-AFFECT | RESPOND (empathique) | Transitoire — flag si récurrent |
+| H-HYPOTHESE | RESPOND (socratique/épistémique) | Transitoire — surveillance |
+| H-DELIBERATION | RESPOND (structurant) | Session — surveillance vers A |
+| AMBIGU / SUSPENDU | CLARIFY | Aucune |
+
+---
+
+## 3. Gestion des messages composites
+
+### 3.1 Deux structures à distinguer
+
+**Messages séquentiels.** Les types se succèdent de façon lisible avec des frontières identifiables entre sous-énoncés. Exemple : "Note que j'ai changé d'adresse / rappelle-moi de prévenir ma banque demain / c'est quoi le délai légal ?" → E + A(différé) + B.
+
+**Messages entrelacés.** Les types sont fusionnés dans le même flux ; la segmentation en sous-énoncés échoue. Exemple : "Je suis épuisé par ce projet et j'ai l'impression que le vrai problème c'est qu'on n'a jamais clarifié les priorités — tu crois qu'il faudrait tout replanifier ?" → H-AFFECT + H-HYPOTHESE + A implicite.
+
+Pour les messages séquentiels : **pré-segmentation en sous-énoncés** avant classification, traitement séquentiel par lane. Pour les messages entrelacés : **lecture holistique** identifiant la composition globale (quels types, dans quelles proportions) sans chercher de frontières nettes.
+
+### 3.2 Règle d'ordonnancement
+
+L'ordre de traitement dans la réponse n'est pas arbitraire. **H-AFFECT passe toujours en premier**, même minoritaire. Répondre à une hypothèse ou une demande d'action sans avoir accusé l'émotion présente crée une rupture relationnelle.
+
+Ordre général : **H-AFFECT → H-DELIBERATION / H-HYPOTHESE → A / B**
+
+Soit : d'abord ce qui concerne l'état de la personne, ensuite sa pensée, enfin le monde ou l'action.
+
+### 3.3 Règle du registre dominant
+
+La réponse ne doit pas être la concaténation des réponses à chaque composant — cela serait lu comme une alternance de modes. Elle doit avoir **un registre dominant** déterminé par le type ayant la charge émotionnelle ou décisionnelle la plus élevée. Les autres types sont adressés comme contenus à l'intérieur de ce registre, pas comme registres alternatifs.
+
+### 3.4 Compositions fréquentes et traitement
+
+**H-AFFECT + H-HYPOTHESE.**
+Dominante affective. Accuser l'émotion brièvement et sincèrement, puis pivoter vers l'hypothèse avec un marqueur de transition naturel ("et tu mets le doigt sur quelque chose d'intéressant..."). La réponse reste dans un registre chaleureux même quand elle devient épistémique.
+
+**H-DELIBERATION + A.**
+Ne pas sauter au plan — la décision n'est pas prise. Adresser la délibération d'abord, signaler la disponibilité à basculer en mode A : "si tu décides d'y aller, on peut construire ça ensemble — mais la question d'abord c'est...".
+
+**H-AFFECT + B.**
+Affect mineur, demande informative claire. Reconnaître l'état en une phrase d'ouverture, puis répondre à B directement. Ne pas sur-traiter l'affect quand l'utilisateur a visiblement décidé de passer à autre chose.
+
+**H-HYPOTHESE + D-EPIS.**
+Répondre à l'hypothèse, stocker l'épisode en silence. Ne pas signaler le stockage — ce serait bruyant et distrayant.
+
+**Multi-segment séquentiel.**
+Signaler au router un tour multi-segment, activer le pipeline de segmentation avant classification, traiter chaque lane séquentiellement, assembler les réponses en une réponse cohérente (pas une liste d'actions).
+
+---
+
+## 4. Cas frontaliers et règles de décision
+
+| Cas | Composition | Règle |
+|---|---|---|
+| "J'ai planté des tomates" | D-EPIS + A implicite possible | Ancrage temporel → D-EPIS + tentative ATTACH sur intent potager |
+| "Mon PC fait un bruit étrange" | A déguisé en déclaration | Priorité à l'intention opérationnelle probable sur la forme grammaticale → A |
+| "Note que je travaille en remote" | E (pas D) | Verbe de mutation + info préexistante probable → E |
+| "J'aimerais être plus sportif... tu pourrais m'aider ?" | H → A dans le même tour | Signal A explicite prime sur H initial → A |
+| "C'était bien" après une réponse | F-CALIBRATION (pas C) | Portée sur le dernier acte de l'assistant → F-CALIBRATION |
+| "Ce n'est pas du tout ce que je voulais" | G-RETRACT ou G-REPAIR | Vérifier si un stockage ou intent a été créé dans les N derniers tours → RETRACT si oui, REPAIR sinon |
+| Copier-coller d'un article sans instruction | AMBIGU | Aucun stockage — demander l'intention |
+| "Je suis épuisé / problème de priorités / faudrait replanifier ?" | H-AFFECT + H-HYPOTHESE + A | Message entrelacé — lecture holistique, dominante affective, surveillance vers A |
+| "Note adresse + rappel demain + délai légal ?" | E + A(différé) + B | Message séquentiel — pré-segmenter, traiter par lane |
+
+---
+
+## 5. Pistes de recherche
+
+### 5.1 Détection de la composition de message
+
+**Problème.** Distinguer automatiquement messages mono-type, séquentiels et entrelacés. La segmentation en sous-énoncés est triviale pour les messages séquentiels (marqueurs discursifs, ponctuation forte) mais non triviale pour les messages entrelacés.
+
+**Pistes.**
+- Étudier les travaux sur la segmentation d'actes de dialogue (*dialogue act segmentation*) en NLP, notamment sur les corpus de conversation naturelle.
+- Explorer si un LLM de routing léger (prompt simple + few-shot) est plus fiable qu'un classifieur dédié pour la détection de composition.
+- Constituer un corpus d'exemples réels annotés avec leur composition (ground truth) pour évaluer les approches.
+
+### 5.2 Seuil de confiance et règles de tie-break
+
+**Problème.** La classification primaire dure avec étiquette secondaire optionnelle nécessite un seuil de confiance calibré. Ce seuil n'est pas universel — il dépend du coût asymétrique de la mauvaise classification.
+
+**Pistes.**
+- Modéliser la matrice de coût de mauvaise classification pour les catégories V2 (manquer un STORE_FACT vs manquer un CREATE vs déclencher un SYSTEM_EXEC à tort).
+- Évaluer si le seuil doit être statique ou adaptatif selon le contexte (fin de session, intent actif ouvert, préférences de l'utilisateur).
+
+### 5.3 Détection des signaux de transition dans H
+
+**Problème.** Détecter le moment où H-AFFECT bascule vers H-DELIBERATION, ou H-DELIBERATION vers A, sans forcer le changement prématurément ni le rater.
+
+**Pistes.**
+- Identifier les marqueurs linguistiques de transition : apparition d'un verbe d'action conditionnel ("si je fais ça..."), formulation d'une demande explicite, changement de temps verbal.
+- Étudier la littérature sur le *motivational interviewing* (entretien motivationnel) qui formalise précisément ces transitions dans un contexte d'accompagnement.
+
+### 5.4 Gestion du rollback mémoriel (G-RETRACT)
+
+**Problème.** G-RETRACT nécessite d'identifier l'acte mémoriel ou d'intent à annuler dans l'historique récent. La fenêtre N est non triviale à définir, et le rollback peut avoir des effets de bord (un épisode rattaché à un intent, supprimé, laisse l'intent orphelin de cette entrée).
+
+**Pistes.**
+- Définir un journal d'actes (*action log*) horodaté en parallèle du store mémoriel, permettant un rollback ciblé et traçable.
+- Étudier les patterns de rétraction dans les corpus de conversation humain-humain pour évaluer la fenêtre temporelle réaliste de G-RETRACT.
+
+### 5.5 Slots orthogonaux : détection de la sensibilité
+
+**Problème.** La détection de la sensibilité (code d'accès, donnée médicale, credential) par pattern matching est fragile (faux positifs sur les exemples pédagogiques, faux négatifs sur les formulations indirectes).
+
+**Pistes.**
+- Combiner pattern matching (regex sur formats de codes, IPs, termes médicaux) avec un classifier sémantique léger.
+- Définir une liste de domaines sensibles par défaut configurable par l'utilisateur.
+- Évaluer si la confirmation avant stockage doit être systématique ou seulement déclenchée sur signal fort.
+
+---
+
+## 6. Préconisations d'implémentation
+
+### 6.1 Architecture du router
+
+Implémenter le router en deux passes :
+
+1. **Passe 1 — Détection de composition.** Classifier le message comme mono-type, séquentiel ou entrelacé. Pour les messages séquentiels, segmenter en sous-énoncés avant la passe 2.
+
+2. **Passe 2 — Classification pragmatique.** Classifier chaque unité (message complet ou sous-énoncé) dans les 8 catégories V2. Produire une classe primaire + classe secondaire optionnelle si confiance < seuil. Attacher les trois slots orthogonaux (modalité, temporalité, sensibilité).
+
+Ne pas fusionner ces deux passes dans un seul prompt — la détection de composition et la classification ont des structures de décision différentes et doivent être évaluées séparément.
+
+### 6.2 Gestion des messages entrelacés
+
+Pour les messages entrelacés, ne pas tenter la segmentation. Passer le message complet avec une étiquette de composition `ENTRELACE` et la liste des types détectés. Le handler downstream est responsable d'appliquer la règle d'ordonnancement et de registre dominant. Documenter cette responsabilité explicitement dans l'interface du handler.
+
+### 6.3 Silence sur les actes de routine
+
+Le stockage de D-EPIS, D-FACT, et les tentatives d'ATTACH doivent être silencieux par défaut. Signaler à l'utilisateur qu'on mémorise quelque chose est bruyant et brise le registre conversationnel. Exception : F-COMMANDE (confirmation de l'exécution) et E avec changement de valeur (confirmation avant UPSERT).
+
+### 6.4 Surveillance des transitions H
+
+Implémenter un mécanisme de surveillance de transition pour les messages classifiés H. À chaque tour suivant un H actif, vérifier si des signaux de transition sont présents (marqueurs linguistiques de demande d'action, formulation d'une décision). Ne pas reclassifier rétroactivement — traiter la transition dans le tour courant.
+
+### 6.5 Journal d'actes
+
+Maintenir un journal d'actes (*action log*) distinct du store mémoriel, enregistrant chaque STORE_FACT, STORE_EPISODE, CREATE, ATTACH avec horodatage et identifiant. Ce journal est la seule source fiable pour G-RETRACT et pour la cohérence du store en cas de rollback.
+
+### 6.6 Priorité H-AFFECT dans les réponses composites
+
+Implémenter la règle H-AFFECT-first comme contrainte dure dans le générateur de réponse, pas comme suggestion dans le prompt. Si H-AFFECT est présent dans la composition détectée, le premier bloc de la réponse doit toujours adresser l'affect, quel que soit le poids relatif des autres types.
+
+### 6.7 Classe AMBIGU comme garde-fou
+
+Traiter AMBIGU / SUSPENDU comme une catégorie de sécurité, pas comme un cas d'échec. Un message classifié AMBIGU ne doit déclencher aucune écriture dans aucun store. La demande de clarification doit être légère et ouverte — ne pas proposer d'interprétations par défaut qui pourraient biaiser la réponse de l'utilisateur.
+
+---
+
+*Document produit dans le cadre du design de l'assistant personnel SYMBIOSE-adjacent. À réviser après constitution d'un corpus d'exemples réels annotés.*
+
+
 ##### v2 version gemini :
 
 ### Évaluation architecturale et critique de la taxonomie V1
