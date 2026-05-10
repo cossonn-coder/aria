@@ -1,0 +1,777 @@
+"""
+migrate_embedder.py — ARIA Sprint 6 · T-Embedder2 D
+=====================================================
+Migration de la collection ChromaDB `mempalace_drawers`
+de all-MiniLM-L6-v2 (dim 384) vers
+sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (dim 768).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TESTS — INVOCATIONS CLI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. PRÉPARATION D'UNE COPIE DE BENCH
+   ──────────────────────────────────
+   cp -r ~/.mempalace ~/.mempalace.bench-copy
+
+2. MIGRATION SUR COPIE (sans snapshot, pour aller vite)
+   ──────────────────────────────────────────────────────
+   ./venv/bin/python aria/scripts/migrate_embedder.py \
+       --palace-path ~/.mempalace.bench-copy/palace \
+       --no-snapshot
+
+   Résultat attendu :
+   - Log des étapes a→g
+   - Compte rendu final "Migration réussie" avec dim=768 et phrases/s
+   - Fichier .embedder-migration-marker créé dans palace-path
+
+3. TEST IDEMPOTENCE (relancer après migration réussie)
+   ──────────────────────────────────────────────────────
+   ./venv/bin/python aria/scripts/migrate_embedder.py \
+       --palace-path ~/.mempalace.bench-copy/palace \
+       --no-snapshot
+
+   Résultat attendu :
+   - Le script détecte le marker, affiche un message explicite du type :
+     "Migration déjà effectuée vers ce modèle (hash SHA256 correspond).
+      Utilisez --force pour ignorer. Abandon."
+   - Exit code 0 (refus propre, pas une erreur)
+
+4. TEST DRY-RUN (sur la copie ou sur l'original)
+   ──────────────────────────────────────────────
+   ./venv/bin/python aria/scripts/migrate_embedder.py \
+       --palace-path ~/.mempalace.bench-copy/palace \
+       --no-snapshot \
+       --dry-run
+
+   Résultat attendu :
+   - Toutes les étapes sont simulées et loguées
+   - Rien n'est écrit dans ChromaDB (pas de delete/create)
+   - Le marker n'est pas créé
+   - Log "[DRY-RUN] ..." sur chaque étape destructive
+
+5. TEST ROLLBACK
+   ──────────────────────────────────────────────────────
+   a) Préparer une copie fraîche (sans marker) :
+      cp -r ~/.mempalace ~/.mempalace.rollback-test
+
+   b) Dans le script, localiser la section "ÉTAPE E" et ajouter
+      temporairement après collection.add(...) :
+          raise RuntimeError("TEST ROLLBACK — erreur simulée à l'étape e")
+
+   c) Lancer (AVEC snapshot cette fois, car le rollback en a besoin) :
+      ./venv/bin/python aria/scripts/migrate_embedder.py \
+          --palace-path ~/.mempalace.rollback-test/palace
+
+   Résultat attendu :
+   - Le script plante à l'étape e et le log affiche :
+     "[ROLLBACK] Exception en étape e/f, restauration depuis snapshot..."
+     "[ROLLBACK] Palace restauré depuis <chemin_snapshot.tar.gz>"
+   - La collection retrouve ses 655 entrées originales avec dim 384
+   - Vérifier : python -c "
+       import chromadb
+       c = chromadb.PersistentClient('~/.mempalace.rollback-test/palace')
+       col = c.get_collection('mempalace_drawers')
+       res = col.peek(1)
+       print('count:', col.count())
+       print('dim:', len(res['embeddings'][0]))
+     "
+
+   d) Retirer le raise temporaire après le test.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DÉPENDANCES REQUISES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    pip install chromadb sentence-transformers tqdm
+"""
+
+import argparse
+import hashlib
+import logging
+import os
+import shutil
+import sys
+import tarfile
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Logging configuré dès l'import — format avec horodatage et niveau
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+log = logging.getLogger("aria.migrate_embedder")
+
+# ---------------------------------------------------------------------------
+# Constantes
+# ---------------------------------------------------------------------------
+COLLECTION_NAME = "mempalace_drawers"
+MARKER_FILENAME = ".embedder-migration-marker"
+
+# Dimensions attendues par modèle (source de vérité locale, sans appel réseau)
+MODEL_EXPECTED_DIM: dict[str, int] = {
+    "all-MiniLM-L6-v2": 384,
+    "sentence-transformers/all-MiniLM-L6-v2": 384,
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": 768,
+    "paraphrase-multilingual-mpnet-base-v2": 768,
+}
+
+BATCH_SIZE = 32  # taille de batch pour l'encodage et l'insertion ChromaDB
+
+
+# ---------------------------------------------------------------------------
+# Utilitaires
+# ---------------------------------------------------------------------------
+
+def _sha256(text: str) -> str:
+    """Retourne le hash SHA-256 hex d'une chaîne UTF-8."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _resolve_palace(path_str: str) -> Path:
+    """Résout le chemin palace (gère le ~ initial)."""
+    return Path(path_str).expanduser().resolve()
+
+
+def _expected_dim(model_name: str) -> int:
+    """
+    Retourne la dimension attendue pour un modèle connu.
+    Lève ValueError si le modèle est inconnu du registre local.
+    """
+    if model_name in MODEL_EXPECTED_DIM:
+        return MODEL_EXPECTED_DIM[model_name]
+    # Essai avec préfixe sentence-transformers/ ajouté ou retiré
+    alt = (
+        f"sentence-transformers/{model_name}"
+        if not model_name.startswith("sentence-transformers/")
+        else model_name.split("/", 1)[1]
+    )
+    if alt in MODEL_EXPECTED_DIM:
+        return MODEL_EXPECTED_DIM[alt]
+    raise ValueError(
+        f"Modèle '{model_name}' inconnu du registre local. "
+        f"Modèles connus : {list(MODEL_EXPECTED_DIM.keys())}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE A — Snapshot tar.gz horodaté
+# ---------------------------------------------------------------------------
+
+def etape_a_snapshot(palace_path: Path, dry_run: bool) -> Path | None:
+    """
+    Crée un snapshot tar.gz horodaté du répertoire palace.
+    Retourne le chemin du snapshot créé, ou None si dry_run.
+    """
+    log.info("── ÉTAPE A : Snapshot du palace ──")
+    ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    snapshot_path = palace_path.parent / f"mempalace_drawers_backup_{ts}.tar.gz"
+
+    if dry_run:
+        log.info("[DRY-RUN] Snapshot simulé → %s (non créé)", snapshot_path)
+        return None
+
+    t0 = time.monotonic()
+    try:
+        with tarfile.open(snapshot_path, "w:gz") as tar:
+            tar.add(palace_path, arcname=palace_path.name)
+        elapsed = time.monotonic() - t0
+        size_mb = snapshot_path.stat().st_size / (1024 ** 2)
+        log.info(
+            "Snapshot créé : %s (%.1f Mo, %.1fs)",
+            snapshot_path, size_mb, elapsed,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Impossible de créer le snapshot : {exc}"
+        ) from exc
+
+    return snapshot_path
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE B — Inspection préalable de la collection
+# ---------------------------------------------------------------------------
+
+def etape_b_inspection(collection, from_model: str) -> tuple[int, int]:
+    """
+    Vérifie que la collection est dans l'état attendu avant migration.
+    Retourne (count, dim_actuelle).
+    """
+    log.info("── ÉTAPE B : Inspection de la collection '%s' ──", COLLECTION_NAME)
+    t0 = time.monotonic()
+
+    count = collection.count()
+    log.info("Nombre d'entrées : %d", count)
+
+    if count == 0:
+        log.info("Collection vide — rien à migrer. Sortie propre.")
+        sys.exit(0)
+
+    # Lire un vecteur exemple pour connaître la dimension actuelle.
+    # NB : ChromaDB renvoie `embeddings` comme numpy.ndarray ; tester sa
+    # truthiness directement (`not arr`) lève ValueError. On vérifie donc
+    # explicitement présence et longueur.
+    sample = collection.peek(limit=1)
+    embeddings_sample = sample.get("embeddings")
+    if embeddings_sample is None or len(embeddings_sample) == 0:
+        raise RuntimeError(
+            "Impossible de lire un embedding exemple depuis la collection. "
+            "La collection est peut-être corrompue."
+        )
+
+    dim_actuelle = len(embeddings_sample[0])
+    log.info("Dimension actuelle des vecteurs : %d", dim_actuelle)
+
+    # Vérification de cohérence avec le modèle source déclaré
+    dim_attendue_from = _expected_dim(from_model)
+    if dim_actuelle != dim_attendue_from:
+        raise ValueError(
+            f"Incohérence de dimension ! Collection contient dim={dim_actuelle} "
+            f"mais le modèle source '{from_model}' attend dim={dim_attendue_from}. "
+            f"Vérifiez l'argument --from-model ou l'état de la collection."
+        )
+
+    log.info(
+        "Inspection OK : %d entrées, dim=%d conforme à '%s' (%.2fs)",
+        count, dim_actuelle, from_model, time.monotonic() - t0,
+    )
+    return count, dim_actuelle
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE C — Idempotence via marker
+# ---------------------------------------------------------------------------
+
+def etape_c_check_marker(palace_path: Path, to_model: str, dry_run: bool) -> None:
+    """
+    Vérifie si la migration vers to_model a déjà été effectuée.
+    Lève SystemExit si le marker correspond au modèle cible.
+    """
+    log.info("── ÉTAPE C : Vérification idempotence (marker) ──")
+    marker_path = palace_path / MARKER_FILENAME
+    target_hash = _sha256(to_model)
+
+    if marker_path.exists():
+        existing_hash = marker_path.read_text(encoding="utf-8").strip()
+        if existing_hash == target_hash:
+            log.warning(
+                "Migration déjà effectuée vers '%s' (hash SHA256 correspond : %s…).\n"
+                "Relancer avec --force pour ignorer (non implémenté par sécurité).\n"
+                "Abandon propre.",
+                to_model, target_hash[:12],
+            )
+            sys.exit(0)
+        else:
+            log.info(
+                "Marker présent mais hash différent (%s… → %s…) : "
+                "migration vers un nouveau modèle, on continue.",
+                existing_hash[:12], target_hash[:12],
+            )
+    else:
+        log.info("Aucun marker trouvé — première migration.")
+
+    if dry_run:
+        log.info("[DRY-RUN] Marker non écrit (sera créé après étape g en mode normal).")
+
+
+def etape_c_write_marker(palace_path: Path, to_model: str, dry_run: bool) -> None:
+    """Écrit le marker de fin de migration (appelé en fin d'étape g)."""
+    if dry_run:
+        log.info("[DRY-RUN] Marker non écrit.")
+        return
+    marker_path = palace_path / MARKER_FILENAME
+    marker_path.write_text(_sha256(to_model), encoding="utf-8")
+    log.info("Marker écrit : %s", marker_path)
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE D — Re-encoding
+# ---------------------------------------------------------------------------
+
+def etape_d_reencoding(collection, to_model: str, dry_run: bool):
+    """
+    Charge le modèle cible et ré-encode tous les documents en batch.
+    Retourne (ids, documents, metadatas, new_embeddings).
+    """
+    log.info("── ÉTAPE D : Re-encoding avec '%s' ──", to_model)
+
+    # Import tardif : pas de dépendance à sentence_transformers si non installé
+    try:
+        from sentence_transformers import SentenceTransformer
+        from tqdm import tqdm
+    except ImportError as exc:
+        raise ImportError(
+            "Dépendances manquantes. Installez : "
+            "pip install sentence-transformers tqdm"
+        ) from exc
+
+    # Chargement du modèle
+    log.info("Chargement du modèle '%s'…", to_model)
+    t_load = time.monotonic()
+    model = SentenceTransformer(to_model)
+    log.info("Modèle chargé en %.1fs.", time.monotonic() - t_load)
+
+    # Lecture complète de la collection
+    log.info("Lecture complète de la collection…")
+    t_read = time.monotonic()
+    total = collection.count()
+
+    # ChromaDB peut limiter get() sans filtre — on pagine par sécurité
+    all_ids: list[str] = []
+    all_documents: list[str] = []
+    all_metadatas: list[dict] = []
+    offset = 0
+    PAGE = 500  # taille de page pour la lecture
+
+    while offset < total:
+        page = collection.get(
+            limit=PAGE,
+            offset=offset,
+            include=["documents", "metadatas"],
+        )
+        batch_ids = page.get("ids", [])
+        if not batch_ids:
+            break
+        all_ids.extend(batch_ids)
+        all_documents.extend(page.get("documents") or [""] * len(batch_ids))
+        all_metadatas.extend(page.get("metadatas") or [{}] * len(batch_ids))
+        offset += len(batch_ids)
+
+    log.info(
+        "%d entrées lues en %.1fs.", len(all_ids), time.monotonic() - t_read
+    )
+
+    if len(all_ids) != total:
+        raise RuntimeError(
+            f"Lecture incomplète : attendu {total} entrées, lu {len(all_ids)}."
+        )
+
+    if dry_run:
+        log.info(
+            "[DRY-RUN] Encodage simulé — %d documents, batch=%d.",
+            len(all_documents), BATCH_SIZE,
+        )
+        # Retourne des embeddings factices pour permettre la validation à sec
+        dim_cible = _expected_dim(to_model)
+        dummy_embeddings = [[0.0] * dim_cible] * len(all_documents)
+        return all_ids, all_documents, all_metadatas, dummy_embeddings
+
+    # Encodage en batch avec barre de progression
+    log.info("Encodage de %d documents (batch=%d)…", len(all_documents), BATCH_SIZE)
+    t_enc = time.monotonic()
+    new_embeddings_np = []
+
+    batches = [
+        all_documents[i:i + BATCH_SIZE]
+        for i in range(0, len(all_documents), BATCH_SIZE)
+    ]
+    for batch in tqdm(batches, desc="Encodage", unit="batch"):
+        vecs = model.encode(batch, show_progress_bar=False)
+        new_embeddings_np.extend(vecs.tolist())
+
+    elapsed_enc = time.monotonic() - t_enc
+    phrases_per_sec = len(all_documents) / elapsed_enc if elapsed_enc > 0 else float("inf")
+    log.info(
+        "Encodage terminé : %d phrases en %.1fs → %.1f phrases/s",
+        len(all_documents), elapsed_enc, phrases_per_sec,
+    )
+
+    return all_ids, all_documents, all_metadatas, new_embeddings_np
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE E — Réécriture ChromaDB
+# ---------------------------------------------------------------------------
+
+def etape_e_rewrite_chroma(
+    client,
+    ids: list[str],
+    embeddings: list,
+    documents: list[str],
+    metadatas: list[dict],
+    dry_run: bool,
+) -> None:
+    """
+    Supprime et recrée la collection avec les nouveaux embeddings.
+    Approche défensive sur la signature de create_collection.
+    """
+    log.info("── ÉTAPE E : Réécriture ChromaDB ──")
+
+    if dry_run:
+        log.info(
+            "[DRY-RUN] delete_collection('%s') simulé.", COLLECTION_NAME
+        )
+        log.info(
+            "[DRY-RUN] create_collection('%s', hnsw:space=cosine) simulé.",
+            COLLECTION_NAME,
+        )
+        log.info(
+            "[DRY-RUN] collection.add(%d entrées en batches de %d) simulé.",
+            len(ids), BATCH_SIZE,
+        )
+        return
+
+    # Suppression
+    log.info("Suppression de la collection '%s'…", COLLECTION_NAME)
+    client.delete_collection(COLLECTION_NAME)
+    log.info("Collection supprimée.")
+
+    # Recréation — approche défensive sur le paramètre metadata
+    log.info("Recréation de la collection '%s' (hnsw:space=cosine)…", COLLECTION_NAME)
+    try:
+        collection = client.create_collection(
+            name=COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+        log.info("Collection créée avec metadata hnsw:space=cosine.")
+    except TypeError as exc:
+        log.warning(
+            "create_collection a rejeté le paramètre metadata (%s). "
+            "Recréation sans metadata.", exc,
+        )
+        collection = client.create_collection(name=COLLECTION_NAME)
+        log.info("Collection créée sans metadata (fallback).")
+
+    # Insertion en batch
+    total = len(ids)
+    log.info("Insertion de %d entrées en batches de %d…", total, BATCH_SIZE)
+    t0 = time.monotonic()
+
+    for start in range(0, total, BATCH_SIZE):
+        end = min(start + BATCH_SIZE, total)
+        collection.add(
+            ids=ids[start:end],
+            embeddings=embeddings[start:end],
+            documents=documents[start:end],
+            metadatas=metadatas[start:end],
+        )
+
+    elapsed = time.monotonic() - t0
+    log.info(
+        "Insertion terminée : %d entrées en %.1fs.", total, elapsed
+    )
+
+
+# ---------------------------------------------------------------------------
+# ÉTAPE F — Validation post-migration
+# ---------------------------------------------------------------------------
+
+def etape_f_validation(client, count_avant: int, to_model: str) -> None:
+    """Vérifie que la migration s'est déroulée correctement."""
+    log.info("── ÉTAPE F : Validation post-migration ──")
+    t0 = time.monotonic()
+
+    collection = client.get_collection(COLLECTION_NAME)
+    count_apres = collection.count()
+    dim_attendue = _expected_dim(to_model)
+
+    # Vérification du compte
+    if count_apres != count_avant:
+        raise RuntimeError(
+            f"Validation ÉCHOUÉE : count avant={count_avant}, "
+            f"count après={count_apres}. Données manquantes !"
+        )
+    log.info("✓ Count OK : %d entrées.", count_apres)
+
+    # Vérification de la dimension via peek.
+    # Cf. note dans etape_b_inspection : `embeddings` est un numpy.ndarray,
+    # impossible de tester sa truthiness directement.
+    sample = collection.peek(limit=1)
+    embeddings_sample = sample.get("embeddings")
+    if embeddings_sample is None or len(embeddings_sample) == 0:
+        raise RuntimeError(
+            "Validation ÉCHOUÉE : impossible de lire un embedding post-migration."
+        )
+    dim_actuelle = len(embeddings_sample[0])
+    if dim_actuelle != dim_attendue:
+        raise RuntimeError(
+            f"Validation ÉCHOUÉE : dim post-migration={dim_actuelle}, "
+            f"attendu={dim_attendue} pour '{to_model}'."
+        )
+    log.info("✓ Dimension OK : %d.", dim_actuelle)
+
+    # Vérification du premier id préservé
+    first_id = sample["ids"][0] if sample.get("ids") else "?"
+    log.info(
+        "✓ Peek OK : id=%s, len(embedding)=%d", first_id, dim_actuelle
+    )
+
+    log.info(
+        "Validation réussie en %.2fs.", time.monotonic() - t0
+    )
+
+
+# ---------------------------------------------------------------------------
+# ROLLBACK — restauration depuis snapshot
+# ---------------------------------------------------------------------------
+
+def rollback_depuis_snapshot(palace_path: Path, snapshot_path: Path | None) -> None:
+    """
+    Restaure le palace depuis le snapshot tar.gz en cas d'erreur entre e et f.
+
+    Stratégie de swap atomique (PATCH C + C-bis) :
+    ───────────────────────────────────────────────
+    Le tmpdir est créé sous palace_path.parent (même filesystem que le palace)
+    via tempfile.mkdtemp(dir=palace_path.parent), pour garantir que le swap
+    final reste sur la même partition (sinon rename traverserait des
+    filesystems et ne serait plus atomique).
+
+    Le swap utilise os.replace, qui sur POSIX est garanti atomique sur les
+    répertoires (appel rename(2)) et écrase silencieusement la cible si elle
+    existe. Cela évite la fenêtre de risque entre rmtree et move : à aucun
+    moment le palace n'est dans un état "supprimé sans remplaçant".
+
+    Le tmpdir est nettoyé dans un bloc finally, quelle que soit l'issue.
+    """
+    log.error("── ROLLBACK : Restauration du palace ──")
+
+    if snapshot_path is None:
+        log.error(
+            "[ROLLBACK] Aucun snapshot disponible (--no-snapshot utilisé ou dry-run). "
+            "Restauration manuelle requise depuis une sauvegarde externe."
+        )
+        return
+
+    if not snapshot_path.exists():
+        log.error(
+            "[ROLLBACK] Snapshot introuvable : %s. "
+            "Restauration manuelle requise.", snapshot_path,
+        )
+        return
+
+    # Créer le tmpdir sous palace_path.parent — même partition que le palace cible
+    tmpdir_path: Path | None = None
+    try:
+        tmpdir_str = tempfile.mkdtemp(
+            prefix="aria_rollback_",
+            dir=palace_path.parent,
+        )
+        tmpdir_path = Path(tmpdir_str)
+
+        # Extraction dans le tmpdir
+        log.info("[ROLLBACK] Extraction du snapshot dans %s…", tmpdir_path)
+        with tarfile.open(snapshot_path, "r:gz") as tar:
+            tar.extractall(path=tmpdir_path)
+
+        # Vérifier que l'extraction a produit le répertoire palace attendu
+        # avant de toucher à quoi que ce soit d'existant
+        extracted_palace = tmpdir_path / palace_path.name
+        if not extracted_palace.exists():
+            raise FileNotFoundError(
+                f"L'extraction n'a pas produit le répertoire attendu "
+                f"'{palace_path.name}' sous {tmpdir_path}. "
+                f"Le snapshot était peut-être archivé sous un nom différent."
+            )
+
+        # [PATCH C-bis] Swap atomique via os.replace.
+        # os.replace est garanti atomique sur POSIX (appel rename(2)) et écrase
+        # la cible silencieusement si elle existe. Pas de rmtree préalable :
+        # cela évite la fenêtre où palace_path serait détruit sans remplaçant
+        # encore en place.
+        os.replace(str(extracted_palace), str(palace_path))
+
+        if not palace_path.exists():
+            raise FileNotFoundError(
+                f"os.replace a semblé réussir mais '{palace_path}' est introuvable."
+            )
+
+        log.info(
+            "[ROLLBACK] Palace restauré (swap atomique) depuis : %s",
+            snapshot_path,
+        )
+
+    except Exception as exc:
+        log.critical(
+            "[ROLLBACK] ÉCHEC de la restauration : %s. "
+            "Snapshot disponible à : %s — restauration manuelle requise.",
+            exc, snapshot_path,
+        )
+
+    finally:
+        # Nettoyage systématique du tmpdir, même en cas d'erreur
+        if tmpdir_path is not None and tmpdir_path.exists():
+            try:
+                shutil.rmtree(tmpdir_path)
+            except Exception as cleanup_exc:
+                log.warning(
+                    "[ROLLBACK] Nettoyage du tmpdir échoué : %s — "
+                    "suppression manuelle : rm -rf %s",
+                    cleanup_exc, tmpdir_path,
+                )
+
+
+# ---------------------------------------------------------------------------
+# Parsing des arguments CLI
+# ---------------------------------------------------------------------------
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "ARIA — Migration d'embedder ChromaDB "
+            "(all-MiniLM-L6-v2 → paraphrase-multilingual-mpnet-base-v2)"
+        )
+    )
+    parser.add_argument(
+        "--palace-path",
+        default="~/.mempalace/palace",
+        help="Chemin du répertoire ChromaDB persistant (défaut: ~/.mempalace/palace)",
+    )
+    parser.add_argument(
+        "--from-model",
+        default="all-MiniLM-L6-v2",
+        help="Nom du modèle source (défaut: all-MiniLM-L6-v2)",
+    )
+    parser.add_argument(
+        "--to-model",
+        default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+        help=(
+            "Nom du modèle cible "
+            "(défaut: sentence-transformers/paraphrase-multilingual-mpnet-base-v2)"
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simule toutes les étapes sans écrire dans ChromaDB ni créer le marker.",
+    )
+    parser.add_argument(
+        "--no-snapshot",
+        action="store_true",
+        help="Saute la création du snapshot tar.gz (utile pour tests rapides).",
+    )
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Point d'entrée principal
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    args = parse_args()
+
+    palace_path = _resolve_palace(args.palace_path)
+    from_model = args.from_model
+    to_model = args.to_model
+    dry_run = args.dry_run
+    no_snapshot = args.no_snapshot
+
+    # En-tête récapitulatif
+    log.info("=" * 60)
+    log.info("ARIA — migrate_embedder.py")
+    log.info("  palace-path : %s", palace_path)
+    log.info("  from-model  : %s (dim=%d)", from_model, _expected_dim(from_model))
+    log.info("  to-model    : %s (dim=%d)", to_model, _expected_dim(to_model))
+    log.info("  dry-run     : %s", dry_run)
+    log.info("  no-snapshot : %s", no_snapshot)
+    log.info("=" * 60)
+
+    # Vérification d'existence du répertoire palace
+    if not palace_path.exists():
+        log.error("Le répertoire palace est introuvable : %s", palace_path)
+        sys.exit(1)
+
+    # Import ChromaDB (tardif pour donner un message d'erreur propre)
+    try:
+        import chromadb
+    except ImportError as exc:
+        raise ImportError(
+            "chromadb n'est pas installé. Lancez : pip install chromadb"
+        ) from exc
+
+    # ── ÉTAPE C (pré) — Vérification idempotence ────────────────────────────
+    # On vérifie le marker AVANT d'ouvrir le client ChromaDB pour éviter
+    # tout effet de bord sur la DB si la migration est déjà faite.
+    etape_c_check_marker(palace_path, to_model, dry_run)
+
+    # Ouverture du client ChromaDB
+    log.info("Ouverture du client ChromaDB persistant : %s", palace_path)
+    try:
+        client = chromadb.PersistentClient(path=str(palace_path))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Impossible d'ouvrir le client ChromaDB : {exc}"
+        ) from exc
+
+    # Récupération de la collection source
+    try:
+        collection = client.get_collection(COLLECTION_NAME)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Collection '{COLLECTION_NAME}' introuvable dans '{palace_path}' : {exc}"
+        ) from exc
+
+    # ── ÉTAPE A — Snapshot ──────────────────────────────────────────────────
+    snapshot_path: Path | None = None
+    if no_snapshot:
+        log.info("── ÉTAPE A : Snapshot ignoré (--no-snapshot) ──")
+    else:
+        snapshot_path = etape_a_snapshot(palace_path, dry_run)
+
+    # ── ÉTAPE B — Inspection préalable ──────────────────────────────────────
+    count_avant, _dim_actuelle = etape_b_inspection(collection, from_model)
+
+    # ── ÉTAPE D — Re-encoding ────────────────────────────────────────────────
+    ids, documents, metadatas, new_embeddings = etape_d_reencoding(
+        collection, to_model, dry_run
+    )
+
+    # ── ÉTAPES E + F — Réécriture et validation (avec rollback si erreur) ───
+    t_ef = time.monotonic()
+    try:
+        # ÉTAPE E — Réécriture ChromaDB
+        etape_e_rewrite_chroma(
+            client, ids, new_embeddings, documents, metadatas, dry_run
+        )
+
+        # ── POINT DE TEST ROLLBACK ──────────────────────────────────────────
+        # Pour tester le rollback, décommenter la ligne suivante :
+        # raise RuntimeError("TEST ROLLBACK — erreur simulée entre étape e et f")
+        # ───────────────────────────────────────────────────────────────────
+
+        # ÉTAPE F — Validation post-migration
+        if dry_run:
+            log.info(
+                "[DRY-RUN] Validation simulée — count=%d, dim=%d.",
+                count_avant, _expected_dim(to_model),
+            )
+        else:
+            etape_f_validation(client, count_avant, to_model)
+
+    except Exception as exc:
+        log.error("Exception entre étapes e/f : %s", exc)
+        if not dry_run:
+            log.error("[ROLLBACK] Tentative de restauration depuis snapshot…")
+            rollback_depuis_snapshot(palace_path, snapshot_path)
+        raise  # On re-raise pour que le code de sortie soit non-zéro
+
+    log.info(
+        "── ÉTAPES E+F terminées en %.1fs. ──", time.monotonic() - t_ef
+    )
+
+    # ── ÉTAPE G — Écriture du marker d'idempotence ──────────────────────────
+    log.info("── ÉTAPE G : Écriture du marker d'idempotence ──")
+    etape_c_write_marker(palace_path, to_model, dry_run)
+
+    # Résumé final
+    log.info("=" * 60)
+    if dry_run:
+        log.info("[DRY-RUN] Simulation terminée — aucune donnée modifiée.")
+    else:
+        log.info(
+            "✓ Migration réussie : '%s' → '%s' | %d entrées | dim %d → %d",
+            from_model, to_model,
+            count_avant,
+            _expected_dim(from_model),
+            _expected_dim(to_model),
+        )
+    log.info("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
