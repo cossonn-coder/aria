@@ -78,6 +78,21 @@ TESTS — INVOCATIONS CLI
 
    d) Retirer le raise temporaire après le test.
 
+   6. CHANGELOG
+   PATCH C-ter (rollback_depuis_snapshot — swap via 2 rename séquentiels)
+    Le PATCH C-bis utilisait os.replace, ce qui échouait avec
+    [Errno 39] Directory not empty quand le palace existe et est non-vide
+    (rename(2) Linux refuse de remplacer un répertoire non-vide). Test
+    rollback en T-Embedder2 D : KO confirmé.
+    Remplacé par une séquence de deux os.rename atomiques :
+        1. Renommer palace → palace.rollback-old (atomique)
+        2. Renommer extracted_palace → palace (atomique, cible inexistante)
+        3. Cleanup palace.rollback-old
+    Si l'étape 2 échoue, l'ancien palace est restauré (rename inverse) et
+    le snapshot tar.gz original reste disponible pour restauration manuelle.
+    Aucune fenêtre de perte de données : entre étapes 1 et 2, le palace
+    est accessible sous le nom .rollback-old.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DÉPENDANCES REQUISES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -515,17 +530,33 @@ def rollback_depuis_snapshot(palace_path: Path, snapshot_path: Path | None) -> N
     """
     Restaure le palace depuis le snapshot tar.gz en cas d'erreur entre e et f.
 
-    Stratégie de swap atomique (PATCH C + C-bis) :
-    ───────────────────────────────────────────────
+    Stratégie de swap via 2 rename séquentiels (PATCH C-ter) :
+    ──────────────────────────────────────────────────────────
     Le tmpdir est créé sous palace_path.parent (même filesystem que le palace)
-    via tempfile.mkdtemp(dir=palace_path.parent), pour garantir que le swap
-    final reste sur la même partition (sinon rename traverserait des
+    via tempfile.mkdtemp(dir=palace_path.parent), pour garantir que les
+    rename restent sur la même partition (sinon rename traverserait des
     filesystems et ne serait plus atomique).
 
-    Le swap utilise os.replace, qui sur POSIX est garanti atomique sur les
-    répertoires (appel rename(2)) et écrase silencieusement la cible si elle
-    existe. Cela évite la fenêtre de risque entre rmtree et move : à aucun
-    moment le palace n'est dans un état "supprimé sans remplaçant".
+    Le swap se fait en deux os.rename atomiques séquentiels :
+        1. palace → palace.rollback-old   (atomique, libère le nom cible)
+        2. extracted_palace → palace      (atomique, cible inexistante)
+        3. rm -rf palace.rollback-old     (cleanup non critique)
+
+    Motivation : os.replace (PATCH C-bis) échouait avec [Errno 39]
+    ENOTEMPTY parce que rename(2) Linux refuse de remplacer un répertoire
+    NON-VIDE. Avec deux rename, la cible de chaque rename est soit
+    inexistante (étape 2) soit on libère le nom (étape 1).
+
+    Sûreté en cas d'échec :
+    - Si étape 1 échoue : palace original intact, snapshot préservé.
+    - Si étape 2 échoue : on remet l'ancien palace en place via rename
+      inverse (palace.rollback-old → palace). Le snapshot tar.gz reste
+      disponible pour restauration manuelle.
+    - Si étape 3 échoue : palace déjà restauré ; seul le cleanup du
+      .rollback-old reste à faire à la main (logué en WARNING).
+
+    Aucune fenêtre de perte de données : entre étapes 1 et 2, le palace
+    reste accessible sous le nom .rollback-old.
 
     Le tmpdir est nettoyé dans un bloc finally, quelle que soit l'issue.
     """
@@ -569,21 +600,69 @@ def rollback_depuis_snapshot(palace_path: Path, snapshot_path: Path | None) -> N
                 f"Le snapshot était peut-être archivé sous un nom différent."
             )
 
-        # [PATCH C-bis] Swap atomique via os.replace.
-        # os.replace est garanti atomique sur POSIX (appel rename(2)) et écrase
-        # la cible silencieusement si elle existe. Pas de rmtree préalable :
-        # cela évite la fenêtre où palace_path serait détruit sans remplaçant
-        # encore en place.
-        os.replace(str(extracted_palace), str(palace_path))
+        # Swap via 2 os.rename séquentiels (cf. docstring pour la motivation).
+        old_palace_path = palace_path.with_name(palace_path.name + ".rollback-old")
+
+        # Si un précédent rollback a laissé un .rollback-old en place, le
+        # nettoyer avant pour libérer le nom (sinon étape 1 va planter)
+        if old_palace_path.exists():
+            log.warning(
+                "[ROLLBACK] %s existe déjà (rollback antérieur incomplet). "
+                "Suppression avant le swap.",
+                old_palace_path,
+            )
+            shutil.rmtree(old_palace_path)
+
+        # Étape 1 : renommer l'ancien palace (atomique)
+        if palace_path.exists():
+            os.rename(str(palace_path), str(old_palace_path))
+            log.info(
+                "[ROLLBACK] Ancien palace mis de côté : %s",
+                old_palace_path,
+            )
+
+        # Étape 2 : promouvoir le palace extrait au nom final (atomique)
+        try:
+            os.rename(str(extracted_palace), str(palace_path))
+        except OSError as exc:
+            # En cas d'échec ici, restaurer l'ancien palace si on l'a mis de côté
+            log.critical(
+                "[ROLLBACK] Promotion du palace extrait échouée : %s. "
+                "Tentative de restauration de l'ancien palace.", exc,
+            )
+            if old_palace_path.exists():
+                os.rename(str(old_palace_path), str(palace_path))
+                log.info(
+                    "[ROLLBACK] Ancien palace remis en place. "
+                    "Le palace n'a PAS été restauré depuis le snapshot — "
+                    "état post-étape-E préservé. Restauration manuelle "
+                    "requise depuis : %s",
+                    snapshot_path,
+                )
+            raise
+
+        # Étape 3 : nettoyer l'ancien palace renommé
+        if old_palace_path.exists():
+            try:
+                shutil.rmtree(old_palace_path)
+                log.info(
+                    "[ROLLBACK] Ancien palace nettoyé (%s).", old_palace_path,
+                )
+            except Exception as cleanup_exc:
+                log.warning(
+                    "[ROLLBACK] Cleanup de %s échoué : %s — "
+                    "suppression manuelle : rm -rf %s",
+                    old_palace_path, cleanup_exc, old_palace_path,
+                )
 
         if not palace_path.exists():
             raise FileNotFoundError(
-                f"os.replace a semblé réussir mais '{palace_path}' est introuvable."
+                f"Après le swap, '{palace_path}' est introuvable. "
+                f"Anomalie système — vérifier {old_palace_path}."
             )
 
         log.info(
-            "[ROLLBACK] Palace restauré (swap atomique) depuis : %s",
-            snapshot_path,
+            "[ROLLBACK] Palace restauré depuis : %s", snapshot_path,
         )
 
     except Exception as exc:
