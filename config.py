@@ -45,8 +45,7 @@ class Config:
     hf_image_model: str = "black-forest-labs/FLUX.1-schnell"
     image_output_dir: str = ""
 
-    # ── Mémoire ChromaDB ──────────────────────────────────────────────────────
-    chroma_path: str = ""
+    # ── Mémoire MemPalace ─────────────────────────────────────────────────────
     max_memories_injected: int = 10
     memory_relevance_threshold: float = 0.55
     extract_every_n_turns: int = 5
@@ -85,7 +84,6 @@ class Config:
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
         self.mempalace_path = "/home/nico/.mempalace/palace"
-        self.chroma_path = str(BASE_DIR / "chroma_db")
         self.soul_path = str(BASE_DIR / "soul.md")
         self.user_path = str(BASE_DIR / "user.md")
         self.pending_path = str(BASE_DIR / "pending_memories.json")
