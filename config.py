@@ -32,7 +32,7 @@ class Config:
     gemini_model: str = "gemini-2.0-flash"
     mistral_model: str = "mistral-small-latest"
     sambanova_model: str = "Meta-Llama-3.3-70B-Instruct"
-    EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
     # ── Modèles vision ────────────────────────────────────────────────────────
     groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
