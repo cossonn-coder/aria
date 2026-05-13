@@ -32,3 +32,8 @@ chroma_db/
 # Backups éditeur
 *.bak
 *~
+
+# Working tree pollution (artefacts de tests interactifs,
+# binaires user locaux non destinés au repo)
+tmp/
+.local/
