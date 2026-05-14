@@ -101,6 +101,7 @@ DÉPENDANCES REQUISES
 
 import argparse
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -127,6 +128,14 @@ log = logging.getLogger("aria.migrate_embedder")
 # ---------------------------------------------------------------------------
 COLLECTION_NAME = "mempalace_drawers"
 MARKER_FILENAME = ".embedder-migration-marker"
+
+# Marker side-channel introduit par le fork MemPalace (T-Mempalace-Patch,
+# commit b8caf32). Écrit à la racine du palace, lu par
+# ChromaBackend._resolve_embedding_function pour réinstancier la bonne
+# sentence-transformers EF à l'ouverture. Sans lui, le fork retombe sur le
+# default MiniLM 384 et plante sur la première query (dim 768 vs 384).
+MEMPALACE_EMBEDDER_MARKER_FILENAME = ".mempalace-embedder.json"
+MEMPALACE_EMBEDDER_MARKER_VERSION = 1
 
 # Dimensions attendues par modèle (source de vérité locale, sans appel réseau)
 MODEL_EXPECTED_DIM: dict[str, int] = {
@@ -296,13 +305,32 @@ def etape_c_check_marker(palace_path: Path, to_model: str, dry_run: bool) -> Non
 
 
 def etape_c_write_marker(palace_path: Path, to_model: str, dry_run: bool) -> None:
-    """Écrit le marker de fin de migration (appelé en fin d'étape g)."""
+    """Écrit les markers de fin de migration (appelé en fin d'étape g).
+
+    Deux markers sont posés côte à côte à la racine du palace :
+
+    * ``.embedder-migration-marker`` — hash SHA-256 du modèle cible, lu par
+      :func:`etape_c_check_marker` pour l'idempotence ARIA (refus propre si
+      la migration a déjà été faite).
+    * ``.mempalace-embedder.json`` — marker side-channel introduit par le
+      fork MemPalace (T-Mempalace-Patch). Idempotent : on ré-écrit
+      à chaque migration réussie pour rester la source de vérité.
+    """
     if dry_run:
         log.info("[DRY-RUN] Marker non écrit.")
         return
     marker_path = palace_path / MARKER_FILENAME
     marker_path.write_text(_sha256(to_model), encoding="utf-8")
     log.info("Marker écrit : %s", marker_path)
+
+    mempalace_marker_path = palace_path / MEMPALACE_EMBEDDER_MARKER_FILENAME
+    payload = {"model": to_model, "version": MEMPALACE_EMBEDDER_MARKER_VERSION}
+    mempalace_marker_path.write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    log.info(
+        "marker .mempalace-embedder.json écrit (model=%s)", to_model
+    )
 
 
 # ---------------------------------------------------------------------------

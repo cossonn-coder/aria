@@ -26,6 +26,8 @@ import pytest
 # et que pytest est lancé depuis là (ou que conftest.py ajoute aria/ au path).
 # ---------------------------------------------------------------------------
 from scripts.migrate_embedder import (
+    MEMPALACE_EMBEDDER_MARKER_FILENAME,
+    MEMPALACE_EMBEDDER_MARKER_VERSION,
     MODEL_EXPECTED_DIM,
     _expected_dim,
     _resolve_palace,
@@ -216,6 +218,57 @@ class TestMarkerIdempotence:
         etape_c_write_marker(tmp_path, to_model, dry_run=False)
         content = (tmp_path / ".embedder-migration-marker").read_text().strip()
         assert content == _sha256(to_model)
+
+
+# ===========================================================================
+# 5b. test_migrate_embedder_writes_marker — fork side-channel (T-Mempalace-Patch)
+# ===========================================================================
+
+class TestMempalaceEmbedderMarker:
+    """Vérifie que la fin de migration écrit aussi le marker
+    ``.mempalace-embedder.json`` consommé par le fork MemPalace pour
+    réinstancier la bonne EF à l'ouverture du palace."""
+
+    def test_migrate_embedder_writes_marker(self, tmp_path):
+        """Sur un palace migré simulé, le marker est présent et contient
+        le bon modèle dans un JSON valide."""
+        import json
+
+        to_model = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        etape_c_write_marker(tmp_path, to_model, dry_run=False)
+
+        marker_path = tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME
+        assert marker_path.exists(), "marker fork doit être écrit en fin de migration"
+
+        payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        assert payload == {
+            "model": to_model,
+            "version": MEMPALACE_EMBEDDER_MARKER_VERSION,
+        }
+
+    def test_mempalace_marker_noop_in_dry_run(self, tmp_path):
+        """En dry-run, aucun des deux markers n'est créé."""
+        etape_c_write_marker(tmp_path, "all-MiniLM-L6-v2", dry_run=True)
+        assert not (tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME).exists()
+
+    def test_mempalace_marker_is_idempotent(self, tmp_path):
+        """Re-appeler etape_c_write_marker écrase le marker existant avec
+        le nouveau modèle (la migration ré-exécutée est la source de
+        vérité — comportement attendu pour une migration relancée)."""
+        import json
+
+        etape_c_write_marker(tmp_path, "all-MiniLM-L6-v2", dry_run=False)
+        etape_c_write_marker(
+            tmp_path,
+            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            dry_run=False,
+        )
+
+        marker_path = tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME
+        payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        assert payload["model"] == (
+            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        )
 
 
 # ===========================================================================
