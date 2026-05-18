@@ -26,10 +26,15 @@ import pytest
 # et que pytest est lancé depuis là (ou que conftest.py ajoute aria/ au path).
 # ---------------------------------------------------------------------------
 from scripts.migrate_embedder import (
+    COLLECTION_NAME,
+    MEMPALACE_EMBEDDER_MARKER_FILENAME,
+    MEMPALACE_EMBEDDER_MARKER_VERSION,
     MODEL_EXPECTED_DIM,
     _expected_dim,
+    _read_collection_dim_count_sqlite,
     _resolve_palace,
     _sha256,
+    etape_b_inspection,
     etape_c_check_marker,
     etape_c_write_marker,
     rollback_depuis_snapshot,
@@ -219,6 +224,57 @@ class TestMarkerIdempotence:
 
 
 # ===========================================================================
+# 5b. test_migrate_embedder_writes_marker — fork side-channel (T-Mempalace-Patch)
+# ===========================================================================
+
+class TestMempalaceEmbedderMarker:
+    """Vérifie que la fin de migration écrit aussi le marker
+    ``.mempalace-embedder.json`` consommé par le fork MemPalace pour
+    réinstancier la bonne EF à l'ouverture du palace."""
+
+    def test_migrate_embedder_writes_marker(self, tmp_path):
+        """Sur un palace migré simulé, le marker est présent et contient
+        le bon modèle dans un JSON valide."""
+        import json
+
+        to_model = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        etape_c_write_marker(tmp_path, to_model, dry_run=False)
+
+        marker_path = tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME
+        assert marker_path.exists(), "marker fork doit être écrit en fin de migration"
+
+        payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        assert payload == {
+            "model": to_model,
+            "version": MEMPALACE_EMBEDDER_MARKER_VERSION,
+        }
+
+    def test_mempalace_marker_noop_in_dry_run(self, tmp_path):
+        """En dry-run, aucun des deux markers n'est créé."""
+        etape_c_write_marker(tmp_path, "all-MiniLM-L6-v2", dry_run=True)
+        assert not (tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME).exists()
+
+    def test_mempalace_marker_is_idempotent(self, tmp_path):
+        """Re-appeler etape_c_write_marker écrase le marker existant avec
+        le nouveau modèle (la migration ré-exécutée est la source de
+        vérité — comportement attendu pour une migration relancée)."""
+        import json
+
+        etape_c_write_marker(tmp_path, "all-MiniLM-L6-v2", dry_run=False)
+        etape_c_write_marker(
+            tmp_path,
+            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            dry_run=False,
+        )
+
+        marker_path = tmp_path / MEMPALACE_EMBEDDER_MARKER_FILENAME
+        payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        assert payload["model"] == (
+            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        )
+
+
+# ===========================================================================
 # 6. test_marker_different_model_continues
 # ===========================================================================
 
@@ -390,3 +446,196 @@ class TestRollbackMissingSnapshot:
         assert "restauration manuelle" in messages, (
             f"'restauration manuelle' attendu dans les logs. Logs : {caplog.messages}"
         )
+
+
+# ===========================================================================
+# 10. test_sqlite_only_inspection — Sprint 8 T-Migrate-Peek-Fix
+# ===========================================================================
+#
+# On préfère une fixture *synthétique* à un test paramétré sur la copie
+# pré-prod : (1) le test reste hermétique et n'a aucune dépendance externe
+# (la copie /home/nico/.mempalace/palace.preprod-* peut être nettoyée à
+# tout moment), et (2) on contrôle exactement les valeurs (dim, count)
+# attendues, ce qui clarifie l'intention de chaque cas (mismatch, vide,
+# nominal). Le seul coût est la duplication du bout de schéma SQLite, qui
+# correspond strictement à celui inspecté sur le palace prod (cf. audit
+# section 3.2). Toute évolution du schéma ChromaDB casserait *aussi* le
+# code prod, donc le couplage est acceptable et documenté côté audit.
+
+import sqlite3
+import uuid
+
+
+def _make_synthetic_palace(
+    base: Path,
+    *,
+    collection_name: str = COLLECTION_NAME,
+    dimension: int = 384,
+    n_entries: int = 3,
+) -> Path:
+    """Construit un palace minimal (``chroma.sqlite3`` seul) avec une
+    collection nommée et ``n_entries`` lignes dans son segment METADATA.
+
+    Schéma copié à l'identique de celui observé sur le palace prod
+    (table ``collections`` avec colonne ``dimension``, table ``segments``
+    avec scope ``METADATA``, table ``embeddings`` avec ``segment_id`` +
+    ``embedding_id``). Aucun fichier HNSW n'est créé — c'est précisément
+    ce qu'on veut valider : l'inspection ne dépend que de SQLite.
+    """
+    palace = base / "palace"
+    palace.mkdir(parents=True, exist_ok=True)
+    sqlite_path = palace / "chroma.sqlite3"
+
+    conn = sqlite3.connect(sqlite_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE databases (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+            CREATE TABLE collections (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                dimension INTEGER,
+                database_id TEXT NOT NULL,
+                config_json_str TEXT,
+                schema_str TEXT,
+                UNIQUE (name, database_id)
+            );
+            CREATE TABLE segments (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                collection TEXT NOT NULL
+            );
+            CREATE TABLE embeddings (
+                id INTEGER PRIMARY KEY,
+                segment_id TEXT NOT NULL,
+                embedding_id TEXT NOT NULL,
+                seq_id BLOB NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (segment_id, embedding_id)
+            );
+            """
+        )
+
+        db_id = str(uuid.uuid4())
+        collection_id = str(uuid.uuid4())
+        metadata_segment_id = str(uuid.uuid4())
+        vector_segment_id = str(uuid.uuid4())
+
+        conn.execute(
+            "INSERT INTO databases (id, name) VALUES (?, ?)",
+            (db_id, "default"),
+        )
+        conn.execute(
+            "INSERT INTO collections (id, name, dimension, database_id) "
+            "VALUES (?, ?, ?, ?)",
+            (collection_id, collection_name, dimension, db_id),
+        )
+        conn.execute(
+            "INSERT INTO segments (id, type, scope, collection) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                metadata_segment_id,
+                "urn:chroma:segment/metadata/sqlite",
+                "METADATA",
+                collection_id,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO segments (id, type, scope, collection) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                vector_segment_id,
+                "urn:chroma:segment/vector/hnsw-local-persisted",
+                "VECTOR",
+                collection_id,
+            ),
+        )
+        # Entrées du segment METADATA — c'est ce que compte
+        # collection.count() côté binding rust, donc notre lecteur SQL doit
+        # tomber sur le même nombre.
+        for i in range(n_entries):
+            conn.execute(
+                "INSERT INTO embeddings (segment_id, embedding_id, seq_id) "
+                "VALUES (?, ?, ?)",
+                (metadata_segment_id, f"doc-{i}", b"\x00"),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return palace
+
+
+class TestReadCollectionDimCountSqlite:
+    """Validation du lecteur SQLite-only introduit pour contourner le
+    bloqueur peek HNSW de l'étape B (sprint 8 / T-Migrate-Peek-Fix)."""
+
+    def test_reads_dim_and_count_from_synthetic_palace(self, tmp_path):
+        palace = _make_synthetic_palace(tmp_path, dimension=384, n_entries=5)
+        dim, count = _read_collection_dim_count_sqlite(palace, COLLECTION_NAME)
+        assert dim == 384
+        assert count == 5
+
+    def test_count_zero_when_no_metadata_entries(self, tmp_path):
+        """Palace avec collection déclarée mais aucun document inséré :
+        count==0 doit être renvoyé sans erreur — c'est la voie qui
+        alimente le early-exit ``sys.exit(0)`` de etape_b_inspection."""
+        palace = _make_synthetic_palace(tmp_path, dimension=384, n_entries=0)
+        dim, count = _read_collection_dim_count_sqlite(palace, COLLECTION_NAME)
+        assert dim == 384
+        assert count == 0
+
+    def test_missing_sqlite_file_raises(self, tmp_path):
+        """Palace dépourvu de chroma.sqlite3 → erreur explicite (pas
+        d'AttributeError opaque)."""
+        empty_palace = tmp_path / "palace"
+        empty_palace.mkdir()
+        with pytest.raises(RuntimeError, match="chroma.sqlite3 introuvable"):
+            _read_collection_dim_count_sqlite(empty_palace, COLLECTION_NAME)
+
+    def test_missing_collection_raises(self, tmp_path):
+        """Collection absente de la table collections → RuntimeError
+        nommant la collection cherchée."""
+        palace = _make_synthetic_palace(tmp_path, dimension=384, n_entries=1)
+        with pytest.raises(RuntimeError, match="ghost_collection"):
+            _read_collection_dim_count_sqlite(palace, "ghost_collection")
+
+
+class TestEtapeBInspectionSqlite:
+    """Tests d'intégration de etape_b_inspection après bascule SQLite."""
+
+    def test_dim_mismatch_raises_value_error(self, tmp_path):
+        """Palace synthétique dim=768 + from_model=MiniLM (dim attendue
+        384) → assertion mismatch dim, ValueError mentionnant les deux
+        dimensions et le modèle source."""
+        palace = _make_synthetic_palace(tmp_path, dimension=768, n_entries=3)
+        with pytest.raises(ValueError) as exc_info:
+            etape_b_inspection(palace, from_model="all-MiniLM-L6-v2")
+
+        msg = str(exc_info.value)
+        # Les deux dims doivent être visibles dans le message pour
+        # diagnostiquer le mismatch côté pilote.
+        assert "768" in msg, f"dim observée absente du message : {msg!r}"
+        assert "384" in msg, f"dim attendue absente du message : {msg!r}"
+        assert "all-MiniLM-L6-v2" in msg, (
+            f"nom du modèle source absent du message : {msg!r}"
+        )
+
+    def test_empty_collection_triggers_clean_exit(self, tmp_path):
+        """Le early-exit count==0 (audit surprise #2) est préservé après
+        bascule SQLite : sys.exit(0), pas une exception."""
+        palace = _make_synthetic_palace(tmp_path, dimension=384, n_entries=0)
+        with pytest.raises(SystemExit) as exc_info:
+            etape_b_inspection(palace, from_model="all-MiniLM-L6-v2")
+        assert exc_info.value.code == 0
+
+    def test_nominal_returns_count_and_dim(self, tmp_path):
+        """Cas nominal : palace dim=384 conforme à --from-model MiniLM,
+        l'inspection retourne ``(count, dim)``."""
+        palace = _make_synthetic_palace(tmp_path, dimension=384, n_entries=7)
+        count, dim = etape_b_inspection(palace, from_model="all-MiniLM-L6-v2")
+        assert count == 7
+        assert dim == 384

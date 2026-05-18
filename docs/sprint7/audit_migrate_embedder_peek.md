@@ -1,130 +1,94 @@
-"""
-migrate_embedder.py — ARIA Sprint 6 · T-Embedder2 D
-=====================================================
-Migration de la collection ChromaDB `mempalace_drawers`
-de all-MiniLM-L6-v2 (dim 384) vers
-sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (dim 768).
+# Audit `scripts/migrate_embedder.py` — appels HNSW-dépendants
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TESTS — INVOCATIONS CLI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**Sprint 7 / phase 2, tour 6.** Audit pré-fix, sans modification de code.
 
-1. PRÉPARATION D'UNE COPIE DE BENCH
-   ──────────────────────────────────
-   cp -r ~/.mempalace ~/.mempalace.bench-copy
+**Contexte.** Le tour T-Mempalace-Preprod a échoué à l'Étape B du
+script avec `chromadb.errors.InternalError: Error finding id`
+parce que le palace copié à chaud héritait du drift sqlite/HNSW
+côté prod et que le fork MemPalace avait quarantained les
+segments dégradés à l'ouverture. La fonction
+`collection.peek(limit=1)` (ligne 244) tente de lire l'embedding
+d'un sample, ce qui touche l'index HNSW. Sur un palace avec
+segments quarantained, cet appel raise.
 
-2. MIGRATION SUR COPIE (sans snapshot, pour aller vite)
-   ──────────────────────────────────────────────────────
-   ./venv/bin/python aria/scripts/migrate_embedder.py \
-       --palace-path ~/.mempalace.bench-copy/palace \
-       --no-snapshot
+Ce document inventorie tous les appels du script qui peuvent
+toucher l'index HNSW, donne le code intégral des fonctions
+concernées, confirme par lecture du fork et de chromadb quelles
+informations sur la collection sont récupérables en SQLite-only,
+et liste les pistes de fix sans rédiger le fix lui-même.
 
-   Résultat attendu :
-   - Log des étapes a→g
-   - Compte rendu final "Migration réussie" avec dim=768 et phrases/s
-   - Fichier .embedder-migration-marker créé dans palace-path
+---
 
-3. TEST IDEMPOTENCE (relancer après migration réussie)
-   ──────────────────────────────────────────────────────
-   ./venv/bin/python aria/scripts/migrate_embedder.py \
-       --palace-path ~/.mempalace.bench-copy/palace \
-       --no-snapshot
+## Section 1 — Inventaire des appels HNSW-dépendants
 
-   Résultat attendu :
-   - Le script détecte le marker, affiche un message explicite du type :
-     "Migration déjà effectuée vers ce modèle (hash SHA256 correspond).
-      Utilisez --force pour ignorer. Abandon."
-   - Exit code 0 (refus propre, pas une erreur)
+Le script ouvre `chromadb.PersistentClient(path=...)` directement
+au lieu de passer par l'API fork
+(`mempalace.palace.get_collection`) — c'est intentionnel côté
+script de migration (il manipule la collection bas-niveau pour
+delete/recreate, opérations que le wrapper fork ne propose pas
+sur sa surface publique). Les objets `collection` manipulés
+sont donc des `chromadb.api.models.Collection.Collection` bruts.
 
-4. TEST DRY-RUN (sur la copie ou sur l'original)
-   ──────────────────────────────────────────────
-   ./venv/bin/python aria/scripts/migrate_embedder.py \
-       --palace-path ~/.mempalace.bench-copy/palace \
-       --no-snapshot \
-       --dry-run
+**Convention de classification :**
+- **HNSW-required** : l'appel demande au backend une opération
+  qui implique le segment vecteur sur disque (HNSW index +
+  blob embeddings). Échoue sur palace avec segments quarantained.
+- **SQLite-only** : l'appel se résout entièrement par la base
+  `chroma.sqlite3` (collections, segments, embeddings table,
+  embedding_metadata, etc.). Insensible à l'état HNSW.
 
-   Résultat attendu :
-   - Toutes les étapes sont simulées et loguées
-   - Rien n'est écrit dans ChromaDB (pas de delete/create)
-   - Le marker n'est pas créé
-   - Log "[DRY-RUN] ..." sur chaque étape destructive
+### Tableau récapitulatif
 
-5. TEST ROLLBACK
-   ──────────────────────────────────────────────────────
-   a) Préparer une copie fraîche (sans marker) :
-      cp -r ~/.mempalace ~/.mempalace.rollback-test
+| # | Étape | Ligne | Appel | Catégorie | Finalité | Alternative SQLite-only |
+|---|---|---|---|---|---|---|
+| 1 | A | 205-206 | `tarfile.open(...).add(palace_path, ...)` | Filesystem | Snapshot tar.gz du répertoire palace. Lit tous les fichiers du palace mais c'est de l'I/O filesystem, pas une opération chromadb. | n/a (intentionnellement filesystem). |
+| 2 | B | 233 | `collection.count()` | **SQLite-only** | Compter les entrées avant migration. | Idem. |
+| 3 | B | 244 | `collection.peek(limit=1)` | **HNSW-required** ⚠ | Lire un embedding sample pour en déduire la dim actuelle, puis cohérence avec `from-model`. | Lecture directe de `collections.dimension` en SQL (cf. Section 3) ; ou `collection.get(limit=1, include=["documents","metadatas"])` sans embeddings + dim depuis SQLite ; ou même `_expected_dim(from_model)` sans interroger la collection (la dim source est *connue* puisque c'est l'argument CLI). |
+| 4 | C (check) | 281, 284-285 | `marker_path.exists()`, `marker_path.read_text(...)` | Filesystem | Idempotence via fichier marker `.embedder-migration-marker`. | n/a (filesystem). |
+| 5 | D | 366 | `collection.count()` | **SQLite-only** | Borne haute de la pagination. | Idem. |
+| 6 | D | 376-380 | `collection.get(limit=PAGE, offset=..., include=["documents","metadatas"])` | **SQLite-only** ✓ | Lire tous les ids, documents et metadatas pour les ré-encoder. Crucially, `"embeddings"` n'est PAS dans include — donc le rust binding ne touche pas l'HNSW. | Idem (déjà optimal). |
+| 7 | E | 465 | `client.delete_collection(COLLECTION_NAME)` | **Écriture** | Drop de la collection (et de ses segments). | n/a (intention de détruire). |
+| 8 | E | 471-474, 481 | `client.create_collection(...)` | **Écriture** | Recréation de la collection avec un nouveau segment HNSW vierge. | n/a (intention de créer). |
+| 9 | E | 491-496 | `collection.add(ids=..., embeddings=..., documents=..., metadatas=...)` | **Écriture** | Insertion des nouveaux vecteurs mpnet ; chromadb construit l'HNSW sain. | n/a. |
+| 10 | F | 513 | `client.get_collection(COLLECTION_NAME)` | Pas d'I/O HNSW immédiate | Récupère le handle de la nouvelle collection. | n/a (lazy, pas d'I/O HNSW à ce point). |
+| 11 | F | 514 | `collection.count()` | **SQLite-only** | Vérifier count préservé. | Idem. |
+| 12 | F | 528 | `collection.peek(limit=1)` | **HNSW-required** ⚠ | Vérifier dim post-migration (768). Mais la collection vient juste d'être recréée à l'étape E, donc l'HNSW est sain par construction — pas le même risque qu'à l'étape B. | Lecture de `collections.dimension` en SQL (cf. Section 3) ; cohérent avec ce qu'on ferait pour étape B. |
+| 13 | G | 322-330 | `marker_path.write_text(...)` × 2 | Filesystem | Écriture des deux markers (`.embedder-migration-marker` et `.mempalace-embedder.json`). | n/a. |
+| 14 | main | 802 | `chromadb.PersistentClient(path=...)` | SQLite + segments catalog | Ouverture du client persistant. Charge SQLite et énumère les segments via le catalog ; ne charge pas l'HNSW en mémoire (lazy). Sur le palace prod cette ouverture déclenche ce qui se déclenche côté fork — et c'est précisément l'endroit où la quarantaine des segments dérivés se produit (`fork chroma.py` — pas dans ce script). | n/a, intrinsèque. |
+| 15 | main | 810 | `client.get_collection(COLLECTION_NAME)` | Pas d'I/O HNSW immédiate | Récupère le handle source. | n/a. |
+| 16 | main | 825-840 | bloc rollback / try/except autour de E+F | n/a | Encadre l'écriture pour permettre le rollback depuis snapshot. | n/a. |
 
-   b) Dans le script, localiser la section "ÉTAPE E" et ajouter
-      temporairement après collection.add(...) :
-          raise RuntimeError("TEST ROLLBACK — erreur simulée à l'étape e")
+### Synthèse
 
-   c) Lancer (AVEC snapshot cette fois, car le rollback en a besoin) :
-      ./venv/bin/python aria/scripts/migrate_embedder.py \
-          --palace-path ~/.mempalace.rollback-test/palace
+Deux appels HNSW-required dans tout le script : **étape B
+ligne 244** et **étape F ligne 528**. Tous les deux sont des
+`collection.peek(limit=1)` dont la finalité est la même —
+déduire la dim des vecteurs.
 
-   Résultat attendu :
-   - Le script plante à l'étape e et le log affiche :
-     "[ROLLBACK] Exception en étape e/f, restauration depuis snapshot..."
-     "[ROLLBACK] Palace restauré depuis <chemin_snapshot.tar.gz>"
-   - La collection retrouve ses 655 entrées originales avec dim 384
-   - Vérifier : python -c "
-       import chromadb
-       c = chromadb.PersistentClient('~/.mempalace.rollback-test/palace')
-       col = c.get_collection('mempalace_drawers')
-       res = col.peek(1)
-       print('count:', col.count())
-       print('dim:', len(res['embeddings'][0]))
-     "
+- **Étape B (244)** : c'est le bloqueur sur palace dégradé.
+  L'appel n'est pas *fonctionnellement* nécessaire : la dim
+  source est déjà connue (`from_model` est un argument CLI avec
+  default `all-MiniLM-L6-v2`, mappé à 384 par `_expected_dim`).
+  Le peek sert uniquement à *valider* la cohérence entre la
+  dim réellement stockée et la dim déclarée. C'est un check de
+  sécurité, pas une dépendance fonctionnelle.
+- **Étape F (528)** : appel sur la collection juste recréée à
+  l'étape E. L'HNSW est vierge et sain par construction (un
+  delete_collection a effacé l'ancien, create_collection a
+  bâti un nouveau). Risque empirique très faible, mais on
+  pourrait le supprimer aussi par cohérence.
 
-   d) Retirer le raise temporaire après le test.
+**Aucun appel FONCTIONNELLEMENT HNSW-required** dans le script :
+les deux peek() sont des validations dont la finalité (dim) est
+récupérable autrement (Section 3).
 
-   6. CHANGELOG
-   PATCH C-ter (rollback_depuis_snapshot — swap via 2 rename séquentiels)
-    Le PATCH C-bis utilisait os.replace, ce qui échouait avec
-    [Errno 39] Directory not empty quand le palace existe et est non-vide
-    (rename(2) Linux refuse de remplacer un répertoire non-vide). Test
-    rollback en T-Embedder2 D : KO confirmé.
-    Remplacé par une séquence de deux os.rename atomiques :
-        1. Renommer palace → palace.rollback-old (atomique)
-        2. Renommer extracted_palace → palace (atomique, cible inexistante)
-        3. Cleanup palace.rollback-old
-    Si l'étape 2 échoue, l'ancien palace est restauré (rename inverse) et
-    le snapshot tar.gz original reste disponible pour restauration manuelle.
-    Aucune fenêtre de perte de données : entre étapes 1 et 2, le palace
-    est accessible sous le nom .rollback-old.
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DÉPENDANCES REQUISES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    pip install chromadb sentence-transformers tqdm
-"""
+## Section 2 — Code intégral des fonctions touchées
 
-import argparse
-import hashlib
-import json
-import logging
-import os
-import shutil
-import sqlite3
-import sys
-import tarfile
-import tempfile
-import time
-import traceback
-from datetime import datetime, timezone
-from pathlib import Path
+### Constantes et utilitaires (lignes 126-183)
 
-# ---------------------------------------------------------------------------
-# Logging configuré dès l'import — format avec horodatage et niveau
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-log = logging.getLogger("aria.migrate_embedder")
-
+```python
 # ---------------------------------------------------------------------------
 # Constantes
 # ---------------------------------------------------------------------------
@@ -183,76 +147,11 @@ def _expected_dim(model_name: str) -> int:
         f"Modèle '{model_name}' inconnu du registre local. "
         f"Modèles connus : {list(MODEL_EXPECTED_DIM.keys())}"
     )
+```
 
+### `etape_a_snapshot` (lignes 190-218)
 
-def _read_collection_dim_count_sqlite(
-    palace_path: Path, collection_name: str
-) -> tuple[int, int]:
-    """
-    Lit (dim, count) de la collection directement dans ``chroma.sqlite3``,
-    sans toucher au segment HNSW.
-
-    Pourquoi : sur un palace dont les segments HNSW ont été quarantained
-    par le fork MemPalace (drift sqlite/HNSW), ``collection.peek(...)``
-    et plus généralement toute lecture qui réclame ``embeddings`` plante.
-    En revanche la dim déclarée (``collections.dimension``) et le count
-    canonique (rows de ``embeddings`` côté segment METADATA) restent
-    accessibles via une simple lecture SQL — c'est la source de vérité
-    documentée par l'audit pré-fix (cf.
-    ``docs/sprint7/audit_migrate_embedder_peek.md`` sections 3.1–3.2).
-
-    Le chemin du fichier est dérivé strictement de ``palace_path``, jamais
-    hardcodé. Connexion en read-only via URI (``mode=ro``).
-
-    Retourne ``(dim, count)``. Lève ``RuntimeError`` si ``chroma.sqlite3``
-    ou la collection est introuvable.
-    """
-    sqlite_path = palace_path / "chroma.sqlite3"
-    if not sqlite_path.exists():
-        raise RuntimeError(
-            f"chroma.sqlite3 introuvable sous {palace_path} — "
-            f"palace invalide ou structure inattendue."
-        )
-
-    uri = f"file:{sqlite_path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    try:
-        row = conn.execute(
-            "SELECT id, dimension FROM collections WHERE name = ?",
-            (collection_name,),
-        ).fetchone()
-        if row is None:
-            raise RuntimeError(
-                f"Collection '{collection_name}' introuvable dans "
-                f"{sqlite_path}."
-            )
-        collection_id, dim = row
-        if dim is None:
-            raise RuntimeError(
-                f"Collection '{collection_name}' présente mais sans "
-                f"dimension renseignée dans la table SQLite — palace "
-                f"probablement non initialisé (aucune insertion)."
-            )
-
-        # Le count canonique côté ChromaDB correspond aux entrées du
-        # segment METADATA (scope='METADATA'), pas du segment vecteur.
-        # C'est ce que renvoie collection.count() côté binding rust.
-        (count,) = conn.execute(
-            "SELECT COUNT(*) FROM embeddings e "
-            "JOIN segments s ON s.id = e.segment_id "
-            "WHERE s.collection = ? AND s.scope = 'METADATA'",
-            (collection_id,),
-        ).fetchone()
-    finally:
-        conn.close()
-
-    return int(dim), int(count)
-
-
-# ---------------------------------------------------------------------------
-# ÉTAPE A — Snapshot tar.gz horodaté
-# ---------------------------------------------------------------------------
-
+```python
 def etape_a_snapshot(palace_path: Path, dry_run: bool) -> Path | None:
     """
     Crée un snapshot tar.gz horodaté du répertoire palace.
@@ -282,49 +181,47 @@ def etape_a_snapshot(palace_path: Path, dry_run: bool) -> Path | None:
         ) from exc
 
     return snapshot_path
+```
 
+### `etape_b_inspection` (lignes 225-268) — **point de blocage**
 
-# ---------------------------------------------------------------------------
-# ÉTAPE B — Inspection préalable de la collection
-# ---------------------------------------------------------------------------
-
-def etape_b_inspection(palace_path: Path, from_model: str) -> tuple[int, int]:
+```python
+def etape_b_inspection(collection, from_model: str) -> tuple[int, int]:
     """
     Vérifie que la collection est dans l'état attendu avant migration.
     Retourne (count, dim_actuelle).
-
-    Lecture SQLite-only (cf. ``_read_collection_dim_count_sqlite``) : ni
-    ``collection.peek`` ni ``collection.count`` ne sont appelés, ce qui
-    rend l'inspection insensible à l'état des segments HNSW. Indispensable
-    pour migrer un palace dont la quarantaine drift/corrupt a été
-    appliquée par le fork MemPalace à l'ouverture du client.
     """
     log.info("── ÉTAPE B : Inspection de la collection '%s' ──", COLLECTION_NAME)
     t0 = time.monotonic()
 
-    dim_actuelle, count = _read_collection_dim_count_sqlite(
-        palace_path, COLLECTION_NAME
-    )
+    count = collection.count()
     log.info("Nombre d'entrées : %d", count)
 
     if count == 0:
         log.info("Collection vide — rien à migrer. Sortie propre.")
         sys.exit(0)
 
+    # Lire un vecteur exemple pour connaître la dimension actuelle.
+    # NB : ChromaDB renvoie `embeddings` comme numpy.ndarray ; tester sa
+    # truthiness directement (`not arr`) lève ValueError. On vérifie donc
+    # explicitement présence et longueur.
+    sample = collection.peek(limit=1)
+    embeddings_sample = sample.get("embeddings")
+    if embeddings_sample is None or len(embeddings_sample) == 0:
+        raise RuntimeError(
+            "Impossible de lire un embedding exemple depuis la collection. "
+            "La collection est peut-être corrompue."
+        )
+
+    dim_actuelle = len(embeddings_sample[0])
     log.info("Dimension actuelle des vecteurs : %d", dim_actuelle)
 
-    # Vérification de cohérence dim SQLite vs modèle source déclaré.
-    # Check de cohérence renforcé par rapport à la version peek : on
-    # confronte la dim *stockée* (table collections) à la dim *théorique*
-    # du modèle passé en --from-model. Mismatch = palace incohérent avec
-    # l'argument CLI, on refuse la migration plutôt que d'encoder
-    # à l'aveugle.
+    # Vérification de cohérence avec le modèle source déclaré
     dim_attendue_from = _expected_dim(from_model)
     if dim_actuelle != dim_attendue_from:
         raise ValueError(
-            f"Incohérence de dimension ! Collection contient "
-            f"dim_sqlite={dim_actuelle} mais le modèle source "
-            f"'{from_model}' attend dim={dim_attendue_from}. "
+            f"Incohérence de dimension ! Collection contient dim={dim_actuelle} "
+            f"mais le modèle source '{from_model}' attend dim={dim_attendue_from}. "
             f"Vérifiez l'argument --from-model ou l'état de la collection."
         )
 
@@ -333,12 +230,11 @@ def etape_b_inspection(palace_path: Path, from_model: str) -> tuple[int, int]:
         count, dim_actuelle, from_model, time.monotonic() - t0,
     )
     return count, dim_actuelle
+```
 
+### `etape_c_check_marker` (lignes 275-304)
 
-# ---------------------------------------------------------------------------
-# ÉTAPE C — Idempotence via marker
-# ---------------------------------------------------------------------------
-
+```python
 def etape_c_check_marker(palace_path: Path, to_model: str, dry_run: bool) -> None:
     """
     Vérifie si la migration vers to_model a déjà été effectuée.
@@ -369,8 +265,11 @@ def etape_c_check_marker(palace_path: Path, to_model: str, dry_run: bool) -> Non
 
     if dry_run:
         log.info("[DRY-RUN] Marker non écrit (sera créé après étape g en mode normal).")
+```
 
+### `etape_c_write_marker` (lignes 307-333) — appelée à l'étape G
 
+```python
 def etape_c_write_marker(palace_path: Path, to_model: str, dry_run: bool) -> None:
     """Écrit les markers de fin de migration (appelé en fin d'étape g).
 
@@ -398,12 +297,11 @@ def etape_c_write_marker(palace_path: Path, to_model: str, dry_run: bool) -> Non
     log.info(
         "marker .mempalace-embedder.json écrit (model=%s)", to_model
     )
+```
 
+### `etape_d_reencoding` (lignes 340-428)
 
-# ---------------------------------------------------------------------------
-# ÉTAPE D — Re-encoding
-# ---------------------------------------------------------------------------
-
+```python
 def etape_d_reencoding(collection, to_model: str, dry_run: bool):
     """
     Charge le modèle cible et ré-encode tous les documents en batch.
@@ -493,12 +391,11 @@ def etape_d_reencoding(collection, to_model: str, dry_run: bool):
     )
 
     return all_ids, all_documents, all_metadatas, new_embeddings_np
+```
 
+### `etape_e_rewrite_chroma` (lignes 435-501)
 
-# ---------------------------------------------------------------------------
-# ÉTAPE E — Réécriture ChromaDB
-# ---------------------------------------------------------------------------
-
+```python
 def etape_e_rewrite_chroma(
     client,
     ids: list[str],
@@ -566,12 +463,11 @@ def etape_e_rewrite_chroma(
     log.info(
         "Insertion terminée : %d entrées en %.1fs.", total, elapsed
     )
+```
 
+### `etape_f_validation` (lignes 508-550)
 
-# ---------------------------------------------------------------------------
-# ÉTAPE F — Validation post-migration
-# ---------------------------------------------------------------------------
-
+```python
 def etape_f_validation(client, count_avant: int, to_model: str) -> None:
     """Vérifie que la migration s'est déroulée correctement."""
     log.info("── ÉTAPE F : Validation post-migration ──")
@@ -590,49 +486,36 @@ def etape_f_validation(client, count_avant: int, to_model: str) -> None:
     log.info("✓ Count OK : %d entrées.", count_apres)
 
     # Vérification de la dimension via peek.
-    # La collection vient juste d'être recréée par l'étape E donc son
-    # HNSW est vierge et sain par construction. Le peek est néanmoins
-    # enveloppé d'un try/except pour ne pas faire échouer la migration
-    # si une dégradation inattendue survenait : le count a déjà été
-    # vérifié au-dessus (durci, raise), et un smoke ultérieur côté
-    # appelant validera la dim réelle de l'EF. Pas de swallow muet :
-    # un warning explicite est émis pour signalement pilote.
-    try:
-        sample = collection.peek(limit=1)
-        embeddings_sample = sample.get("embeddings")
-        if embeddings_sample is None or len(embeddings_sample) == 0:
-            raise RuntimeError(
-                "peek post-migration n'a renvoyé aucun embedding."
-            )
-        dim_actuelle = len(embeddings_sample[0])
-        if dim_actuelle != dim_attendue:
-            raise RuntimeError(
-                f"dim post-migration={dim_actuelle}, attendu={dim_attendue} "
-                f"pour '{to_model}'."
-            )
-        log.info("✓ Dimension OK : %d.", dim_actuelle)
+    # Cf. note dans etape_b_inspection : `embeddings` est un numpy.ndarray,
+    # impossible de tester sa truthiness directement.
+    sample = collection.peek(limit=1)
+    embeddings_sample = sample.get("embeddings")
+    if embeddings_sample is None or len(embeddings_sample) == 0:
+        raise RuntimeError(
+            "Validation ÉCHOUÉE : impossible de lire un embedding post-migration."
+        )
+    dim_actuelle = len(embeddings_sample[0])
+    if dim_actuelle != dim_attendue:
+        raise RuntimeError(
+            f"Validation ÉCHOUÉE : dim post-migration={dim_actuelle}, "
+            f"attendu={dim_attendue} pour '{to_model}'."
+        )
+    log.info("✓ Dimension OK : %d.", dim_actuelle)
 
-        first_id = sample["ids"][0] if sample.get("ids") else "?"
-        log.info(
-            "✓ Peek OK : id=%s, len(embedding)=%d", first_id, dim_actuelle
-        )
-    except Exception as exc:
-        tb_short = "\n".join(traceback.format_exc().splitlines()[-4:])
-        log.warning(
-            "Peek validation post-migration échoué, collection cible "
-            "potentiellement dégradée — exception : %s\n%s",
-            exc, tb_short,
-        )
+    # Vérification du premier id préservé
+    first_id = sample["ids"][0] if sample.get("ids") else "?"
+    log.info(
+        "✓ Peek OK : id=%s, len(embedding)=%d", first_id, dim_actuelle
+    )
 
     log.info(
         "Validation réussie en %.2fs.", time.monotonic() - t0
     )
+```
 
+### `rollback_depuis_snapshot` (lignes 557-713)
 
-# ---------------------------------------------------------------------------
-# ROLLBACK — restauration depuis snapshot
-# ---------------------------------------------------------------------------
-
+```python
 def rollback_depuis_snapshot(palace_path: Path, snapshot_path: Path | None) -> None:
     """
     Restaure le palace depuis le snapshot tar.gz en cas d'erreur entre e et f.
@@ -790,54 +673,11 @@ def rollback_depuis_snapshot(palace_path: Path, snapshot_path: Path | None) -> N
                     "suppression manuelle : rm -rf %s",
                     cleanup_exc, tmpdir_path,
                 )
+```
 
+### `main` — orchestration pertinente (lignes 762-880, extraits)
 
-# ---------------------------------------------------------------------------
-# Parsing des arguments CLI
-# ---------------------------------------------------------------------------
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "ARIA — Migration d'embedder ChromaDB "
-            "(all-MiniLM-L6-v2 → paraphrase-multilingual-mpnet-base-v2)"
-        )
-    )
-    parser.add_argument(
-        "--palace-path",
-        default="~/.mempalace/palace",
-        help="Chemin du répertoire ChromaDB persistant (défaut: ~/.mempalace/palace)",
-    )
-    parser.add_argument(
-        "--from-model",
-        default="all-MiniLM-L6-v2",
-        help="Nom du modèle source (défaut: all-MiniLM-L6-v2)",
-    )
-    parser.add_argument(
-        "--to-model",
-        default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-        help=(
-            "Nom du modèle cible "
-            "(défaut: sentence-transformers/paraphrase-multilingual-mpnet-base-v2)"
-        ),
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Simule toutes les étapes sans écrire dans ChromaDB ni créer le marker.",
-    )
-    parser.add_argument(
-        "--no-snapshot",
-        action="store_true",
-        help="Saute la création du snapshot tar.gz (utile pour tests rapides).",
-    )
-    return parser.parse_args()
-
-
-# ---------------------------------------------------------------------------
-# Point d'entrée principal
-# ---------------------------------------------------------------------------
-
+```python
 def main() -> None:
     args = parse_args()
 
@@ -871,8 +711,6 @@ def main() -> None:
         ) from exc
 
     # ── ÉTAPE C (pré) — Vérification idempotence ────────────────────────────
-    # On vérifie le marker AVANT d'ouvrir le client ChromaDB pour éviter
-    # tout effet de bord sur la DB si la migration est déjà faite.
     etape_c_check_marker(palace_path, to_model, dry_run)
 
     # Ouverture du client ChromaDB
@@ -900,9 +738,7 @@ def main() -> None:
         snapshot_path = etape_a_snapshot(palace_path, dry_run)
 
     # ── ÉTAPE B — Inspection préalable ──────────────────────────────────────
-    # Lecture SQLite directe (palace_path), pas via l'objet collection :
-    # robuste aux palaces dont l'HNSW est quarantained.
-    count_avant, _dim_actuelle = etape_b_inspection(palace_path, from_model)
+    count_avant, _dim_actuelle = etape_b_inspection(collection, from_model)
 
     # ── ÉTAPE D — Re-encoding ────────────────────────────────────────────────
     ids, documents, metadatas, new_embeddings = etape_d_reencoding(
@@ -916,11 +752,6 @@ def main() -> None:
         etape_e_rewrite_chroma(
             client, ids, new_embeddings, documents, metadatas, dry_run
         )
-
-        # ── POINT DE TEST ROLLBACK ──────────────────────────────────────────
-        # Pour tester le rollback, décommenter la ligne suivante :
-        # raise RuntimeError("TEST ROLLBACK — erreur simulée entre étape e et f")
-        # ───────────────────────────────────────────────────────────────────
 
         # ÉTAPE F — Validation post-migration
         if dry_run:
@@ -945,21 +776,308 @@ def main() -> None:
     # ── ÉTAPE G — Écriture du marker d'idempotence ──────────────────────────
     log.info("── ÉTAPE G : Écriture du marker d'idempotence ──")
     etape_c_write_marker(palace_path, to_model, dry_run)
+```
 
-    # Résumé final
-    log.info("=" * 60)
-    if dry_run:
-        log.info("[DRY-RUN] Simulation terminée — aucune donnée modifiée.")
-    else:
-        log.info(
-            "✓ Migration réussie : '%s' → '%s' | %d entrées | dim %d → %d",
-            from_model, to_model,
-            count_avant,
-            _expected_dim(from_model),
-            _expected_dim(to_model),
-        )
-    log.info("=" * 60)
+---
 
+## Section 3 — Cartographie SQLite-only de la collection
 
-if __name__ == "__main__":
-    main()
+### 3.1 `count()`
+
+**SQLite-only.** Confirmé par lecture de chromadb :
+
+- `Collection.count()` → `_client._count(...)`
+  (`venv/lib/python3.13/site-packages/chromadb/api/models/Collection.py:43-58`)
+- `LocalAPI._count(...)` → `self.bindings.count(str(collection_id), tenant, database)`
+  (`venv/lib/python3.13/site-packages/chromadb/api/rust.py:360-367`)
+
+Le call retourne un `int` directement depuis le rust binding, sans
+inclure d'embeddings. Empiriquement confirmé sur le palace pré-prod
+quarantained : `count()` a retourné `710` à l'étape 3 du tour
+T-Mempalace-Preprod malgré la quarantaine.
+
+### 3.2 Dimension de la collection — **SQLite-only, sans peek nécessaire**
+
+**Source de vérité** : table `collections` de `chroma.sqlite3`,
+colonne `dimension`. Schéma lu sur le palace pré-prod :
+
+```sql
+CREATE TABLE IF NOT EXISTS "collections" (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    dimension INTEGER,
+    database_id TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+    config_json_str TEXT,
+    schema_str TEXT,
+    UNIQUE (name, database_id)
+);
+```
+
+Valeur courante pour les deux collections de prod :
+
+```
+1e179386-e78e-49ed-b738-43b1e7f81165|mempalace_drawers|384
+64d7d455-9793-4dd7-91fe-c983f2c4da93|mempalace_closets|384
+```
+
+**Donc la dim est lisible par une simple requête SQL** :
+
+```sql
+SELECT dimension FROM collections WHERE name = 'mempalace_drawers';
+```
+
+Aucune ouverture chromadb requise pour cette lecture — un
+`sqlite3.connect(...)` direct suffit. C'est la voie la plus
+robuste pour remplacer le `peek` de l'étape B.
+
+### 3.3 Documents et métadonnées — SQLite-only via `get(..., include=["documents","metadatas"])`
+
+L'appel `collection.get(limit=..., offset=..., include=["documents","metadatas"])`
+chemine :
+
+- `Collection.get(...)` → `_client._get(...)`
+- `LocalAPI._get(...)` → `self.bindings.get(str(collection_id), ids, where, limit, offset, where_document, include, tenant, database)`
+  (`venv/lib/python3.13/site-packages/chromadb/api/rust.py:386-430`)
+
+Le paramètre `include` (sans `"embeddings"`) est passé tel quel
+au rust binding. Le binding rust ne lit les vecteurs du segment
+HNSW que si `"embeddings"` est demandé.
+
+À comparer avec `peek(limit)` qui passe explicitement
+`include=IncludeMetadataDocumentsEmbeddings = ["metadatas","documents","embeddings"]`
+(`venv/lib/python3.13/site-packages/chromadb/api/rust.py:370-383` et
+`venv/lib/python3.13/site-packages/chromadb/api/types.py:529-530`).
+
+C'est exactement la différence qui explique pourquoi l'étape D
+(get sans embeddings) passe sur palace quarantained alors que
+l'étape B (peek) plante.
+
+*Note de prudence empirique* : nous n'avons pas confirmé
+*in vivo* que l'étape D passe sur palace quarantained — nous
+sommes morts à l'étape B avant d'y arriver dans le tour
+T-Mempalace-Preprod. La déduction repose sur la lecture du code
+chromadb (include sans "embeddings" ne touche pas l'HNSW). À
+valider empiriquement lors du fix.
+
+### 3.4 Liste des IDs — SQLite-only
+
+Les IDs sont stockés dans la table `embeddings` (colonne
+`embedding_id`) :
+
+```
+CREATE TABLE embeddings (
+    id INTEGER PRIMARY KEY,
+    segment_id TEXT NOT NULL,
+    embedding_id TEXT NOT NULL,
+    seq_id BLOB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (segment_id, embedding_id)
+);
+```
+
+Donc une requête `SELECT embedding_id FROM embeddings WHERE
+segment_id = ?` retourne tous les IDs sans toucher l'HNSW. Et le
+`collection.get(...)` retourne déjà les IDs dans son champ `ids`
+même quand `include=[]`. Pas de souci sur ce point.
+
+### 3.5 Embeddings (vecteurs) eux-mêmes — **HNSW-required**
+
+Les vecteurs ne sont PAS stockés dans la table SQLite
+`embeddings` (qui ne contient que les pointeurs id/segment_id).
+Ils résident dans le segment vecteur sur disque (`data_level0.bin`,
+`link_lists.bin`, `header.bin`, `index_metadata.pickle` sous le
+sous-répertoire `<segment_id>/`). Toute lecture de vecteur passe
+par ce segment. C'est ce que `peek` demande et c'est ce qui fait
+échec sur palace quarantained.
+
+**Conséquence pour la migration** : le script n'a pas besoin de
+lire les vecteurs source — il ne les utilise pas (il ré-encode
+depuis les `documents`). Donc *aucune* lecture HNSW source n'est
+fonctionnellement nécessaire à la migration.
+
+---
+
+## Section 4 — Impact d'un fix sur les étapes D, E, F
+
+### Étape D — re-encoding
+
+**Ne touche PAS l'HNSW source.** Confirmé :
+
+- ligne 366 : `total = collection.count()` — SQLite-only.
+- lignes 376-380 : `collection.get(limit=PAGE, offset=offset,
+  include=["documents","metadatas"])` — pas de `"embeddings"`
+  dans include, donc le rust binding ne lit pas le segment
+  vecteur (cf. Section 3.3).
+- ligne 418 : `model.encode(batch, show_progress_bar=False)` —
+  appel sentence-transformers local, totalement hors chromadb.
+
+Le re-encoding n'a besoin que des documents texte, qui sont
+stockés en SQLite. Aucune dépendance sur l'index HNSW source.
+
+### Étape E — réécriture
+
+**Détruit puis recrée la collection** :
+
+- ligne 465 : `client.delete_collection(COLLECTION_NAME)` — drop
+  total. La collection et son segment HNSW (sain ou corrompu)
+  sont effacés du catalog. Les fichiers du segment vivant sont
+  également supprimés du disque.
+- lignes 471-481 : `client.create_collection(name=COLLECTION_NAME,
+  metadata={"hnsw:space": "cosine"})` — création d'une nouvelle
+  collection vierge avec un nouveau `segment_id`.
+- lignes 491-496 : `collection.add(...)` en batch — chromadb
+  construit l'HNSW à mesure des insertions.
+
+**Note sur les segments quarantained** : les répertoires
+`<segment_id>.drift-...` et `<segment_id>.corrupt-...` créés par
+le fork à l'ouverture ont été *renommés*, ils n'apparaissent plus
+sous leur segment_id d'origine dans le catalog. `delete_collection`
+ne les voit pas et ne les nettoie pas — ils survivent en tant que
+fichiers orphelins sur disque. Pas un problème de correctness
+(la nouvelle collection a un autre segment_id), juste un cleanup
+manuel à prévoir post-migration. À noter pour le runbook ou le
+post-mortem.
+
+### Étape F — validation
+
+**Sur la nouvelle collection** :
+
+- ligne 513 : `client.get_collection(COLLECTION_NAME)` — handle
+  sur la *nouvelle* collection créée à l'étape E.
+- ligne 514 : `count_apres = collection.count()` — SQLite-only.
+- ligne 528 : `sample = collection.peek(limit=1)` — peek sur la
+  nouvelle collection, dont l'HNSW est vierge et sain par
+  construction. Risque empirique très faible. Mais si on patche
+  l'étape B pour s'affranchir de peek, autant remplacer aussi
+  celui-ci par une lecture SQLite-only de `collections.dimension`
+  (cohérence + un seul point d'inspection à maintenir).
+
+### Synthèse étapes D/E/F après fix Étape B
+
+Si on remplace le peek de l'étape B par une lecture
+SQLite-only de la dim :
+
+- D : déjà SQLite-only sur les lectures, fonctionne.
+- E : intrinsèquement destructif/reconstructif, fonctionne sur
+  un palace quarantained car le delete écrase tout.
+- F : on peut soit garder le peek (sain sur la nouvelle
+  collection), soit l'aligner sur la même méthode SQLite-only
+  pour homogénéité.
+
+Le fix Étape B est suffisant pour débloquer la migration sur
+palace quarantained. Le fix Étape F est cosmétique mais
+recommandé pour cohérence.
+
+---
+
+## Section 5 — Stratégies de fix possibles
+
+### a) Remplacer `peek` par une lecture SQLite-only de la dim
+
+**Avantage** : robuste par construction, indépendant de l'état
+HNSW, source de vérité officielle chromadb (colonne `dimension`
+de la table `collections`).
+**Risque** : couplage au schéma SQLite chromadb (changement de
+schéma à une version future = casse silencieuse).
+**Coût** : ~10 lignes — ouvrir `chroma.sqlite3` en lecture,
+exécuter `SELECT dimension FROM collections WHERE name = ?`,
+parser. Tout en fail-safe (fallback sur les autres options en
+cas de schéma inattendu).
+
+### b) `try/except InternalError` autour de peek, fallback sur la dim attendue
+
+**Avantage** : minimal en termes de diff, pas de couplage SQL.
+**Risque** : on perd la vérification de cohérence dim observée
+vs dim déclarée. Le check de l'étape B existe précisément pour
+détecter le cas "l'utilisateur a passé `--from-model=MiniLM` mais
+la collection contient déjà du mpnet" — on ne le détecterait plus.
+**Coût** : ~5 lignes, mais c'est un fallback "aveugle" qui
+désactive un garde-fou.
+
+### c) Court-circuiter complètement l'étape B sur palaces présumés dégradés
+
+Variantes envisageables :
+
+- flag CLI `--skip-inspection` que l'opérateur active sciemment
+  quand il sait que le palace est en drift.
+- auto-detection sur présence de fichiers `.drift` / `.corrupt`
+  sous palace_path (la signature laissée par le fork).
+
+**Avantage** : pas de risque sur les palaces sains, opt-in
+explicite, message clair côté log.
+**Risque** : un opérateur qui oublie le flag se prendra le
+même crash. L'auto-detection sur `.drift` est plus sûre mais
+ajoute un coupling au comportement de quarantine du fork
+(qui pourrait changer).
+**Coût** : ~15 lignes (option CLI) + branche d'évitement de
+peek.
+
+### d) Combiner SQLite-only (a) ET try/except (b) en cascade
+
+Lire la dim depuis SQLite en premier choix ; si la requête SQL
+échoue (schéma inattendu, fichier manquant), tomber sur peek ;
+si peek échoue, tomber sur `_expected_dim(from_model)` avec un
+WARNING explicite.
+
+**Avantage** : tolérance maximale, ne dégrade pas le check de
+cohérence quand SQLite répond.
+**Risque** : trois branches à maintenir, complexité de test.
+**Coût** : ~25 lignes.
+
+### e) Alternative côté lecture : utiliser `collection.get(limit=1, include=["embeddings"])` au lieu de `peek`
+
+**Évaluation** : ne change rien au problème. `get` avec
+`include=["embeddings"]` chemine vers la même
+`bindings.get(..., include)` rust path que `peek`. Si le segment
+HNSW est quarantained, ça échouera pareil.
+
+→ **À écarter**, ne traite pas le bug.
+
+### f) Pré-réparation du palace (avant migration) — hors-scope script
+
+Outil tiers ou patch fork pour reconstruire l'HNSW depuis
+SQLite avant de lancer la migration. Plus propre conceptuellement
+mais hors-scope d'un fix de `migrate_embedder.py`. À envisager
+côté fork MemPalace si on tombe sur ce drift en récurrence.
+
+### Recommandation implicite (sans rédiger le fix)
+
+L'option **(a)** ou **(d)** semblent dominer : elles préservent
+la valeur du check de cohérence dim observée vs dim déclarée,
+sont alignées sur la source de vérité chromadb (`collections.dimension`),
+et débloquent la migration sur palace quarantained. **(b)** est
+défendable si on accepte de perdre le check.
+
+L'option **(c)** est légitime en plus de (a) ou (d), pas à la
+place : un flag explicite est utile en debug même quand la voie
+SQL marche.
+
+Arbitrage Nico requis avant fix.
+
+---
+
+## Annexe — exécution chromadb des trois méthodes clés
+
+Pour traçabilité, citations chromadb 1.x telles qu'installées
+dans le venv ARIA (`venv/lib/python3.13/site-packages/chromadb/`) :
+
+- **`Collection.count()`** — `api/models/Collection.py:43-58` →
+  `_client._count(...)` → `api/rust.py:360-367` →
+  `bindings.count(collection_id, tenant, database)`. Aucun
+  paramètre include, aucune lecture de vecteur.
+
+- **`Collection.peek(limit=10)`** — `api/models/Collection.py:174-190` →
+  `_client._peek(...)` → `api/rust.py:370-383` → délègue à
+  `_get(..., include=IncludeMetadataDocumentsEmbeddings)`.
+  `IncludeMetadataDocumentsEmbeddings = ["metadatas","documents","embeddings"]`
+  est défini en `api/types.py:530`.
+
+- **`Collection.get(..., include=["documents","metadatas"])`** —
+  `api/models/Collection.py:...` → `_client._get(...)` →
+  `api/rust.py:386-430` → `bindings.get(collection_id, ids, where,
+  limit, offset, where_document, include, tenant, database)`.
+  Quand `"embeddings"` n'est pas dans `include`, le binding rust
+  ne lit pas le segment vecteur.
+
+C'est la différence d'`include` qui sépare un appel
+HNSW-required d'un appel SQLite-only — pas la méthode elle-même.
