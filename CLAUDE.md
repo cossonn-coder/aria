@@ -54,6 +54,10 @@ intents, et routing dynamique vers des effecteurs spécialisés.
   résiduelles dans `mempalace_closets` non migrées (hors scope
   sprint 4, à arbitrer si un usage justifie leur migration).
 
+Layout filesystem du palace, backend chromadb-rust et mécanismes de
+quarantine (`.drift-*` / `.corrupt-*`) : voir
+`docs/architecture/chromadb_palace.md`.
+
 ## Style de code
 - Commentaires en français, professionnels et pédagogiques, code en anglais
 - Logging via `from logger import get_logger; log = get_logger(__name__)`
