@@ -333,6 +333,7 @@ qui consomme le marker .mempalace-embedder.json. Court-circuiter
 ce point d'entrée invalide le test.
 """
 from mempalace.palace import get_collection
+from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
 # Garde "fork actif" — redondant avec Section 1 check 1, mais
 # ferme le trou si un opérateur saute la Section 1 ou si pip a
@@ -370,11 +371,14 @@ ef = col._collection._embedding_function
 ef_repr = repr(ef)
 print(f"[smoke] embedding_function: {ef_repr}")
 
-# Pattern ATTENDU : la classe doit contenir SentenceTransformer
-# (le fork écrit SentenceTransformerEmbeddingFunction quand le
-#  marker .mempalace-embedder.json est consommé correctement).
-assert "SentenceTransformer" in ef_repr, (
-    f"backend EF inattendu (attendu SentenceTransformer-based) : {ef_repr}"
+# Pattern ATTENDU : isinstance de SentenceTransformerEmbeddingFunction
+# (check sémantique sur la lignée d'héritage). Le fork subclass tactiquement
+# en _MempalaceST (cf. mempalace/embedding.py:145) pour overrider name() :
+# un check textuel sur repr(ef) échouerait à tort. Cf. dette #25 sprint 9 /
+# fix sprint 12, docs/sprint12/audit_heredoc_smoke_pattern.md.
+assert isinstance(ef, SentenceTransformerEmbeddingFunction), (
+    f"backend EF inattendu (attendu SentenceTransformerEmbeddingFunction "
+    f"ou sous-classe) : {ef_repr} ; MRO={type(ef).__mro__}"
 )
 print("[smoke] OK — backend sentence-transformers actif")
 EOF

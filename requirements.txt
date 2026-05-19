@@ -4,6 +4,8 @@ python-telegram-bot>=22.0
 # === MEMORY LAYER ===
 chromadb>=1.5.0
 mempalace==3.3.0
+# pin explicite : couche HNSW C++ critique pour le palace, cf. dette #27 sprint 9
+chroma-hnswlib==0.7.6
 
 # === EMBEDDINGS ===
 sentence-transformers>=5.0.0
