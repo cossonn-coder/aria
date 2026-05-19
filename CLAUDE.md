@@ -81,7 +81,7 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 
 ## Backlog en cours
 Voir le doc de contexte complet pour le sprint actuel.
-Priorité immédiate : Voir docs/sprint6/context_sprint_6_kickoff_v2.md pour la priorité actuelle.
+Priorité immédiate : Voir docs/sprint12/context_sprint_12_kickoff.md pour la priorité actuelle.
 
 ## Ne JAMAIS faire
 - Modifier `soul.md` sans demander explicitement à Nico
