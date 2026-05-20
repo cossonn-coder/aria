@@ -3,7 +3,11 @@ python-telegram-bot>=22.0
 
 # === MEMORY LAYER ===
 chromadb>=1.5.0
-mempalace==3.3.0
+# pin SHA fork : la 3.3.5 PyPI ne contient PAS le commit configurable
+# embedder (model_name + marker .mempalace-embedder.json) dont dépend le
+# palace mpnet-768. Cf. dette #28 sprint 13, audit pin_mempalace.md §4.
+# Tout bump de ce SHA doit être délibéré + tracé (validation smoke runbook §6).
+mempalace @ git+https://github.com/cossonn-coder/mempalace.git@b8caf3259021d27c2689928458ac02d5a0defd01
 # pin explicite : couche HNSW C++ critique pour le palace, cf. dette #27 sprint 9
 chroma-hnswlib==0.7.6
 
