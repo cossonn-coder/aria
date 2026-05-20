@@ -56,6 +56,12 @@ cd ~/projects/aria
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+> `mempalace` est installé depuis un fork épinglé par SHA
+> (pas depuis PyPI). Workflow dev (override editable) et
+> règle de bump du SHA détaillés dans
+> [`docs/architecture/install_mempalace.md`](docs/architecture/install_mempalace.md).
 
 ---
 
