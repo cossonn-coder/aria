@@ -28,11 +28,12 @@
 #   - Aucun agent, aucun router n'importe mempalace_store directement.
 #
 # Instanciation (production) :
-#   from memory.mempalace_store import search
-#   bridge = MempalaceBridge(store=search)
+#   from memory.mempalace_store import search, get_by_metadata
+#   bridge = MempalaceBridge(store=search, get_by_metadata=get_by_metadata)
 #
 # Instanciation (tests) :
 #   bridge = MempalaceBridge(store=fake_search)
+#   bridge = MempalaceBridge(store=fake_search, get_by_metadata=fake_get)
 
 
 class MempalaceBridge:
@@ -40,13 +41,20 @@ class MempalaceBridge:
     Adapter mémoire — couche de lecture MemPalace injectable et testable.
 
     Args:
-        store : callable avec signature search(query, wing, room, n) → dict.
-                En production : mempalace_store.search.
-                En test       : tout callable compatible.
+        store           : callable avec signature search(query, wing, room, n) → dict.
+                          En production : mempalace_store.search.
+                          En test       : tout callable compatible.
+        get_by_metadata : callable optionnel avec signature
+                          get_by_metadata(palace_path, where, include=None) → dict
+                          natif ChromaDB {ids, documents, metadatas}.
+                          Requis uniquement pour load_conversation_history.
+                          Si None, l'appel à load_conversation_history lève
+                          RuntimeError.
     """
 
-    def __init__(self, store):
+    def __init__(self, store, get_by_metadata=None):
         self._store = store
+        self._get_by_metadata = get_by_metadata
 
     # =========================================================
     # RECALL ÉPISODIQUE
@@ -197,3 +205,68 @@ class MempalaceBridge:
             "hits": result.get("results", []),
             "count": len(result.get("results", [])),
         }
+
+    # =========================================================
+    # LECTURE CONVERSATIONNELLE (chronologique, pas de query vectorielle)
+    # =========================================================
+
+    def load_conversation_history(
+        self,
+        conversation_key: str,
+        n: int = 10,
+    ) -> list[dict]:
+        """
+        Restitution chronologique (oldest → newest) des n derniers tours
+        d'une conversation. Format prêt à être passé en `messages` au
+        provider LLM au sprint 16.
+
+        Lecture non-vectorielle : filtre metadata pur sur wing/room,
+        puis tri Python sur metadata.timestamp. ChromaDB ne trie pas
+        nativement sur .get() — c'est délibéré côté caller (cf. audit
+        sprint 15 §5.3).
+
+        Args:
+            conversation_key : clé d'indexation de la conversation
+                               (chat_id Telegram stringifié côté caller).
+            n                : nombre maximum de tours retournés
+                               (les plus récents). n<=0 → liste vide.
+
+        Returns:
+            liste de {"role": str, "content": str, "timestamp": str}
+            triée par timestamp croissant. Liste vide si conversation
+            inconnue ou n<=0.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata
+                           (injection optionnelle au constructeur).
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for conversation history; "
+                "inject at construction"
+            )
+
+        if n <= 0:
+            return []
+
+        from config import config as _config
+
+        where = {"$and": [
+            {"wing": "aria_conversation"},
+            {"room": conversation_key},
+        ]}
+
+        result = self._get_by_metadata(_config.mempalace_path, where) or {}
+        docs = result.get("documents") or []
+        metas = result.get("metadatas") or []
+
+        turns = [
+            {
+                "role": (meta or {}).get("role", ""),
+                "content": doc or "",
+                "timestamp": (meta or {}).get("timestamp", ""),
+            }
+            for doc, meta in zip(docs, metas)
+        ]
+        turns.sort(key=lambda t: t["timestamp"])
+        return turns[-n:]

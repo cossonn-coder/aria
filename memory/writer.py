@@ -165,6 +165,50 @@ def write_semantic_fact(
     col.upsert(documents=[fact], ids=[doc_id], metadatas=[meta])
 
 
+# ── Écriture conversationnelle (tours user/assistant) ────────────────────────
+
+_ALLOWED_CONVERSATION_ROLES = {"user", "assistant"}
+
+
+def write_conversation_turn(
+    conversation_key: str,
+    role: str,
+    content: str,
+    *,
+    extra: dict | None = None,
+) -> None:
+    """
+    Stocke un tour conversationnel dans aria_conversation.
+
+    wing="aria_conversation" et room=conversation_key sont structurels
+    et non overridables (invariant W4). role et timestamp sont en
+    métadonnée pour permettre tri chronologique et filtrage par rôle
+    côté lecture.
+
+    role doit valoir "user" ou "assistant" — toute autre valeur déclenche
+    ValueError (pas de "system" à ce stade ; cf. sprint 15 audit §arbitrage 2).
+    """
+    if role not in _ALLOWED_CONVERSATION_ROLES:
+        raise ValueError(
+            f"role must be one of {sorted(_ALLOWED_CONVERSATION_ROLES)} "
+            f"(got {role!r})"
+        )
+
+    col = get_collection(config.mempalace_path)
+    doc_id = uuid4().hex
+
+    meta = {
+        **(extra or {}),
+        "wing": "aria_conversation",
+        "room": conversation_key,
+        "type": "conversation_turn",
+        "timestamp": _now_iso(),
+        "role": role,
+    }
+    _validate(meta)
+    col.upsert(documents=[content], ids=[doc_id], metadatas=[meta])
+
+
 # ── Écriture cache classifier ─────────────────────────────────────────────────
 
 def write_classifier_cache(
