@@ -12,6 +12,78 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 - systemd service `aria.service` sur Debian
 - Pas de GPU pour l'instant
 
+## Acteurs
+
+Trois rôles distincts, ne pas les confondre.
+
+- **Architecte** (Claude.ai côté Nico) : analyse, critique, planifie,
+  rédige les briefs. Ne touche pas au code.
+- **Pilote** (Nico) : courroie de transmission. Colle les briefs,
+  ramène les livrables, fait tourner les runs live (Telegram,
+  `journalctl`, `systemctl`).
+- **Implémenteur** (toi, Claude Code sur vDebianIA) : exécute le
+  code, les tests, les scripts. Tu n'as pas accès à Telegram ni à
+  `journalctl` en temps réel. Tout run live passe par Nico.
+
+## Workflow par tour
+Un tour = un objectif atomique. Brief → exécution → livrable → validation
+architecte → tour suivant. Pas de fusion de tours, pas de réponse hors-brief.
+
+## Audit avant fix
+Sujet non-trivial : premier tour = audit documenté, pas fix ; fix dans
+tour séparé. Sur audit, complétude prime sur concision (code intégral,
+callers, chemins). Le diagnostic posé noir sur blanc fait partie du
+livrable. Protocole DeepSeek suspendu.
+
+## Calibrage du niveau d'exigence
+ARIA = outil perso mono-utilisateur. Niveau d'exigence par défaut faible.
+
+- Fix qui marche + 1 test de non-régression sur le cas nominal.
+- Pas de `try/except` défensifs « au cas où ».
+- Pas de fixtures exhaustives ni d'assertions de cohérence « tant qu'on y est ».
+- Pas de mesure empirique sur dettes adjacentes pendant un sprint.
+
+Entre deux niveaux de soin, prends le moins exigeant. Exception : sprint
+touchant le palace prod (Nico le signale explicitement).
+
+## Surgical changes
+- Toucher uniquement ce qui sert le brief, ne pas refactorer ce qui marche.
+- Conserver le style existant.
+- Dead code hors-sujet : mentionner en fin de livrable, ne pas supprimer.
+
+## Résiste au scope creep
+Bugs adjacents = « dettes à arbitrer » en fin de livrable. Rester sur
+le brief en cours.
+
+## Garde-fous comportementaux
+Lus à la lumière du calibrage ci-dessus (qui prime en conflit).
+
+- **Think before coding** : expliciter assumptions, demander si ambigu,
+  pas de choix silencieux entre interprétations.
+- **Simplicity first** : minimum de code, pas d'abstraction spéculative,
+  pas de configurabilité non demandée.
+- **Goal-driven** : critères de succès vérifiables énoncés avant code.
+
+## Livrables synthétiques par défaut
+- Diffs restreints aux fichiers touchés.
+- Extraits `grep` avec ~3 lignes de contexte.
+- Tableaux before/after quand pertinent.
+- Pas de full dump.
+
+Exception : tours d'audit pré-fix.
+
+## Tests verts ≠ objectif atteint
+Tests = balise nécessaire, pas suffisante. Validation finale d'un fix
+de fond = run live (Telegram + `journalctl`) via Nico. Livrables :
+distinguer vérifié-VM (tests, scripts, sandbox) vs à-valider-live (Nico).
+Ne jamais déclarer un fix « validé » sur tests seuls si le sujet touche
+le runtime.
+
+## Pas de push sans validation
+Aucun `git push origin` sans validation explicite de Nico. Commits locaux
+par défaut. Push = clôture d'item ou de sprint, jamais en cours de tour.
+Si tu hésites, tu ne pushes pas.
+
 ## Règles d'architecture INVIOLABLES
 
 1. Une opération = un handler = un seul point d'écriture mémoire.
@@ -36,27 +108,17 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 
 ## Couches mémoire
 
-État réel post-sprint-4 :
+État post-sprint-4 (détail, compteurs et dettes :
+voir `docs/architecture/memory_layers.md`) :
 
-- `aria_episodic` : interactions, images reçues, images générées.
-  Types `interaction|image_input|image_generated`. ~408 entrées.
-  Indexé par `intent_id` (room).
-- `aria_semantic` : faits stables sur l'utilisateur (allergies,
-  localisation, préférences). 0 caller prod actuellement — couche
-  d'infrastructure prête mais pas alimentée par le pipeline normal.
-  Cf. dette #17 (bloc-note explicite).
-- `aria_classifier` : cache du classifier d'opérations.
-  ~199 entrées, fonctionnellement cassé depuis sa création
-  (mismatch document indexé vs query) — résolu sprint 5
-  (commit b0aaee5, dette #20 close).
-- `aria_intentual` : réservé intents sérialisés. Pas implémenté.
-- `aria` (legacy) : 0 entrée dans `mempalace_drawers`. 32 entrées
-  résiduelles dans `mempalace_closets` non migrées (hors scope
-  sprint 4, à arbitrer si un usage justifie leur migration).
+- `aria_episodic` : interactions et images. Actif.
+- `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
+- `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
+- `aria_intentual` : intents sérialisés. Pas implémenté.
+- `aria` (legacy) : `mempalace_drawers` vide, 32 entrées résiduelles en `mempalace_closets`.
 
-Layout filesystem du palace, backend chromadb-rust et mécanismes de
-quarantine (`.drift-*` / `.corrupt-*`) : voir
-`docs/architecture/chromadb_palace.md`.
+Layout filesystem, backend chromadb-rust, quarantine
+(`.drift-*` / `.corrupt-*`) : voir `docs/architecture/chromadb_palace.md`.
 
 ## Style de code
 - Commentaires en français, professionnels et pédagogiques, code en anglais
@@ -81,186 +143,35 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 
 ## Backlog en cours
 Voir le doc de contexte complet pour le sprint actuel.
-Priorité immédiate : Voir docs/sprint12/context_sprint_12_kickoff.md pour la priorité actuelle.
+Priorité immédiate : voir `docs/sprint14/` (dernier kickoff
+en date).
 
 ## Ne JAMAIS faire
 - Modifier `soul.md` sans demander explicitement à Nico
 - Bypasser le kernel pour appeler un router directement
 - Faire écrire la mémoire par un agent ou un client LLM
 - Utiliser `print()` à la place du logger
-- Lancer `git push` sans confirmation
+- Lancer `git push origin` sans validation explicite de Nico
 - Modifier le prompt AnalystAgent sans faire passer le test garde-fou
   tests/agents/test_analyst_prompt_guard.py
+- Refactorer du code adjacent au brief « tant qu'on y est »
+- Traiter une dette hors-scope au prétexte qu'elle bloque ton chemin
+  (la documenter et passer)
+- Déclarer un fix de fond « validé » sur la seule base des tests
+  unitaires (le run live passe par Nico)
+- Créer une nouvelle branche sans demande explicite
 
-## Protocole de délégation DeepSeek – Économie de tokens
+## Protocole de délégation DeepSeek
 
-> Ces règles priment sur toute autre consigne.
+Trois outils dans `/home/nico/.local/bin/` :
 
----
+- `write-deepseek` : génère du boilerplate (tests pytest, docstrings, scaffolding).
+- `ask-deepseek` : lit et analyse plusieurs fichiers, retourne une synthèse.
+- `extract-chat` : extrait un transcript `.jsonl` en texte lisible.
 
-### Outils disponibles
+Spec complète, déclencheurs automatiques, syntaxe, exemples,
+répartition des responsabilités et interdictions :
+voir `docs/agent/deepseek_protocol.md`. À lire AVANT tout tour
+impliquant ≥ 3 fichiers, du boilerplate, ou une mise à jour de doc.
 
-| Outil | Rôle |
-|---|---|
-| `write-deepseek` | Génération de boilerplate (tests, docstrings, scaffolding) |
-| `extract-chat` | Extraction de transcript avant mise à jour doc |
-| `ask-deepseek` | Lecture et analyse multi-fichiers |
-
-**Chemins :** `/home/nico/.local/bin/<outil>`
-
----
-
-### Vérification en début de session
-
-À exécuter automatiquement, sans attendre de demande :
-
-```bash
-ls -la /home/nico/.local/bin/ask-deepseek \
-        /home/nico/.local/bin/write-deepseek \
-        /home/nico/.local/bin/extract-chat
-```
-
----
-
-### 1. `write-deepseek` – Génération de boilerplate
-
-#### Déclencheurs automatiques
-
-Exécuter immédiatement (sans demander) dans ces situations :
-
-- Générer un **fichier de tests pytest** pour un module existant
-- Ajouter des **docstrings** à toutes les fonctions publiques d'un fichier
-- Créer un **nouveau handler / routeur** en suivant un pattern existant
-- Mettre à jour la **documentation** après une session (voir §4)
-
-#### Syntaxe
-
-```bash
-/home/nico/.local/bin/write-deepseek \
-  --spec "<description précise>" \
-  --context <fichier_reference> \
-  --target <fichier_sortie>
-```
-
-#### Exemple – Ajouter des tests
-
-**Demande :** *« Ajoute des tests pour `src/mavlink_parser.py` »*
-
-```bash
-/home/nico/.local/bin/write-deepseek \
-  --spec "Génère un fichier pytest complet pour src/mavlink_parser.py, testant toutes les fonctions publiques" \
-  --context src/mavlink_parser.py \
-  --target tests/test_mavlink_parser.py
-```
-
----
-
-### 2. `ask-deepseek` – Lecture multi-fichiers
-Les tours d'audit pré-fix (audit avant fix) sortent du déclenchement automatique d'ask-deepseek. Claude Code lit directement les fichiers et retourne leur contenu intégral. Si le brief mentionne 'audit' ou demande explicitement le contenu brut, le protocole de délégation est suspendu pour ce tour.
-
-#### Déclencheurs automatiques
-
-- Lire **≥ 1 fichier de plus de 300 lignes**
-- Lire **≥ 3 fichiers**, quelle que soit leur taille
-- Comprendre des **interactions entre modules**
-
-#### Syntaxe
-
-```bash
-# Sans raisonnement
-/home/nico/.local/bin/ask-deepseek \
-  --paths <fichier1> <fichier2> ... \
-  --question "<question>"
-
-# Avec raisonnement approfondi
-/home/nico/.local/bin/ask-deepseek \
-  --paths <fichier1> <fichier2> ... \
-  --question "<question>" \
-  --think
-```
-
-L'outil retourne un texte structuré (~300–500 tokens) à lire à la place des fichiers bruts.
-
-#### Exemple – Question sur plusieurs fichiers
-
-**Demande :** *« Quel port utilise le module telemetry ? »* (avec ≥ 3 fichiers concernés)
-
-```bash
-/home/nico/.local/bin/ask-deepseek \
-  --paths src/telemetry.py src/config.py src/main.py \
-  --question "Quel port utilise le module telemetry ?"
-```
-
----
-
-### 3. `extract-chat` – Préparation pour la documentation
-
-#### Déclencheur
-
-Avant chaque mise à jour de documentation, après une session de travail.
-
-#### Syntaxe
-
-```bash
-/home/nico/.local/bin/extract-chat \
-  ~/.claude/projects/aria/<session>.jsonl \
-  -o /tmp/chat.txt
-```
-
-> Ne jamais lire un fichier `.jsonl` brut – toujours passer par `extract-chat`.
-
----
-
-### 4. Workflow de mise à jour de la documentation
-
-À exécuter **après chaque feature terminée**, automatiquement :
-
-```bash
-# 1. Extraire le transcript de la session courante
-/home/nico/.local/bin/extract-chat \
-  ~/.claude/projects/aria/$(ls -t ~/.claude/projects/aria/ | head -1) \
-  -o /tmp/chat.txt
-
-# 2. Mettre à jour l'architecture via DeepSeek
-/home/nico/.local/bin/write-deepseek \
-  --spec "Synchronise docs/architecture.md avec les changements listés dans /tmp/chat.txt" \
-  --context docs/architecture.md \
-  --target docs/architecture.md
-```
-
-#### Exemple – Fin de feature
-
-**Demande :** *« On a fini la feature, mets à jour la doc »*
-
-```bash
-/home/nico/.local/bin/extract-chat \
-  ~/.claude/projects/aria/$(ls -t ~/.claude/projects/aria/ | head -1) \
-  -o /tmp/chat.txt
-
-/home/nico/.local/bin/write-deepseek \
-  --spec "Synchronise docs/architecture.md avec les changements listés dans /tmp/chat.txt" \
-  --context docs/architecture.md \
-  --target docs/architecture.md
-```
-
----
-
-### 5. Répartition des responsabilités
-
-| Tâche | Responsable |
-|---|---|
-| Déboguer une race condition | **Claude** |
-| Décision d'architecture | **Claude** |
-| Lire 5 fichiers pour trouver un port | **DeepSeek** via `ask-deepseek` |
-| Générer un fichier de tests | **DeepSeek** via `write-deepseek` |
-| Mettre à jour la doc après une session | **DeepSeek** via `extract-chat` + `write-deepseek` |
-| Scaffolding d'un nouveau handler | **DeepSeek** via `write-deepseek` |
-
----
-
-### 6. Interdictions
-
-- Ne **jamais** générer soi-même un fichier de tests, des docstrings ou du code de structure.
-- Ne **jamais** répondre à une question nécessitant la lecture de ≥ 3 fichiers sans `ask-deepseek`.
-- Ne **jamais** ouvrir ou lire directement un fichier `.jsonl` : utiliser `extract-chat`.
-- Ne **jamais** produire du code boilerplate dans les messages de réponse.
+Suspendu sur les tours d'audit pré-fix : Claude Code lit lui-même.
