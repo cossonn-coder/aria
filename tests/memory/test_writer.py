@@ -192,3 +192,74 @@ def test_write_classifier_cache_indexes_message_brut(fake_col):
     # Pas de pollution metadata
     assert "message" not in fake_col.last_meta
     assert "operation" not in fake_col.last_meta
+
+
+# ── 13. write_conversation_turn — wing toujours aria_conversation ────────────
+
+def test_write_conversation_turn_wing_is_aria_conversation(fake_col):
+    w.write_conversation_turn("conv-1", "user", "salut")
+    assert fake_col.last_meta["wing"] == "aria_conversation"
+
+
+# ── 14. write_conversation_turn — room = conversation_key ────────────────────
+
+def test_write_conversation_turn_room_is_conversation_key(fake_col):
+    w.write_conversation_turn("conv-42", "user", "salut")
+    assert fake_col.last_meta["room"] == "conv-42"
+
+
+# ── 15. write_conversation_turn — type = conversation_turn ───────────────────
+
+def test_write_conversation_turn_type_is_conversation_turn(fake_col):
+    w.write_conversation_turn("conv-1", "assistant", "réponse")
+    assert fake_col.last_meta["type"] == "conversation_turn"
+
+
+# ── 16. write_conversation_turn — role "user" accepté et porté en meta ───────
+
+def test_write_conversation_turn_role_user_accepted(fake_col):
+    w.write_conversation_turn("conv-1", "user", "question")
+    assert fake_col.last_meta["role"] == "user"
+    assert fake_col.last_doc == "question"
+
+
+# ── 17. write_conversation_turn — role "assistant" accepté et porté en meta ──
+
+def test_write_conversation_turn_role_assistant_accepted(fake_col):
+    w.write_conversation_turn("conv-1", "assistant", "réponse")
+    assert fake_col.last_meta["role"] == "assistant"
+    assert fake_col.last_doc == "réponse"
+
+
+# ── 18. write_conversation_turn — role invalide → ValueError ─────────────────
+
+@pytest.mark.parametrize("bad_role", ["system", "foo", "", "User", "ASSISTANT", "tool"])
+def test_write_conversation_turn_role_invalid_raises_value_error(fake_col, bad_role):
+    """Garde-fou : seuls "user" et "assistant" sont acceptés à ce stade.
+    Cf. audit sprint 15 §arbitrage 2 (pas de "system" délibérément)."""
+    with pytest.raises(ValueError):
+        w.write_conversation_turn("conv-1", bad_role, "content")
+
+
+# ── 19. write_conversation_turn — extra ne peut pas overrider wing (W4) ──────
+
+def test_write_conversation_turn_extra_cannot_override_wing(fake_col):
+    """Régression directe du bug W4 (sprint 3.1 / dette #11).
+    Passer wing/room/type/role dans extra ne doit pas corrompre la
+    destination ni le rôle métier — wing/room/type/role sont posés
+    APRÈS le spread."""
+    w.write_conversation_turn(
+        "conv-1",
+        "user",
+        "salut",
+        extra={
+            "wing": "aria",
+            "room": "wrong-room",
+            "type": "wrong-type",
+            "role": "assistant",
+        },
+    )
+    assert fake_col.last_meta["wing"] == "aria_conversation"
+    assert fake_col.last_meta["room"] == "conv-1"
+    assert fake_col.last_meta["type"] == "conversation_turn"
+    assert fake_col.last_meta["role"] == "user"
