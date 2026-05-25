@@ -196,13 +196,68 @@ class LLMRouter:
             provider, ttl,
         )
 
+    @staticmethod
+    def _validate_messages(messages) -> None:
+        """Valide la forme `messages=[...]` du sprint 16.
+
+        Garde-fou minimal (cf. audit §7.2) : forme, rôle, content non vide.
+        L'ordre user/assistant et l'alternance ne sont pas vérifiés — laissé
+        au provider qui renverra une 400 explicite si la séquence est
+        invalide.
+        """
+        if not isinstance(messages, list):
+            raise ValueError(
+                f"messages doit être une list, reçu {type(messages).__name__}"
+            )
+        if not messages:
+            raise ValueError("messages est vide")
+
+        valid_roles = {"user", "assistant", "system"}
+        for i, m in enumerate(messages):
+            if not isinstance(m, dict):
+                raise ValueError(f"messages[{i}] n'est pas un dict")
+            if "role" not in m:
+                raise ValueError(f"messages[{i}]: clé 'role' manquante")
+            if "content" not in m:
+                raise ValueError(f"messages[{i}]: clé 'content' manquante")
+            role = m["role"]
+            if role not in valid_roles:
+                raise ValueError(
+                    f"messages[{i}]: role {role!r} invalide "
+                    f"(attendu user/assistant/system)"
+                )
+            content = m["content"]
+            if not isinstance(content, str):
+                raise ValueError(
+                    f"messages[{i}]: content doit être une str, reçu "
+                    f"{type(content).__name__}"
+                )
+            if not content.strip():
+                raise ValueError(
+                    f"messages[{i}]: content vide ou whitespace seulement"
+                )
+
     def complete(
         self,
-        prompt: str,
+        prompt: str | None = None,
+        *,
+        messages: list[dict] | None = None,
         role: LLMRole = LLMRole.CHAT,
         temperature: float = 0.7,
         max_tokens: int = 1000,
     ) -> LLMResponse:
+        # Xor strict — un seul des deux modes à la fois (cf. audit §7.1).
+        if prompt is None and messages is None:
+            raise ValueError(
+                "complete(): fournir prompt OU messages, pas aucun"
+            )
+        if prompt is not None and messages is not None:
+            raise ValueError(
+                "complete(): fournir prompt OU messages, pas les deux"
+            )
+
+        if messages is not None:
+            self._validate_messages(messages)
 
         from logger import get_logger
         log = get_logger(__name__)
@@ -218,13 +273,20 @@ class LLMRouter:
                 log.info("[LLM] provider %s skipped (cached 429)", provider)
                 continue
 
+            # On ne forwarde `messages` à `_call` que dans la branche
+            # nouvelle : la branche legacy garde sa signature d'origine,
+            # ce qui préserve le patch monkeypatch de test_negative_cache.
+            call_kwargs = dict(
+                prompt=prompt,
+                provider_cfg=provider_cfg,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if messages is not None:
+                call_kwargs["messages"] = messages
+
             try:
-                return self._call(
-                    prompt=prompt,
-                    provider_cfg=provider_cfg,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+                return self._call(**call_kwargs)
             except Exception as e:
                 log.error("[LLM FALLBACK] %s failed: %s", provider, e)
                 # Cache uniquement les 429 explicites — un crash réseau
@@ -240,24 +302,58 @@ class LLMRouter:
 
     def _call(
         self,
-        prompt: str,
+        prompt: str | None,
         provider_cfg: dict,
         temperature: float,
         max_tokens: int,
+        *,
+        messages: list[dict] | None = None,
     ) -> LLMResponse:
 
+        from logger import get_logger
+        log = get_logger(__name__)
+
         api_key = provider_cfg["api_key"]()
+        provider = provider_cfg["provider"]
 
-        # system prompt = soul + user (commun aux deux formats)
-        system_parts = [_SOUL]
-        if _USER:
-            system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
-        system_prompt = "\n".join(system_parts)
+        # ── Construction des messages selon le mode ──────────────────────────
+        if messages is None:
+            # Forme legacy : on construit le system prompt depuis _SOUL/_USER
+            # et on l'injecte avec le user prompt unique.
+            system_parts = [_SOUL]
+            if _USER:
+                system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
+            system_prompt = "\n".join(system_parts)
 
-        if provider_cfg["provider"] == "anthropic":
-            from logger import get_logger
-            log = get_logger(__name__)
+            if provider == "anthropic":
+                anthropic_system: str | None = system_prompt
+                anthropic_messages = [{"role": "user", "content": prompt}]
+            else:
+                openai_messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+        else:
+            # Forme nouvelle (sprint 16) : caller fournit messages complet,
+            # le router n'injecte ni _SOUL ni _USER. Anthropic exige
+            # néanmoins d'extraire les {role:system} vers le param top-level.
+            if provider == "anthropic":
+                system_parts_list = [
+                    m["content"] for m in messages if m["role"] == "system"
+                ]
+                anthropic_system = (
+                    "\n\n".join(system_parts_list)
+                    if system_parts_list
+                    else None
+                )
+                anthropic_messages = [
+                    m for m in messages if m["role"] != "system"
+                ]
+            else:
+                openai_messages = messages  # transmis tel quel
 
+        # ── Dispatch HTTP ────────────────────────────────────────────────────
+        if provider == "anthropic":
             url = f"{provider_cfg['base_url']}/messages"
             headers = {
                 "x-api-key": api_key,
@@ -267,10 +363,12 @@ class LLMRouter:
             payload = {
                 "model": provider_cfg["model"],
                 "max_tokens": max_tokens,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": anthropic_messages,
                 "temperature": temperature,
             }
+            if anthropic_system:
+                payload["system"] = anthropic_system
+
             response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
             response.raise_for_status()
             data = response.json()
@@ -279,7 +377,7 @@ class LLMRouter:
             return LLMResponse(
                 content=content,
                 metadata={
-                    "provider": provider_cfg["provider"],
+                    "provider": provider,
                     "model": provider_cfg["model"],
                 },
                 usage=data.get("usage"),
@@ -293,18 +391,13 @@ class LLMRouter:
         }
 
         # OpenRouter requiert ces headers pour le rate limiting
-        if provider_cfg["provider"] == "openrouter":
+        if provider == "openrouter":
             headers["HTTP-Referer"] = "https://aria.local"
             headers["X-Title"] = "Aria"
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ]
-
         payload = {
             "model": provider_cfg["model"],
-            "messages": messages,
+            "messages": openai_messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -317,7 +410,7 @@ class LLMRouter:
         return LLMResponse(
             content=content,
             metadata={
-                "provider": provider_cfg["provider"],
+                "provider": provider,
                 "model": provider_cfg["model"],
             },
             usage=data.get("usage"),
