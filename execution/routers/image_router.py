@@ -43,6 +43,9 @@ from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
 from cognition.cognitive_classifier import is_interrogative_caption
 from memory.writer import write_image_artifact
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 class ImageExecutionRouter(BaseRouter):
@@ -118,9 +121,8 @@ class ImageExecutionRouter(BaseRouter):
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
             write_image_artifact(artifact, intent_id=intent_id)
+            log.info("image_write OK wing=aria_episodic intent_id=%s", intent_id)
         except Exception as e:
-            from logger import get_logger
-            log = get_logger(__name__)
             log.error("memory write error: %s", e)
 
         # ── Mode enrichi : caption interrogative + LLM router disponible ────
@@ -160,6 +162,9 @@ class ImageExecutionRouter(BaseRouter):
 
         Format du message injecté :
             [Analyse visuelle : <description modèle vision>]
+            [Consigne : rattachement projet seulement si justifié, sinon silence]
+            [Consigne : langue de la réponse (FR par défaut, sinon celle de la question)]
+            Language rule: <même règle en anglais>
 
             <question originale de l'utilisateur>
 
@@ -167,19 +172,33 @@ class ImageExecutionRouter(BaseRouter):
         La question utilisateur oriente l'angle de réponse.
         La mémoire + intents enrichissent le contexte personnel.
         """
+        # Consigne anti-rattachement abusif (#51) : sans intent résolu, le
+        # lien projet ne passe plus que par le contexte, et seulement s'il
+        # est justifié par la description ; sinon le LLM doit se taire sur
+        # les projets (sans quoi il commente l'absence de lien).
+        # Consigne de langue : user.md impose le français, donc la règle
+        # « langue de la question » doit être explicite ici. Ligne FR + ligne
+        # EN, comme le prompt vision (la version FR seule n'a pas suffi).
         enriched_message = (
-            f"[Analyse visuelle : {vision_text}]\n\n"
+            f"[Analyse visuelle : {vision_text}]\n"
+            f"[Consigne : ne rattache cette photo à un projet de Nico que si "
+            f"la description le justifie clairement ; sinon, ne mentionne pas "
+            f"ses projets.]\n"
+            f"[Consigne : réponds en français, sauf si la question de "
+            f"l'utilisateur est dans une autre langue : réponds alors dans "
+            f"cette langue.]\n"
+            f"Language rule: if the user's message is not in French, write "
+            f"your whole answer in the language of that message.\n\n"
             f"{user_caption}"
         )
 
-        from logger import get_logger
-        log = get_logger(__name__)
-        log.error("[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
+        log.info("[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
 
         return self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched_message,
-            "metadata": payload.get("metadata", {}),
+            # skip_intent : aucune résolution/mutation d'intent (#51)
+            "metadata": {**payload.get("metadata", {}), "skip_intent": True},
         })
 
     # =========================================================
@@ -224,8 +243,6 @@ class ImageExecutionRouter(BaseRouter):
         try:
             write_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
-            from logger import get_logger
-            log = get_logger(__name__)
             log.error("memory write error: %s", e)
 
         # Caption basée sur raw_prompt — lisible, sans le bloc contexte interne.
@@ -280,8 +297,6 @@ class ImageExecutionRouter(BaseRouter):
                     if mem_lines:
                         parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
             except Exception as e:
-                from logger import get_logger
-                log = get_logger(__name__)
                 log.error("[CONTEXT BUILD ERROR] episodic recall: %s", e)
 
         return "\n\n".join(parts)
