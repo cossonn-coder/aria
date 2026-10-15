@@ -9,7 +9,7 @@
 | # | Kickoff | Qui | État |
 |---|---|---|---|
 | 01 | `01_chaine_texte.md` — chaînes groq → DeepSeek → Anthropic, `extra`, réponse vide = échec, log de succès | /sprint-auto | ✅ |
-| 02 | `02_vision.md` — vision groq qwen3.8 → DeepSeek | /sprint-auto | ⏳ |
+| 02 | `02_vision.md` — vision groq qwen3.8 → DeepSeek | /sprint-auto | ✅ |
 | 03 | `03_run_live.md` — conversation + 2 photos | Nico | ⏳ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
@@ -60,4 +60,14 @@ succès OpenAI-compat. pytest 254 verts (+2 :
 `tests/llm/test_empty_response_fallback.py`). Vérif VM sans mock : les
 4 rôles répondent via `groq (qwen/qwen3.8-27b)`, aucun `[LLM FALLBACK]` ;
 appels directs `_call` OK sur deepseek-flash, deepseek-v4-pro,
-claude-haiku-4-5. Prochaine étape : tronçon 02 (vision), puis run live 03.
+claude-haiku-4-5.
+
+Tronçon 02 ✅ (2026-10-15, non commité à la sortie du sous-agent) :
+`groq_vision_model` = `qwen/qwen3.8-27b` ; `VISION_ROUTING_TABLE` = groq ×3
+→ deepseek (`GroqVisionClient`, `config.deepseek_model`) ; entrée et import
+OpenRouter retirés de `llm/image_router.py`. pytest 255 verts (+1 :
+`tests/images/test_vision_chain.py`). Vérif VM sans mock (PNG synthétique,
+un disque rouge) : chaîne complète → description non vide via groq, aucun
+`[IMAGE ROUTER FALLBACK]` ; DeepSeek seul → description non vide et exacte.
+Observation : groq qwen3.8 a décrit « trois cercles rouges » au lieu d'un
+[n=1] — qualité à juger au run live. Prochaine étape : run live 03 (Nico).

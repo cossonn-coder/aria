@@ -17,7 +17,6 @@
 from images.image_types import ImageArtifact, ImageInput
 from config import config
 from llm.vision.groq_vision import GroqVisionClient
-from llm.vision.openrouter_vision import OpenRouterVisionClient
 from llm.image_gen.pollinations_client import PollinationsClient
 from llm.image_gen.hf_client import HuggingFaceImageClient
 
@@ -49,12 +48,14 @@ VISION_ROUTING_TABLE = [
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "api_key": lambda: config.groq_api_key_3,
     },
+    # DeepSeek en dernier recours : API compatible OpenAI, donc le client
+    # générique GroqVisionClient suffit (pas de client dédié).
     {
-        "provider": "openrouter",
-        "client": OpenRouterVisionClient,
-        "models": config.openrouter_vision_models,
-        "base_url": "https://openrouter.ai/api/v1/chat/completions",
-        "api_key": lambda: config.openrouter_api_key,
+        "provider": "deepseek",
+        "client": GroqVisionClient,
+        "model": config.deepseek_model,
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "api_key": lambda: config.deepseek_api_key,
     },
 ]
 

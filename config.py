@@ -38,7 +38,7 @@ class Config:
     EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 
     # ── Modèles vision ────────────────────────────────────────────────────────
-    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    groq_vision_model: str = "qwen/qwen3.8-27b"
     openrouter_vision_models: tuple = (
         "nvidia/nemotron-nano-12b-v2-vl:free",
         "baidu/qianfan-ocr-fast:free",
