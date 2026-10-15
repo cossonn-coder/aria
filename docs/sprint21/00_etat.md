@@ -7,7 +7,7 @@
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_telegram_robustesse.md` — bootstrap_retries, retry send, error handler, log réception | ⏳ |
+| 01 | `01_telegram_robustesse.md` — bootstrap_retries, retry send, error handler, log réception | ✅ (non commité, pytest 262 verts) |
 | 02 | `02_run_live.md` — coupure iptables (Nico) | ⏳ |
 
 ## Décisions arrêtées
@@ -31,4 +31,4 @@
 ## §REPRISE
 
 Lire `CLAUDE.md`, `docs/sprint21/context_kickoff_sprint_21.md`, ce fichier.
-+ `audit_telegram_reseau.md`. Prochaine étape : `/sprint-auto sprint 21` (tronçon 01), puis run live 02 par Nico.
++ `audit_telegram_reseau.md`. Tronçon 01 implémenté (`interfaces/telegram_interface.py`, `tests/interfaces/test_telegram_interface.py`), en attente de commit orchestrateur. Prochaine étape : run live 02 par Nico (`02_run_live.md`).
