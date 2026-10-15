@@ -1,6 +1,6 @@
 # Sprint 20 — état de conception
 
-**Phase** : B bis — figée (Q7-Q9), en attente du run live bis 04 (Nico).
+**Phase** : CLOS (2026-10-15). Run live bis 04 OK.
 **Branche** : `feat/sprint20-relances`.
 
 ## Décisions arrêtées
@@ -66,14 +66,15 @@
 | 01 | `01_photo_historique.md` — photo standard écrite dans `aria_conversation` | #57 | ✅ (259 verts) |
 | 02 | `02_namer_contextuel.md` — namer contextuel, « aucun » → pas d'intent | #59 | ✅ (261 verts) |
 | 03 | `03_run_live.md` — run live (Nico) | — | ⚠️ partiel (3 critères sur 6, voir §Run live 03) |
-| 04 | `04_run_live_bis.md` — purge parasites (faite) + relances | #59 | ⏳ |
+| 04 | `04_run_live_bis.md` — purge parasites (faite) + relances | #59 | ✅ (5/5) |
 
 Esprit (Nico) : ARIA doit juger, comme un humain, si un intérêt vaut
 d'être retenu comme intent.
 
 ## Dettes
 
-- Visées : #59 (fermée si run live bis OK). #57 fermée (Q8).
+- Fermées : #57 (Q8), #59 (run live bis OK), #61.
+- Ouvertes au run live bis : #62 (timeouts Telegram), #63 (photo traitée deux fois, à confirmer), #64 (`IGNORE` jamais utilisé).
 - Fermée sans code : #61 (cause = historique, symptôme éteint).
 - Reformulée, ouverte acceptée : #60 → « vision : lecture fine inventée
   (position d'échecs), limite modèle ».
@@ -119,9 +120,17 @@ Diagnostic :
   relève de #60 (description sans position).
 - Q9 : tronçon 04 = run live bis ciblé (purge + relances 2, 3, 5).
 
+## Run live bis 04 (2026-10-15, 23:16-23:17)
+
+Photo → `conversation_write OK` ; « évalue la position », « pourtant les
+noirs abandonnent ici », « il fait beau aujourd'hui » → `intent SKIPPED
+reason=namer_aucun` ; « combien de litres de terreau par pied ? » →
+`memory_write OK … intent_name=plantation tomates balcon est`. Actifs : 2
+(inchangé). Hors scope : crash au démarrage (timeout Telegram, relance
+systemd), réponse à « il fait beau » perdue (timeout envoi), photo
+analysée deux fois → #62, #63.
+
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Tronçons 01 (`2359a4f`) et 02 (`07a890c`)
-commités. Run live 03 partiel, diagnostic ci-dessus.
-Q7-Q9 tranchées, purge faite (`intents.json.bak-sprint20`).
-Prochaine étape : run live bis par Nico (`04_run_live_bis.md`), puis clôture.
+Sprint clos, tag `sprint-20`. Suite : `docs/sprint21/context_kickoff_sprint_21.md`,
+`/conception sprint 21`.
