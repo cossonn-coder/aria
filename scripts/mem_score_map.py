@@ -1,3 +1,4 @@
+#aria/scripts/mem_score_map.py
 import sys, json
 sys.path.insert(0, ".")
 from memory.mempalace_bridge import MempalaceBridge
