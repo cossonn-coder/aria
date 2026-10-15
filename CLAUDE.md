@@ -118,6 +118,7 @@ voir `docs/architecture/memory_layers.md`) :
 - `aria_episodic` : interactions et images. Actif.
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
+- `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
 - `aria_intentual` : intents sérialisés. Pas implémenté.
 - `aria` (legacy) : `mempalace_drawers` vide, 32 entrées résiduelles en `mempalace_closets`.
 
@@ -146,11 +147,10 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint en cours : **sprint 17** (A3 branchement caller, clôture
-du fil rouge #34), branche `feat/sprint17-conversation-wiring`.
-Tour 1 (audit) fait : `docs/sprint17/audit_branchement_caller.md`.
-Prochaine étape : `/conception sprint 17` pour trancher C1/C2 et
-les 8 décisions, puis figer les kickoffs.
+Sprint 17 clos (tag `sprint-17`, #34 fermée). Prochain : **sprint 18**
+(chaîne de fallback LLM : modèles retirés + ajout DeepSeek, dette #42).
+Kickoff : `docs/sprint18/context_kickoff_sprint_18.md`.
+Prochaine étape : `/conception sprint 18`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
