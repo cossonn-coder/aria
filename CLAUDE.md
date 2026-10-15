@@ -146,9 +146,13 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Voir le doc de contexte complet pour le sprint actuel.
-Priorité immédiate : voir `docs/sprint14/` (dernier kickoff
-en date).
+Sprint en cours : **sprint 17** (A3 branchement caller, clôture
+du fil rouge #34), branche `feat/sprint17-conversation-wiring`.
+Tour 1 (audit) fait : `docs/sprint17/audit_branchement_caller.md`.
+Prochaine étape : `/conception sprint 17` pour trancher C1/C2 et
+les 8 décisions, puis figer les kickoffs.
+État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
+sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
 ## Ne JAMAIS faire
 - Modifier `soul.md` sans demander explicitement à Nico
