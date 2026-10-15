@@ -24,10 +24,13 @@ class Config:
     sambanova_api_key: str = ""
     openrouter_api_key: str = ""
     anthropic_api_key: str = ""
+    deepseek_api_key: str = ""
     hf_token: str = ""
 
     # ── Modèles texte ─────────────────────────────────────────────────────────
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "qwen/qwen3.8-27b"
+    deepseek_model: str = "deepseek-flash"
+    deepseek_reasoning_model: str = "deepseek-v4-pro"
     cerebras_model: str = "qwen-3-235b-a22b-instruct-2507"
     gemini_model: str = "gemini-2.0-flash"
     mistral_model: str = "mistral-small-latest"
@@ -35,7 +38,7 @@ class Config:
     EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 
     # ── Modèles vision ────────────────────────────────────────────────────────
-    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    groq_vision_model: str = "qwen/qwen3.8-27b"
     openrouter_vision_models: tuple = (
         "nvidia/nemotron-nano-12b-v2-vl:free",
         "baidu/qianfan-ocr-fast:free",
@@ -83,6 +86,7 @@ class Config:
         self.sambanova_api_key = os.getenv("SAMBANOVA_API_KEY", "")
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        self.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "")
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.soul_path = str(BASE_DIR / "soul.md")
         self.user_path = str(BASE_DIR / "user.md")
