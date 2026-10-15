@@ -1,6 +1,6 @@
 # Sprint 19 — état (vision lisible, dettes #45-#51)
 
-**Phase** : B figée le 2026-10-15 (tronçon 04 ajouté après run live 03) — prêt pour `/sprint-auto sprint 19`
+**Phase** : CLOS le 2026-10-15 (run live 05 accepté par Nico, E' passé en dette #56)
 **Branche** : `feat/sprint19-vision`
 **Docs** : `context_kickoff_sprint_19.md` (cadrage), `audit_vision.md` (audit 2026-10-15)
 
@@ -12,7 +12,7 @@
 | 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ✅ |
 | 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ✅ partiel (E ❌) |
 | 04 | `04_consignes_enrichi.md` — message enrichi : règle de langue FR+EN, consigne projet « sinon n'en parle pas » | /sprint-auto | ✅ |
-| 05 | `05_run_live.md` — 3 photos (E' EN, C' sans projets, D' châssis) | Nico | ⏳ |
+| 05 | `05_run_live.md` — 3 photos (E' EN, C' sans projets, D' châssis) | Nico | ✅ accepté (E' ❌ → #56) |
 
 ## Décisions arrêtées (2026-10-15, Nico)
 
@@ -113,10 +113,34 @@ Prochaine étape : run live 03 par Nico.
 Run live 03 consigné ci-dessus. Tronçon 04 figé (Q7-Q9, 2026-10-15).
 Prochaine étape : `/sprint-auto sprint 19` (tronçon 04), puis run live 05 par Nico.
 
-Tronçon 04 ✅ (2026-10-15, non commité) : `_handle_input_enriched` —
+Tronçon 04 ✅ (2026-10-15, commité 2ec9bae) : `_handle_input_enriched` —
 consigne projet Q8 (« … ; sinon, ne mentionne pas ses projets. ») +
 consigne de langue FR + ligne `Language rule: …` EN ; docstring et
 commentaire à jour. Test `test_message_enrichi_contient_analyse_visuelle`
 étendu (2 assertions). Pytest 258 verts. Pas de vérif VM (appel réel non
 monté). Aucun écart au kickoff.
 Prochaine étape : run live 05 par Nico.
+
+## Run live 05 (2026-10-15, Nico)
+
+- ✅ C' (« C'est quoi? ») : FR, aucune mention des projets.
+- ✅ D' (châssis, « t'en penses quoi? ») : lien au projet tomates cerises,
+  jugé justifié par Nico (jardinage, tomates dans le châssis).
+- ✅ E' : aucune mention des projets.
+- ❌ E' (« What's this? ») : réponse en français. Nico accepte, passe en
+  dette #56. Hypothèse non vérifiée : le message enrichi vu par le LLM est
+  presque entièrement en français (analyse visuelle + consignes), la règle
+  « if the user's message is not in French » ne se déclenche pas ;
+  `user.md` « Langue : français » et l'historique FR [20 messages] poussent
+  dans le même sens.
+- Logs : `[VISION] deepseek` ×3, `[IMAGE ENRICHED]`, `intent SKIPPED
+  reason=skip_intent`, `memory_write SKIPPED reason=no_intent_resolved`,
+  `conversation_write OK` à chaque photo ; aucun `[IMAGE ROUTER FALLBACK]`.
+  Compte d'intents après le run : 5 (compte d'avant non relevé).
+- Hors sprint : quarantaine HNSW au démarrage du run (22:08:34,
+  `dba15bea-….drift-20261015-220834`, « sqlite 447s newer than HNSW ») →
+  nouvelle occurrence de #31.
+
+**Sprint 19 clos.** #45-#51 fermées (#45 partiellement : la langue du
+chemin enrichi passe en #56). Dettes nouvelles : voir
+`docs/sprint20/context_kickoff_sprint_20.md`.
