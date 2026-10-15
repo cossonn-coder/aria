@@ -11,7 +11,7 @@
 | 01 | `01_vision.md` — DeepSeek d'abord (raisonnement coupé), prompt FR sobre + règle de langue, `max_tokens` 1024, MIME, vide = échec, logs (#45-#50) | /sprint-auto | ✅ |
 | 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ✅ |
 | 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ✅ partiel (E ❌) |
-| 04 | `04_consignes_enrichi.md` — message enrichi : règle de langue FR+EN, consigne projet « sinon n'en parle pas » | /sprint-auto | ⏳ |
+| 04 | `04_consignes_enrichi.md` — message enrichi : règle de langue FR+EN, consigne projet « sinon n'en parle pas » | /sprint-auto | ✅ |
 | 05 | `05_run_live.md` — 3 photos (E' EN, C' sans projets, D' châssis) | Nico | ⏳ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
@@ -112,3 +112,11 @@ Prochaine étape : run live 03 par Nico.
 
 Run live 03 consigné ci-dessus. Tronçon 04 figé (Q7-Q9, 2026-10-15).
 Prochaine étape : `/sprint-auto sprint 19` (tronçon 04), puis run live 05 par Nico.
+
+Tronçon 04 ✅ (2026-10-15, non commité) : `_handle_input_enriched` —
+consigne projet Q8 (« … ; sinon, ne mentionne pas ses projets. ») +
+consigne de langue FR + ligne `Language rule: …` EN ; docstring et
+commentaire à jour. Test `test_message_enrichi_contient_analyse_visuelle`
+étendu (2 assertions). Pytest 258 verts. Pas de vérif VM (appel réel non
+monté). Aucun écart au kickoff.
+Prochaine étape : run live 05 par Nico.

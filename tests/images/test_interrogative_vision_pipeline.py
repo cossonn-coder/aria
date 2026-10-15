@@ -276,6 +276,9 @@ class TestImageRouterEnrichedMode:
 
         call_payload = llm_exec.execute.call_args[0][0]
         assert "[Analyse visuelle :" in call_payload["content"]
+        # Tronçon 04 : consigne projet « sinon silence » + règle de langue EN
+        assert "ne mentionne pas ses projets" in call_payload["content"]
+        assert "Language rule:" in call_payload["content"]
         # #51 : aucune résolution/mutation d'intent en mode enrichi
         assert call_payload["metadata"]["skip_intent"] is True
 

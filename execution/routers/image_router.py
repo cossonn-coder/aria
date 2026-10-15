@@ -162,6 +162,9 @@ class ImageExecutionRouter(BaseRouter):
 
         Format du message injecté :
             [Analyse visuelle : <description modèle vision>]
+            [Consigne : rattachement projet seulement si justifié, sinon silence]
+            [Consigne : langue de la réponse (FR par défaut, sinon celle de la question)]
+            Language rule: <même règle en anglais>
 
             <question originale de l'utilisateur>
 
@@ -171,11 +174,21 @@ class ImageExecutionRouter(BaseRouter):
         """
         # Consigne anti-rattachement abusif (#51) : sans intent résolu, le
         # lien projet ne passe plus que par le contexte, et seulement s'il
-        # est justifié par la description.
+        # est justifié par la description ; sinon le LLM doit se taire sur
+        # les projets (sans quoi il commente l'absence de lien).
+        # Consigne de langue : user.md impose le français, donc la règle
+        # « langue de la question » doit être explicite ici. Ligne FR + ligne
+        # EN, comme le prompt vision (la version FR seule n'a pas suffi).
         enriched_message = (
             f"[Analyse visuelle : {vision_text}]\n"
             f"[Consigne : ne rattache cette photo à un projet de Nico que si "
-            f"la description le justifie clairement.]\n\n"
+            f"la description le justifie clairement ; sinon, ne mentionne pas "
+            f"ses projets.]\n"
+            f"[Consigne : réponds en français, sauf si la question de "
+            f"l'utilisateur est dans une autre langue : réponds alors dans "
+            f"cette langue.]\n"
+            f"Language rule: if the user's message is not in French, write "
+            f"your whole answer in the language of that message.\n\n"
             f"{user_caption}"
         )
 
