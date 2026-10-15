@@ -10,7 +10,7 @@
 | # | Kickoff | Qui | État |
 |---|---|---|---|
 | 01 | `01_isolation_tests.md` — tests isolés du palace et d'`intents.json` de prod | /sprint-auto | ✅ |
-| 02 | `02_branchement.md` — lecture + écriture conversationnelle, Analyst en forme messages | /sprint-auto | ⏳ |
+| 02 | `02_branchement.md` — lecture + écriture conversationnelle, Analyst en forme messages | /sprint-auto | ✅ |
 | 03 | `03_run_live.md` — reset mémoire prod + conversation Telegram 4 messages | Nico | ⏳ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
@@ -60,6 +60,15 @@ Tronçon 01 fait (2026-10-15) : fixture autouse `isolate_storage` dans
 `intent_store.STORE_PATH` → `tmp_path`), test `tests/test_storage_isolation.py`.
 pytest 247 verts ; mtimes de `~/.mempalace/palace/chroma.sqlite3` et
 `~/.aria/intents.json` inchangées après un run complet.
-Prochaine étape : tronçon 02 (`02_branchement.md`), puis Nico exécute
-`03_run_live.md`, puis clôture.
+Tronçon 02 fait (2026-10-15) : kernel injecte `get_by_metadata` dans le
+bridge ; `LLMRouter.build_base_system_prompt()` (source unique, utilisée
+par la branche legacy) ; `LLMExecutionRouter` lit l'historique (clé
+`chat_id`, n = `max_history_turns`×2) dans `ctx.extra["conversation_history"]`
+et écrit user + assistant dans `aria_conversation` même sans intent ;
+`AnalystAgent` en forme messages (`_build_system_prompt`,
+`_format_memories` supprimé, `PROMPT` = PROJET RÉCENT + RÈGLES).
+Écart au kickoff : `mempalace_store.get_by_metadata` renvoie `{}` sur
+`PalaceNotFoundError` (sinon le 1er message après le reset du 03 plantait).
+pytest 252 verts (garde-fou Analyst vert).
+Prochaine étape : Nico exécute `03_run_live.md`, puis clôture.
 Chaque tronçon met à jour la carte ci-dessus (⏳ → ✅).

@@ -300,6 +300,18 @@ class LLMRouter:
 
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
+    @classmethod
+    def build_base_system_prompt(cls) -> str:
+        """
+        System prompt de base d'ARIA : _SOUL, puis le profil utilisateur
+        s'il existe. Source de vérité unique, partagée entre la forme
+        legacy de _call et les callers en forme messages (AnalystAgent).
+        """
+        system_parts = [_SOUL]
+        if _USER:
+            system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
+        return "\n".join(system_parts)
+
     def _call(
         self,
         prompt: str | None,
@@ -320,10 +332,7 @@ class LLMRouter:
         if messages is None:
             # Forme legacy : on construit le system prompt depuis _SOUL/_USER
             # et on l'injecte avec le user prompt unique.
-            system_parts = [_SOUL]
-            if _USER:
-                system_parts.append(f"\n\nPROFIL UTILISATEUR :\n{_USER}")
-            system_prompt = "\n".join(system_parts)
+            system_prompt = self.build_base_system_prompt()
 
             if provider == "anthropic":
                 anthropic_system: str | None = system_prompt
