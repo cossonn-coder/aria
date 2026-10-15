@@ -9,7 +9,7 @@
 | # | Kickoff | Qui | État |
 |---|---|---|---|
 | 01 | `01_vision.md` — DeepSeek d'abord (raisonnement coupé), prompt FR sobre + règle de langue, `max_tokens` 1024, MIME, vide = échec, logs (#45-#50) | /sprint-auto | ✅ |
-| 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ⏳ |
+| 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ✅ |
 | 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ⏳ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
@@ -55,4 +55,15 @@ EN sur « What is this? » et FR sur « c'est quoi ? » [n=2 photos], deepseek s
 Écart kickoff : la règle de langue en français seule ne suffisait pas
 (réponse FR à « What is this? » [n=2 essais]) → ajout d'une ligne en
 anglais « Language rule: ... » dans le prompt avec légende.
-Prochaine étape : tronçon 02, puis run live 03 par Nico.
+Tronçon 01 commité (195aced).
+
+Tronçon 02 ✅ (2026-10-15, non commité) : `ImageRouter._handle_input_enriched`
+pose `metadata["skip_intent"]=True` + consigne « ne rattache cette photo à
+un projet de Nico que si la description le justifie clairement » ;
+`LLMExecutionRouter._run_pipeline` saute étapes 2-3 (log
+`intent SKIPPED reason=skip_intent`, `intent=None`, `recall=None`) ;
+`AnalystAgent` : `intent_name` = « aucun » si `ctx.intent is None`
+(`PROMPT` inchangé, garde-fou vert). Chemin REASONING = `analyst` seul
+(`controller_agent.py`) → aucun autre agent exposé à `None`.
+Pytest 258 verts. Aucun écart au kickoff.
+Prochaine étape : run live 03 par Nico.

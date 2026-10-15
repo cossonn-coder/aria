@@ -282,3 +282,23 @@ def test_conversation_written_without_intent(mock_store, mock_conv):
 
     mock_store.assert_not_called()
     assert mock_conv.call_count == 2
+
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_skip_intent_bypasses_resolve_and_apply(mock_store, mock_conv):
+    """#51 : skip_intent → ni resolve ni apply, réponse texte renvoyée."""
+    router, _, intent_engine, _, bridge = make_router()
+    bridge.load_conversation_history.return_value = []
+    router.controller.run = MagicMock(return_value=_fake_ctx(None, "réponse photo"))
+
+    result = router.execute({
+        "op_type": CognitiveOperation.REASONING.value,
+        "content": "[Analyse visuelle : un chalet]\n\nc'est quoi ?",
+        "metadata": {"skip_intent": True},
+    })
+
+    intent_engine.resolve.assert_not_called()
+    intent_engine.apply.assert_not_called()
+    assert router.controller.run.call_args[0][0].intent is None
+    assert result == {"text": "réponse photo"}

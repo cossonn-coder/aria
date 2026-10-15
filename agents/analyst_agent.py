@@ -59,5 +59,5 @@ class AnalystAgent(BaseAgent):
         return (
             LLMRouter.build_base_system_prompt()
             + "\n\nCONTEXTE COGNITIF :\n" + context_block
-            + "\n\n" + PROMPT.format(intent_name=ctx.intent.name)
+            + "\n\n" + PROMPT.format(intent_name=ctx.intent.name if ctx.intent else "aucun")
         )

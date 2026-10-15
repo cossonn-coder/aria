@@ -169,8 +169,13 @@ class ImageExecutionRouter(BaseRouter):
         La question utilisateur oriente l'angle de réponse.
         La mémoire + intents enrichissent le contexte personnel.
         """
+        # Consigne anti-rattachement abusif (#51) : sans intent résolu, le
+        # lien projet ne passe plus que par le contexte, et seulement s'il
+        # est justifié par la description.
         enriched_message = (
-            f"[Analyse visuelle : {vision_text}]\n\n"
+            f"[Analyse visuelle : {vision_text}]\n"
+            f"[Consigne : ne rattache cette photo à un projet de Nico que si "
+            f"la description le justifie clairement.]\n\n"
             f"{user_caption}"
         )
 
@@ -179,7 +184,8 @@ class ImageExecutionRouter(BaseRouter):
         return self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched_message,
-            "metadata": payload.get("metadata", {}),
+            # skip_intent : aucune résolution/mutation d'intent (#51)
+            "metadata": {**payload.get("metadata", {}), "skip_intent": True},
         })
 
     # =========================================================

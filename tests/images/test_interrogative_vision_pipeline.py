@@ -276,6 +276,8 @@ class TestImageRouterEnrichedMode:
 
         call_payload = llm_exec.execute.call_args[0][0]
         assert "[Analyse visuelle :" in call_payload["content"]
+        # #51 : aucune résolution/mutation d'intent en mode enrichi
+        assert call_payload["metadata"]["skip_intent"] is True
 
     # Mémoire toujours écrite
     @patch("execution.routers.image_router.write_image_artifact")

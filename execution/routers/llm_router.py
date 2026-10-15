@@ -116,27 +116,36 @@ class LLMExecutionRouter(BaseRouter):
             session_memories={},
         )
 
-        # ── 2. Intent recall ────────────────────────────────────────────────
-        active_intents = self.intent_engine.list_attention_active()
+        # ── 2-3. Drapeau skip_intent (photo interrogative, #51) ─────────────
+        # Le message enrichi d'une photo ne doit ni résoudre, ni créer, ni
+        # modifier un intent : sinon la description vision devient un
+        # « projet » présenté à l'agent. Le reste du pipeline est inchangé.
+        if metadata.get("skip_intent"):
+            log.info("intent SKIPPED reason=skip_intent")
+            recall_decision = None
+            intent = None
+        else:
+            # ── 2. Intent recall ────────────────────────────────────────────
+            active_intents = self.intent_engine.list_attention_active()
 
-        recall_decision, _ = self.intent_engine.resolve(
-            message,
-            active_intents,
-            memory_context=memory_context.global_memories,
-        )
+            recall_decision, _ = self.intent_engine.resolve(
+                message,
+                active_intents,
+                memory_context=memory_context.global_memories,
+            )
 
-        # ── 3. Intent mutation ──────────────────────────────────────────────
-        # Extraction du nom canonique uniquement si création d'un nouvel intent.
-        # Ce LLM call est coûteux — on ne l'effectue qu'en cas de nécessité.
-        intent_name = None
-        if recall_decision.action == "create":
-            intent_name = extract_intent_name(message, self.llm_router)
+            # ── 3. Intent mutation ──────────────────────────────────────────
+            # Extraction du nom canonique uniquement si création d'un nouvel intent.
+            # Ce LLM call est coûteux — on ne l'effectue qu'en cas de nécessité.
+            intent_name = None
+            if recall_decision.action == "create":
+                intent_name = extract_intent_name(message, self.llm_router)
 
-        intent = self.intent_engine.apply(
-            decision=recall_decision,
-            message=message,
-            intent_name=intent_name,
-        )
+            intent = self.intent_engine.apply(
+                decision=recall_decision,
+                message=message,
+                intent_name=intent_name,
+            )
 
         # ── 4. Mémoire de session (contexte post-intent) ────────────────────
         # retrieve_by_intent cible les souvenirs liés à l'intent résolu —
