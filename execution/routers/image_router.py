@@ -155,7 +155,8 @@ class ImageExecutionRouter(BaseRouter):
             TOP_K REASONING = 8 vs FACT_RECALL = 3.
             Une question sur une image peut mobiliser des souvenirs variés
             (jardinage, santé, activités) — le budget mémoire large est justifié.
-            REASONING est aussi le rôle LLM le plus puissant (Cerebras qwen-3-235b).
+            REASONING est aussi le rôle LLM le plus puissant (DeepSeek deepseek-v4-pro
+            en fallback après groq).
 
         Format du message injecté :
             [Analyse visuelle : <description modèle vision>]

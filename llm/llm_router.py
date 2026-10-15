@@ -37,8 +37,13 @@ class LLMResponse:
 # ROUTING TABLE
 # ==========================
 
-ROUTING_TABLE = {
-    LLMRole.CHAT: [
+def _text_chain(deepseek_model: str) -> list[dict]:
+    """Chaîne de fallback texte commune aux 4 rôles (sprint 18) :
+    groq ×3 (même modèle, 3 clés) → DeepSeek → Anthropic.
+    Seul le modèle DeepSeek varie selon le rôle. L'entrée `extra` est
+    fusionnée dans le payload par `_call` : on y coupe le raisonnement
+    DeepSeek, qui sinon consomme le budget de tokens et renvoie ''."""
+    return [
         {
             "provider": "groq",
             "model": config.groq_model,
@@ -58,22 +63,11 @@ ROUTING_TABLE = {
             "api_key": lambda: config.groq_api_key_3,
         },
         {
-            "provider": "mistral",
-            "model": config.mistral_model,
-            "base_url": "https://api.mistral.ai/v1",
-            "api_key": lambda: config.mistral_api_key,
-        },
-        {
-            "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": lambda: config.openrouter_api_key,
-        },
-        {
-            "provider": "cerebras",
-            "model": "llama3.1-8b",
-            "base_url": "https://api.cerebras.ai/v1",
-            "api_key": lambda: config.cerebras_api_key,
+            "provider": "deepseek",
+            "model": deepseek_model,
+            "base_url": "https://api.deepseek.com",
+            "api_key": lambda: config.deepseek_api_key,
+            "extra": {"thinking": {"type": "disabled"}},
         },
         {
             "provider": "anthropic",
@@ -81,73 +75,14 @@ ROUTING_TABLE = {
             "base_url": "https://api.anthropic.com/v1",
             "api_key": lambda: config.anthropic_api_key,
         },
-    ],
-    # ... reste inchangé
-    LLMRole.PLANNING: [
-        {
-            "provider": "mistral",
-            "model": config.mistral_model,
-            "base_url": "https://api.mistral.ai/v1",
-            "api_key": lambda: config.mistral_api_key,
-        },
-        {   "provider": "cerebras",
-            "model": "llama-3.3-70b", 
-            "base_url": "https://api.cerebras.ai/v1",
-            "api_key": lambda: config.cerebras_api_key,
-        },
-        {
-            "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": lambda: config.openrouter_api_key,
-        },
-        {
-            "provider": "anthropic",
-            "model": "claude-haiku-4-5",
-            "base_url": "https://api.anthropic.com/v1",
-            "api_key": lambda: config.anthropic_api_key,
-        },
-    ],
-    LLMRole.REASONING: [
-        {
-            "provider": "cerebras",
-            "model": config.cerebras_model,
-            "base_url": "https://api.cerebras.ai/v1",
-            "api_key": lambda: config.cerebras_api_key,
-        },
-        {
-            "provider": "openrouter",
-            "model": "google/gemma-3-27b-it:free",
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": lambda: config.openrouter_api_key,
-        },
-        {
-            "provider": "anthropic",
-            "model": "claude-haiku-4-5",
-            "base_url": "https://api.anthropic.com/v1",
-            "api_key": lambda: config.anthropic_api_key,
-        },
-    ],
-    LLMRole.REFLECTION: [
-        {
-            "provider": "mistral",
-            "model": config.mistral_model,
-            "base_url": "https://api.mistral.ai/v1",
-            "api_key": lambda: config.mistral_api_key,
-        },
-        {
-            "provider": "openrouter",
-            "model": "nvidia/nemotron-3-super-120b-a12b:free",
-            "base_url": "https://openrouter.ai/api/v1",
-            "api_key": lambda: config.openrouter_api_key,
-        },
-        {
-            "provider": "anthropic",
-            "model": "claude-haiku-4-5",
-            "base_url": "https://api.anthropic.com/v1",
-            "api_key": lambda: config.anthropic_api_key,
-        },
-    ],
+    ]
+
+
+ROUTING_TABLE = {
+    LLMRole.CHAT: _text_chain(config.deepseek_model),
+    LLMRole.PLANNING: _text_chain(config.deepseek_model),
+    LLMRole.REASONING: _text_chain(config.deepseek_reasoning_model),
+    LLMRole.REFLECTION: _text_chain(config.deepseek_model),
 }
 
 # fallback global si role inconnu
@@ -382,6 +317,13 @@ class LLMRouter:
             response.raise_for_status()
             data = response.json()
             content = data["content"][0]["text"]
+            # Réponse vide = échec : on lève pour que complete() passe au
+            # provider suivant au lieu de renvoyer '' au caller.
+            if content is None or not content.strip():
+                raise ValueError(
+                    f"{provider}: réponse vide "
+                    f"(stop_reason={data.get('stop_reason')})"
+                )
             log.info("[LLM] Anthropic (%s) a répondu.", provider_cfg["model"])
             return LLMResponse(
                 content=content,
@@ -410,11 +352,22 @@ class LLMRouter:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        # Paramètres propres au provider (ex. DeepSeek : thinking désactivé).
+        payload.update(provider_cfg.get("extra", {}))
         response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
         response.raise_for_status()
 
         data = response.json()
-        content = data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        content = choice["message"]["content"]
+        # Réponse vide = échec (un modèle à raisonnement peut renvoyer ''
+        # quand le budget de tokens est épuisé) → fallback dans complete().
+        if content is None or not content.strip():
+            raise ValueError(
+                f"{provider}: réponse vide "
+                f"(finish_reason={choice.get('finish_reason')})"
+            )
+        log.info("[LLM] %s (%s) a répondu.", provider, provider_cfg["model"])
 
         return LLMResponse(
             content=content,

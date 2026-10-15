@@ -8,7 +8,7 @@
 
 | # | Kickoff | Qui | État |
 |---|---|---|---|
-| 01 | `01_chaine_texte.md` — chaînes groq → DeepSeek → Anthropic, `extra`, réponse vide = échec, log de succès | /sprint-auto | ⏳ |
+| 01 | `01_chaine_texte.md` — chaînes groq → DeepSeek → Anthropic, `extra`, réponse vide = échec, log de succès | /sprint-auto | ✅ |
 | 02 | `02_vision.md` — vision groq qwen3.8 → DeepSeek | /sprint-auto | ⏳ |
 | 03 | `03_run_live.md` — conversation + 2 photos | Nico | ⏳ |
 
@@ -52,5 +52,12 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 18` (01 puis 02),
-puis run live 03 par Nico. Chaque tronçon met à jour la carte (⏳ → ✅).
+Tronçon 01 ✅ (2026-10-15, non commité à la sortie du sous-agent) :
+`ROUTING_TABLE` construite par `_text_chain(deepseek_model)` (groq ×3 →
+deepseek → anthropic), `extra` fusionné dans le payload OpenAI-compatible,
+réponse vide → `ValueError` → fallback (OpenAI-compat et Anthropic), log de
+succès OpenAI-compat. pytest 254 verts (+2 :
+`tests/llm/test_empty_response_fallback.py`). Vérif VM sans mock : les
+4 rôles répondent via `groq (qwen/qwen3.8-27b)`, aucun `[LLM FALLBACK]` ;
+appels directs `_call` OK sur deepseek-flash, deepseek-v4-pro,
+claude-haiku-4-5. Prochaine étape : tronçon 02 (vision), puis run live 03.
