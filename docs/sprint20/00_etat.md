@@ -1,6 +1,6 @@
 # Sprint 20 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-15), prête pour `/sprint-auto sprint 20`.
+**Phase** : B bis — figée (Q7-Q9), en attente du run live bis 04 (Nico).
 **Branche** : `feat/sprint20-relances`.
 
 ## Décisions arrêtées
@@ -65,25 +65,63 @@
 |---|---|---|---|
 | 01 | `01_photo_historique.md` — photo standard écrite dans `aria_conversation` | #57 | ✅ (259 verts) |
 | 02 | `02_namer_contextuel.md` — namer contextuel, « aucun » → pas d'intent | #59 | ✅ (261 verts) |
-| 03 | `03_run_live.md` — run live (Nico) | — | ⏳ |
+| 03 | `03_run_live.md` — run live (Nico) | — | ⚠️ partiel (3 critères sur 6, voir §Run live 03) |
+| 04 | `04_run_live_bis.md` — purge parasites (faite) + relances | #59 | ⏳ |
 
 Esprit (Nico) : ARIA doit juger, comme un humain, si un intérêt vaut
 d'être retenu comme intent.
 
 ## Dettes
 
-- Visées : #57, #59 (fermées si run live OK).
+- Visées : #59 (fermée si run live bis OK). #57 fermée (Q8).
 - Fermée sans code : #61 (cause = historique, symptôme éteint).
 - Reformulée, ouverte acceptée : #60 → « vision : lecture fine inventée
   (position d'échecs), limite modèle ».
 - Notées, hors sprint : `IntentActionType.IGNORE` déclaré jamais utilisé ;
-  les 4 intents parasites restent dans `intents.json` (Q6).
+  les 4 intents parasites passés en `abandoned` (Q7, remplace Q6).
+
+## Run live 03 (2026-10-15, 22:51-22:55)
+
+| # | Message | Observé | |
+|---|---|---|---|
+| 1 | photo sans légende | `conversation_write OK key=6895898630` | ✅ |
+| 2 | « évalue la position » | « je ne vois pas l'image » ; attach parasite `evaluation position` | ❌ |
+| 3 | « j'ai envoyé la photo juste avant » (remplace le message prévu) | même refus ; même parasite | ❌ |
+| 4 | « il fait beau aujourd'hui » | `intent SKIPPED reason=namer_aucun` · `memory_write SKIPPED` | ✅ |
+| 5 | « combien de litres de terreau par pied » | attach parasite `surface pieds conseils` (pas tomates) | ❌ |
+| 6 | « je veux apprendre docker cet hiver » | `apprentissage docker` créé, 6 intents | ✅ |
+
+Diagnostic :
+- #57 : mécanisme OK. Dump `aria_conversation` (lecture seule) : tours
+  photo écrits à 20:52:24/27 UTC, historique chargé à 20:52:36 (20
+  derniers messages) → la description était dans le contexte du LLM.
+  Le refus vient de la description elle-même (aucune case, aucune pièce
+  nommée = #60) ; « je ne vois pas l'image » est une formulation fausse
+  du modèle (rien ne lui dit que `[Analyse visuelle : …]` est une photo).
+- #59 : « aucun » et création OK. Échecs 2, 3, 5 = recall `attach`
+  (cosine message ↔ nom d'intent ≥ 0.45) sur les parasites,
+  créés aux runs précédents par ces mêmes messages ; le namer
+  n'est jamais consulté en attach. Cause = Q6 (parasites conservés).
+- Levier sans code : `IntentStatus.ABANDONED` (`intent/intent.py:30`)
+  est relu depuis le JSON (`intent_store.py:36`) et le recall ne garde
+  que `status == "active"` (`intent_recall_engine.py:73`). Passer les
+  parasites en `"abandoned"` les retire du recall, réversible. Aucun
+  caller prod de `abandon()`. Édition JSON service arrêté (sinon le
+  service réécrit le fichier).
+
+## Décisions arrêtées (run live 03)
+
+- Q7 (#59, revient sur Q6) : les 4 parasites passent en `status:
+  "abandoned"` dans `~/.aria/intents.json` (opération données, service
+  arrêté, réversible). Pas de namer en attach. Raison : sans code ; le
+  namer « aucun » limite les nouveaux parasites.
+- Q8 (#57) : fermée telle quelle. Mécanisme validé ; le refus résiduel
+  relève de #60 (description sans position).
+- Q9 : tronçon 04 = run live bis ciblé (purge + relances 2, 3, 5).
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
-Tronçon 01 ✅ commité (`2359a4f`). Tronçon 02 ✅ (non commité à la
-sortie du sous-agent) : namer contextuel (intents actifs + tour user
-précédent, « aucun » → `None`), historique chargé avant l'intent,
-namer appelé en create/split, `SPLIT` dédoublonne par nom ; 2 tests.
-Prochaine étape : run live 03 par Nico (`03_run_live.md`).
+Lire `CLAUDE.md`, ce fichier. Tronçons 01 (`2359a4f`) et 02 (`07a890c`)
+commités. Run live 03 partiel, diagnostic ci-dessus.
+Q7-Q9 tranchées, purge faite (`intents.json.bak-sprint20`).
+Prochaine étape : run live bis par Nico (`04_run_live_bis.md`), puis clôture.
