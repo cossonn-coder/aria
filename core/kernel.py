@@ -23,6 +23,7 @@ from cognition.cognitive_context import CognitiveOperation
 
 from memory.mempalace_bridge import MempalaceBridge
 from memory.mempalace_store import search as mempalace_search
+from memory.mempalace_store import get_by_metadata as mempalace_get_by_metadata
 
 from embedding.embedder import Embedder
 from intent.intent_engine import IntentEngine
@@ -108,7 +109,12 @@ class AriaKernel:
         llm_router = LLMRouter()
         embedder = Embedder(config.EMBEDDING_MODEL)
         intent_engine = IntentEngine(embedder)
-        mempalace_bridge = MempalaceBridge(store=mempalace_search)
+        # get_by_metadata est requis par load_conversation_history
+        # (historique conversationnel lu par LLMExecutionRouter).
+        mempalace_bridge = MempalaceBridge(
+            store=mempalace_search,
+            get_by_metadata=mempalace_get_by_metadata,
+        )
 
         self.cognitive_engine = cognitive_engine or CognitiveEngine(
             llm_router=llm_router,

@@ -234,3 +234,51 @@ def test_write_interaction_failure_does_not_propagate(mock_store):
     result = router._run_pipeline("test", CognitiveOperation.FACT_RECALL, {})
 
     assert result == "réponse malgré erreur mémoire"
+
+# ── Tests : historique conversationnel (sprint 17) ────────────────────────────
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_conversation_history_loaded_and_written(mock_store, mock_conv):
+    """
+    L'historique est lu avec la clé chat_id (10 tours = 20 messages),
+    posé dans ctx.extra, puis l'échange est écrit (user puis assistant).
+    """
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_conversation_history.return_value = [{"role": "user", "content": "avant"}]
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["history"] = ctx.extra["conversation_history"]
+        return _fake_ctx(fake_intent, result="réponse")
+
+    router.controller.run = capture_ctx
+
+    router._run_pipeline("question", CognitiveOperation.REASONING, {"chat_id": 42})
+
+    bridge.load_conversation_history.assert_called_once_with("42", n=20)
+    assert captured["history"] == [{"role": "user", "content": "avant"}]
+    assert [c.args for c in mock_conv.call_args_list] == [
+        ("42", "user", "question"),
+        ("42", "assistant", "réponse"),
+    ]
+
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_conversation_written_without_intent(mock_store, mock_conv):
+    """Amendement Nico : l'échange est écrit même sans intent résolu."""
+    router, _, intent_engine, _, bridge = make_router()
+    bridge.load_conversation_history.return_value = []
+    intent_engine.apply.return_value = None
+
+    no_intent_ctx = MagicMock()
+    no_intent_ctx.result = "réponse sans intent"
+    no_intent_ctx.intent = None
+    no_intent_ctx.trace.as_dict.return_value = []
+    router.controller.run = MagicMock(return_value=no_intent_ctx)
+
+    router._run_pipeline("message", CognitiveOperation.UNKNOWN, {"chat_id": 42})
+
+    mock_store.assert_not_called()
+    assert mock_conv.call_count == 2

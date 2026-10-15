@@ -1,5 +1,6 @@
 # memory/mempalace_store.py
 
+from mempalace.backends.base import PalaceNotFoundError
 from mempalace.palace import get_collection
 from mempalace.searcher import search_memories
 from config import config
@@ -39,5 +40,10 @@ def get_by_metadata(
     # Note : include est une liste car c'est l'API native ChromaDB.
     if include is None:
         include = ["documents", "metadatas"]
-    col = get_collection(palace_path, create=False)
+    # Palace absent (premier message après un reset) : aucun historique,
+    # comme search_memories qui renvoie un résultat vide dans ce cas.
+    try:
+        col = get_collection(palace_path, create=False)
+    except PalaceNotFoundError:
+        return {}
     return col.get(where=where, include=include)

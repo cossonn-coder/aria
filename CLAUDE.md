@@ -14,20 +14,24 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 
 ## Acteurs
 
-Trois rôles distincts, ne pas les confondre.
+Depuis 2026-10-15, plus de relais Claude.ai : tout se fait dans
+Claude Code.
 
-- **Architecte** (Claude.ai côté Nico) : analyse, critique, planifie,
-  rédige les briefs. Ne touche pas au code.
-- **Pilote** (Nico) : courroie de transmission. Colle les briefs,
-  ramène les livrables, fait tourner les runs live (Telegram,
-  `journalctl`, `systemctl`).
-- **Implémenteur** (toi, Claude Code sur vDebianIA) : exécute le
-  code, les tests, les scripts. Tu n'as pas accès à Telegram ni à
-  `journalctl` en temps réel. Tout run live passe par Nico.
+- **Nico** : arbitre les décisions de conception, valide, fait
+  tourner les runs live (Telegram, `journalctl`, `systemctl`).
+- **Conception** (skill `/conception`, session principale) : audite
+  le code, challenge, remonte les arbitrages, fige le sprint en
+  kickoffs autosuffisants (`docs/sprintN/00_etat.md` + `0N_*.md`).
+  Ne touche pas au code de prod.
+- **Implémentation** (skill `/sprint-auto`) : un sous-agent frais
+  par tronçon, l'orchestrateur vérifie (pytest) et commite en local.
+  Pas d'accès à Telegram ni à `journalctl` : tout run live passe par Nico.
 
-## Workflow par tour
-Un tour = un objectif atomique. Brief → exécution → livrable → validation
-architecte → tour suivant. Pas de fusion de tours, pas de réponse hors-brief.
+## Workflow par sprint
+`/conception <sujet>` → arbitrages avec Nico → OK → kickoffs commités →
+`/clear` → `/sprint-auto sprint N` → run live par Nico → clôture
+(merge, tag, push sur OK explicite). Un tronçon = un objectif atomique,
+pas de fusion de tronçons, pas de travail hors-kickoff.
 
 ## Audit avant fix
 Sujet non-trivial : premier tour = audit documenté, pas fix ; fix dans
@@ -114,6 +118,7 @@ voir `docs/architecture/memory_layers.md`) :
 - `aria_episodic` : interactions et images. Actif.
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
+- `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
 - `aria_intentual` : intents sérialisés. Pas implémenté.
 - `aria` (legacy) : `mempalace_drawers` vide, 32 entrées résiduelles en `mempalace_closets`.
 
@@ -142,9 +147,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Voir le doc de contexte complet pour le sprint actuel.
-Priorité immédiate : voir `docs/sprint14/` (dernier kickoff
-en date).
+Sprint 17 clos (tag `sprint-17`, #34 fermée). Prochain : **sprint 18**
+(chaîne de fallback LLM : modèles retirés + ajout DeepSeek, dette #42).
+Kickoff : `docs/sprint18/context_kickoff_sprint_18.md`.
+Prochaine étape : `/conception sprint 18`.
+État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
+sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
 ## Ne JAMAIS faire
 - Modifier `soul.md` sans demander explicitement à Nico

@@ -179,11 +179,8 @@ class TestAnalystAgentMemoryIsolation:
 
         agent.run(ctx, llm_router)
 
-        call_args  = llm_router.complete.call_args
-        prompt_used = (
-            call_args[0][0] if call_args[0]
-            else call_args[1].get("prompt", "")
-        )
+        # Forme messages (sprint 17) : le contexte est dans le system prompt.
+        prompt_used = llm_router.complete.call_args.kwargs["messages"][0]["content"]
 
         assert "souvenir A injecté par le router" in prompt_used, (
             "AnalystAgent n'utilise pas ctx.memories dans son prompt. "

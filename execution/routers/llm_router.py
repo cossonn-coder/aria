@@ -24,11 +24,12 @@
 #   10. Écriture MemPalace
 
 from execution.routers.execution_base import BaseRouter
+from config import config
 from logger import get_logger
 
 from intent.intent_engine import IntentEngine
 from llm.llm_router import LLMRouter
-from memory.writer import write_interaction
+from memory.writer import write_interaction, write_conversation_turn
 from memory.mempalace_bridge import MempalaceBridge
 from llm.intent_namer import extract_intent_name
 from agents.base_agent import AgentContext
@@ -162,6 +163,20 @@ class LLMExecutionRouter(BaseRouter):
             global_memories=global_memories,
         )
 
+        # ── 4c. Historique conversationnel (wing aria_conversation) ─────────
+        # Clé = chat_id Telegram (passé en metadata), "default" sinon.
+        # Convention : max_history_turns compte des tours (user + assistant),
+        # load_conversation_history compte des messages → n = tours × 2.
+        # C'est le router qui lit, jamais l'agent (règle inviolable 3).
+        conversation_key = str(metadata.get("chat_id", "default"))
+        conversation_history = self.mempalace_bridge.load_conversation_history(
+            conversation_key, n=config.max_history_turns * 2,
+        )
+        log.info(
+            "conversation_history loaded key=%s messages=%d",
+            conversation_key, len(conversation_history),
+        )
+
         # ── 5. Construction du contexte agent ───────────────────────────────
         trace = CognitiveTrace()
 
@@ -173,6 +188,7 @@ class LLMExecutionRouter(BaseRouter):
             trace=trace,
             extra={
                 "context_block": context_block,
+                "conversation_history": conversation_history,
                 "memory_context": memory_context,
                 "recall": recall_decision,
                 "active_intents": self.intent_engine.list_active(),
@@ -224,6 +240,15 @@ class LLMExecutionRouter(BaseRouter):
                     "memory_write ERROR intent_id=%s intent_name=%s",
                     intent.id, intent.name,
                 )
+
+        # Historique conversationnel : écrit même sans intent résolu
+        # (amendement Nico 2026-10-15). Même politique non bloquante.
+        try:
+            write_conversation_turn(conversation_key, "user", message)
+            write_conversation_turn(conversation_key, "assistant", result)
+            log.info("conversation_write OK key=%s", conversation_key)
+        except Exception:
+            log.exception("conversation_write ERROR key=%s", conversation_key)
 
         log.info("pipeline done → %d chars", len(result))
         for step in ctx.trace.as_dict():
