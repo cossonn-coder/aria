@@ -83,6 +83,23 @@ def mock_network(request):
             "get": mock_get,
         }
 
+
+# ── Isolation du stockage prod ────────────────────────────────────────────────
+#
+# Redirige le palace ChromaDB et le fichier d'intents vers tmp_path pour
+# chaque test, y compris les tests `live` (qui testent les providers réseau,
+# pas le palace de prod). Les deux chemins sont relus au moment de l'appel
+# par le code prod (memory/writer.py, mempalace_store.py, mempalace_bridge.py,
+# intent/intent_store.py), donc un monkeypatch de l'attribut suffit.
+
+@pytest.fixture(autouse=True)
+def isolate_storage(tmp_path, monkeypatch):
+    from config import config
+    import intent.intent_store as intent_store
+
+    monkeypatch.setattr(config, "mempalace_path", str(tmp_path / "palace"))
+    monkeypatch.setattr(intent_store, "STORE_PATH", tmp_path / "aria" / "intents.json")
+
 # ── Marker live ───────────────────────────────────────────────────────────────
 
 def pytest_configure(config):

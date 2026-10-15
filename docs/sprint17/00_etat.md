@@ -9,7 +9,7 @@
 
 | # | Kickoff | Qui | État |
 |---|---|---|---|
-| 01 | `01_isolation_tests.md` — tests isolés du palace et d'`intents.json` de prod | /sprint-auto | ⏳ |
+| 01 | `01_isolation_tests.md` — tests isolés du palace et d'`intents.json` de prod | /sprint-auto | ✅ |
 | 02 | `02_branchement.md` — lecture + écriture conversationnelle, Analyst en forme messages | /sprint-auto | ⏳ |
 | 03 | `03_run_live.md` — reset mémoire prod + conversation Telegram 4 messages | Nico | ⏳ |
 
@@ -55,6 +55,11 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 17` (tronçons 01
-et 02), puis Nico exécute `03_run_live.md`, puis clôture.
+Tronçon 01 fait (2026-10-15) : fixture autouse `isolate_storage` dans
+`tests/conftest.py` (monkeypatch `config.mempalace_path` et
+`intent_store.STORE_PATH` → `tmp_path`), test `tests/test_storage_isolation.py`.
+pytest 247 verts ; mtimes de `~/.mempalace/palace/chroma.sqlite3` et
+`~/.aria/intents.json` inchangées après un run complet.
+Prochaine étape : tronçon 02 (`02_branchement.md`), puis Nico exécute
+`03_run_live.md`, puis clôture.
 Chaque tronçon met à jour la carte ci-dessus (⏳ → ✅).
