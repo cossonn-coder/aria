@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 01 | `01_isolation_tests.md` — tests isolés du palace et d'`intents.json` de prod | /sprint-auto | ✅ |
 | 02 | `02_branchement.md` — lecture + écriture conversationnelle, Analyst en forme messages | /sprint-auto | ✅ |
-| 03 | `03_run_live.md` — reset mémoire prod + conversation Telegram 4 messages | Nico | ⏳ |
+| 03 | `03_run_live.md` — reset mémoire prod + conversation Telegram 4 messages | Nico | ✅ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
 
@@ -50,6 +50,13 @@
 - Nouvelle : executor/critic (phase `execution`) sans historique.
 - Nouvelle : embeddings inutiles sur `aria_conversation` (latence CPU,
   insertions HNSW, lien possible avec #31).
+- Nouvelle (run live 03) : chaîne de fallback LLM moribonde. Modèles
+  retirés : groq `llama-3.3-70b-versatile`, cerebras `llama3.1-8b` /
+  `llama-3.3-70b` / `qwen-3-235b-a22b-instruct-2507`, openrouter
+  `llama-3.3-70b-instruct:free` / `gemma-3-27b-it:free` → 404. Mistral en 429.
+  Seul Anthropic (claude-haiku-4-5) répond ; ~6 échecs ≈ 6-8 s perdus
+  par appel LLM [n=4 messages]. DeepSeek absent de la chaîne runtime
+  (clé valide, utilisée seulement par `bin/`).
 - Nouvelle : `executor_agent.py` et `critic_agent.py` absents de l'inventaire
   sprint 16 des callers de `complete` (constat C3).
 
@@ -70,5 +77,9 @@ et écrit user + assistant dans `aria_conversation` même sans intent ;
 Écart au kickoff : `mempalace_store.get_by_metadata` renvoie `{}` sur
 `PalaceNotFoundError` (sinon le 1er message après le reset du 03 plantait).
 pytest 252 verts (garde-fou Analyst vert).
-Prochaine étape : Nico exécute `03_run_live.md`, puis clôture.
+Tronçon 03 fait (2026-10-15, Nico) : reset palace + intents archivés
+(`*.pre-sprint17-<TS>`), conversation tomates 4 messages. Historique lu
+(messages=0/2/4/6), `conversation_write OK` à chaque tour, rappel correct
+au 4e message (« tu me disais quoi déjà sur l'orientation ? »). #34 fermée.
+Prochaine étape : clôture (kickoff sprint 18, CLAUDE.md, tag, merge, push sur OK).
 Chaque tronçon met à jour la carte ci-dessus (⏳ → ✅).
