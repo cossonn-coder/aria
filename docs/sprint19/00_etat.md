@@ -1,6 +1,6 @@
 # Sprint 19 — état (vision lisible, dettes #45-#51)
 
-**Phase** : B figée le 2026-10-15 — prêt pour `/sprint-auto sprint 19`
+**Phase** : B figée le 2026-10-15 (tronçon 04 ajouté après run live 03) — prêt pour `/sprint-auto sprint 19`
 **Branche** : `feat/sprint19-vision`
 **Docs** : `context_kickoff_sprint_19.md` (cadrage), `audit_vision.md` (audit 2026-10-15)
 
@@ -10,7 +10,9 @@
 |---|---|---|---|
 | 01 | `01_vision.md` — DeepSeek d'abord (raisonnement coupé), prompt FR sobre + règle de langue, `max_tokens` 1024, MIME, vide = échec, logs (#45-#50) | /sprint-auto | ✅ |
 | 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ✅ |
-| 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ⏳ |
+| 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ✅ partiel (E ❌) |
+| 04 | `04_consignes_enrichi.md` — message enrichi : règle de langue FR+EN, consigne projet « sinon n'en parle pas » | /sprint-auto | ⏳ |
+| 05 | `05_run_live.md` — 3 photos (E' EN, C' sans projets, D' châssis) | Nico | ⏳ |
 
 ## Décisions arrêtées (2026-10-15, Nico)
 
@@ -33,6 +35,13 @@
   au run live (service arrêté, sinon réécrit depuis la RAM).
 - Q6 : découpage 01 / 02 / 03 et propositions en bloc acceptés.
 - Règle de langue (Nico) : français par défaut, sinon la langue de la question.
+- Q7 (a) : règle de langue dans le message enrichi seulement (ligne FR +
+  ligne EN). Raison : défaut limité au chemin enrichi ; `soul.md`/`user.md`
+  toucheraient tout ARIA.
+- Q8 : consigne projet « … que si la description le justifie clairement ;
+  sinon, ne mentionne pas ses projets ». Nico rattachera lui-même si besoin.
+- Q9 : tronçon 04 (code + test du contenu enrichi) puis 05 run live
+  (3 photos E'/C'/D').
 
 ## Dettes
 
@@ -43,6 +52,39 @@ run live passe).
   (relance texte sans la photo dans l'historique).
 - #51 option (b) : rattachement photo → intent sur correspondance forte,
   si le run live montre une perte de contexte projet.
+- Relances texte après photo : intents parasites créés
+  (`evaluation position`, `abandon des noirs`, run live 03).
+- Mode texte : invention de détails absents de la description
+  (position d'échecs inventée, run live 03).
+- Intent supprimé (« maison de montagne ») encore cité via l'historique
+  conversationnel (hypothèse non vérifiée).
+
+## Run live 03 (2026-10-15, Nico)
+
+- ✅ A, B, C, D en FR, non coupées ; `[VISION] deepseek` à chaque photo
+  [n=5], aucun fallback ; `intent SKIPPED reason=skip_intent` en C/D/E ;
+  aucun intent créé par une photo.
+- ❌ E « What's this? » → réponse en FR.
+- ⚠️ C et E : mention non sollicitée « pas de lien avec tes projets actifs ».
+- C cite encore « maison de montagne » alors que l'intent est supprimé
+  (hypothèse non vérifiée : historique de 16 messages).
+- Relances texte « évalue la position » : 2 intents parasites
+  (`evaluation position`, `abandon des noirs`) + position inventée au
+  2e essai. Hors sprint → dettes sprint 20.
+
+## Audit tronçon 04 (2026-10-15)
+
+- Chemin enrichi : `ImageRouter._handle_input_enriched`
+  (`execution/routers/image_router.py` ~l. 172-189) construit
+  `[Analyse visuelle : …]` + `[Consigne : ne rattache …]` + caption, puis
+  `LLMExecutionRouter` REASONING → `AnalystAgent` (groq qwen).
+- La règle de langue n'existe que dans le prompt vision avec légende
+  (`llm/image_router.py` ~l. 131-143, ligne FR + ligne EN). Rien côté LLM
+  texte : `soul.md` muet sur la langue, `user.md:4` « Langue : français,
+  tutoiement », historique FR → la réponse finale part en FR.
+- La consigne projet dit quand rattacher, pas quoi faire sinon → le LLM
+  commente l'absence de lien.
+- Aucun test n'asserte le contenu du message enrichi.
 
 ## §REPRISE
 
@@ -67,3 +109,6 @@ un projet de Nico que si la description le justifie clairement » ;
 (`controller_agent.py`) → aucun autre agent exposé à `None`.
 Pytest 258 verts. Aucun écart au kickoff.
 Prochaine étape : run live 03 par Nico.
+
+Run live 03 consigné ci-dessus. Tronçon 04 figé (Q7-Q9, 2026-10-15).
+Prochaine étape : `/sprint-auto sprint 19` (tronçon 04), puis run live 05 par Nico.
