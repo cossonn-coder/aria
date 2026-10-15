@@ -43,6 +43,9 @@ from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
 from cognition.cognitive_classifier import is_interrogative_caption
 from memory.writer import write_image_artifact
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 class ImageExecutionRouter(BaseRouter):
@@ -118,9 +121,8 @@ class ImageExecutionRouter(BaseRouter):
         intent_id = payload.get("metadata", {}).get("intent_id")
         try:
             write_image_artifact(artifact, intent_id=intent_id)
+            log.info("image_write OK wing=aria_episodic intent_id=%s", intent_id)
         except Exception as e:
-            from logger import get_logger
-            log = get_logger(__name__)
             log.error("memory write error: %s", e)
 
         # ── Mode enrichi : caption interrogative + LLM router disponible ────
@@ -172,9 +174,7 @@ class ImageExecutionRouter(BaseRouter):
             f"{user_caption}"
         )
 
-        from logger import get_logger
-        log = get_logger(__name__)
-        log.error("[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
+        log.info("[IMAGE ENRICHED] caption interrogative → LLMExecutionRouter REASONING")
 
         return self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
@@ -224,8 +224,6 @@ class ImageExecutionRouter(BaseRouter):
         try:
             write_image_artifact(artifact, intent_id=intent_id)
         except Exception as e:
-            from logger import get_logger
-            log = get_logger(__name__)
             log.error("memory write error: %s", e)
 
         # Caption basée sur raw_prompt — lisible, sans le bloc contexte interne.
@@ -280,8 +278,6 @@ class ImageExecutionRouter(BaseRouter):
                     if mem_lines:
                         parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
             except Exception as e:
-                from logger import get_logger
-                log = get_logger(__name__)
                 log.error("[CONTEXT BUILD ERROR] episodic recall: %s", e)
 
         return "\n\n".join(parts)

@@ -19,6 +19,9 @@ from config import config
 from llm.vision.groq_vision import GroqVisionClient
 from llm.image_gen.pollinations_client import PollinationsClient
 from llm.image_gen.hf_client import HuggingFaceImageClient
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 # ── Routing tables ────────────────────────────────────────────────────────────
@@ -27,6 +30,20 @@ from llm.image_gen.hf_client import HuggingFaceImageClient
 # et passe au suivant en cas d'exception (rate limit, timeout, etc.).
 
 VISION_ROUTING_TABLE = [
+    # DeepSeek en premier (sprint 19) : descriptions plus justes que groq
+    # qwen3.8, qui décrit souvent une photo unique comme plusieurs vues.
+    # API compatible OpenAI, donc le client générique GroqVisionClient
+    # suffit. Le raisonnement est coupé : sans ça, deepseek-flash consomme
+    # ~900 tokens à réfléchir et la réponse visible est tronquée.
+    {
+        "provider": "deepseek",
+        "client": GroqVisionClient,
+        "model": config.deepseek_model,
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "api_key": lambda: config.deepseek_api_key,
+        "extra": {"thinking": {"type": "disabled"}},
+    },
+    # groq ×3 en secours.
     {
         "provider": "groq1",
         "client": GroqVisionClient,
@@ -47,15 +64,6 @@ VISION_ROUTING_TABLE = [
         "model": config.groq_vision_model,
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "api_key": lambda: config.groq_api_key_3,
-    },
-    # DeepSeek en dernier recours : API compatible OpenAI, donc le client
-    # générique GroqVisionClient suffit (pas de client dédié).
-    {
-        "provider": "deepseek",
-        "client": GroqVisionClient,
-        "model": config.deepseek_model,
-        "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key": lambda: config.deepseek_api_key,
     },
 ]
 
@@ -121,19 +129,25 @@ class ImageRouter:
         # Construction du prompt : générique ou contextualisé selon la caption.
         # La caption utilisateur devient le cadre interprétatif de l'analyse.
         if image_input.caption:
+            # Règle de langue : français par défaut, sinon la langue de la légende.
             prompt = (
                 f"L'utilisateur a envoyé cette image avec le message : "
                 f"« {image_input.caption} »\n"
-                f"Analyse l'image en tenant compte de ce contexte. "
-                f"Réponds directement à ce que l'utilisateur semble vouloir savoir."
+                f"Réponds en tenant compte de ce contexte, en quelques phrases. "
+                f"N'affirme rien qui ne soit visible sur l'image ; si tu n'es pas "
+                f"sûr de ce qu'est un élément ou un lieu, dis-le au lieu de deviner. "
+                f"Réponds en français, sauf si le message de l'utilisateur est "
+                f"dans une autre langue.\n"
+                f"Language rule: if the user's message is not in French, write "
+                f"your whole answer in the language of that message."
             )
         else:
-            # Prompt de description générale si aucun contexte fourni.
-            # Volontairement en anglais : les modèles de vision performent
-            # mieux sur des prompts anglais pour la description d'images.
+            # Prompt de description sobre : court, en français, anti-invention.
             prompt = (
-                "Describe this image in detail. "
-                "Focus on the main subject, context, and any notable elements."
+                "Décris cette photo en français, en quelques phrases : sujet "
+                "principal, contexte, éléments notables. Ne décris que ce qui est "
+                "visible ; si tu n'es pas sûr de ce qu'est un élément ou un lieu, "
+                "dis-le au lieu de deviner."
             )
 
         caption = self._run_vision(source, prompt=prompt)
@@ -193,11 +207,16 @@ class ImageRouter:
                     models=entry.get("models"),
                     api_key=entry.get("api_key", lambda: None)(),
                     output_dir=config.image_output_dir,
+                    extra=entry.get("extra"),
                 )
-                return getattr(client, method)(**kwargs)
+                result = getattr(client, method)(**kwargs)
+                # _dispatch sert aussi à la génération : ce log ne vise que la vision.
+                if method == "describe":
+                    log.info("[VISION] %s (%s) a répondu.", entry.get("provider"), entry.get("model"))
+                return result
 
             except Exception as e:
-                print(f"[IMAGE ROUTER FALLBACK] {entry.get('provider')} failed: {e}")
+                log.warning("[IMAGE ROUTER FALLBACK] %s failed: %s", entry.get("provider"), e)
                 last_error = e
 
         raise RuntimeError(

@@ -8,7 +8,7 @@
 
 | # | Kickoff | Qui | État |
 |---|---|---|---|
-| 01 | `01_vision.md` — DeepSeek d'abord (raisonnement coupé), prompt FR sobre + règle de langue, `max_tokens` 1024, MIME, vide = échec, logs (#45-#50) | /sprint-auto | ⏳ |
+| 01 | `01_vision.md` — DeepSeek d'abord (raisonnement coupé), prompt FR sobre + règle de langue, `max_tokens` 1024, MIME, vide = échec, logs (#45-#50) | /sprint-auto | ✅ |
 | 02 | `02_photo_sans_intent.md` — photo interrogative sans résolution d'intent (#51) | /sprint-auto | ⏳ |
 | 03 | `03_run_live.md` — suppression intent artefact + 5 photos | Nico | ⏳ |
 
@@ -46,5 +46,13 @@ run live passe).
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 19` (tronçons
-01 puis 02), puis run live 03 par Nico.
+Tronçon 01 ✅ (2026-10-15, non commité) : DeepSeek d'abord (`thinking`
+désactivé via `extra`), prompts FR sobres, `max_tokens` 1024, MIME par
+extension, réponse vide = échec, logs `[VISION] <provider> (<model>) a
+répondu.` (vision seulement), `image_write OK`, `[IMAGE ENRICHED]` en info.
+Pytest 257 verts. Vérif VM sans mock : FR sans légende [n=1 photo],
+EN sur « What is this? » et FR sur « c'est quoi ? » [n=2 photos], deepseek seul, aucun fallback.
+Écart kickoff : la règle de langue en français seule ne suffisait pas
+(réponse FR à « What is this? » [n=2 essais]) → ajout d'une ligne en
+anglais « Language rule: ... » dans le prompt avec légende.
+Prochaine étape : tronçon 02, puis run live 03 par Nico.
