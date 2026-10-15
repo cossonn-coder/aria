@@ -14,20 +14,24 @@ intents, et routing dynamique vers des effecteurs spécialisés.
 
 ## Acteurs
 
-Trois rôles distincts, ne pas les confondre.
+Depuis 2026-10-15, plus de relais Claude.ai : tout se fait dans
+Claude Code.
 
-- **Architecte** (Claude.ai côté Nico) : analyse, critique, planifie,
-  rédige les briefs. Ne touche pas au code.
-- **Pilote** (Nico) : courroie de transmission. Colle les briefs,
-  ramène les livrables, fait tourner les runs live (Telegram,
-  `journalctl`, `systemctl`).
-- **Implémenteur** (toi, Claude Code sur vDebianIA) : exécute le
-  code, les tests, les scripts. Tu n'as pas accès à Telegram ni à
-  `journalctl` en temps réel. Tout run live passe par Nico.
+- **Nico** : arbitre les décisions de conception, valide, fait
+  tourner les runs live (Telegram, `journalctl`, `systemctl`).
+- **Conception** (skill `/conception`, session principale) : audite
+  le code, challenge, remonte les arbitrages, fige le sprint en
+  kickoffs autosuffisants (`docs/sprintN/00_etat.md` + `0N_*.md`).
+  Ne touche pas au code de prod.
+- **Implémentation** (skill `/sprint-auto`) : un sous-agent frais
+  par tronçon, l'orchestrateur vérifie (pytest) et commite en local.
+  Pas d'accès à Telegram ni à `journalctl` : tout run live passe par Nico.
 
-## Workflow par tour
-Un tour = un objectif atomique. Brief → exécution → livrable → validation
-architecte → tour suivant. Pas de fusion de tours, pas de réponse hors-brief.
+## Workflow par sprint
+`/conception <sujet>` → arbitrages avec Nico → OK → kickoffs commités →
+`/clear` → `/sprint-auto sprint N` → run live par Nico → clôture
+(merge, tag, push sur OK explicite). Un tronçon = un objectif atomique,
+pas de fusion de tronçons, pas de travail hors-kickoff.
 
 ## Audit avant fix
 Sujet non-trivial : premier tour = audit documenté, pas fix ; fix dans
