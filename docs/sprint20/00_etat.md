@@ -63,7 +63,7 @@
 
 | # | Kickoff | Dette | État |
 |---|---|---|---|
-| 01 | `01_photo_historique.md` — photo standard écrite dans `aria_conversation` | #57 | ⏳ |
+| 01 | `01_photo_historique.md` — photo standard écrite dans `aria_conversation` | #57 | ✅ (259 verts) |
 | 02 | `02_namer_contextuel.md` — namer contextuel, « aucun » → pas d'intent | #59 | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico) | — | ⏳ |
 
@@ -82,5 +82,7 @@ d'être retenu comme intent.
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
-Prochaine étape : `/sprint-auto sprint 20` (tronçons 01, 02), puis run
-live 03 par Nico.
+Tronçon 01 ✅ (non commité à la sortie du sous-agent) : `image_router.py`
+écrit les tours user/assistant en mode standard, 1 test ajouté.
+Prochaine étape : tronçon 02 (`02_namer_contextuel.md`), puis run live 03
+par Nico.

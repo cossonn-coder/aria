@@ -234,6 +234,22 @@ class TestImageRouterEnrichedMode:
         assert llm_exec is not None
         llm_exec.execute.assert_not_called()
 
+    # Mode standard — tours écrits dans aria_conversation (#57)
+    @patch("execution.routers.image_router.write_conversation_turn")
+    @patch("execution.routers.image_router.write_image_artifact")
+    def test_mode_standard_ecrit_historique(self, mock_store, mock_turn):
+        router, _, _ = self._router(with_llm_router=True)
+        payload = self._payload("substrats de shiitakes usés")
+        payload["metadata"] = {"chat_id": 42}
+        router.execute(payload)
+
+        assert mock_turn.call_count == 2
+        key, role, content = mock_turn.call_args_list[0].args
+        assert (key, role) == ("42", "user")
+        assert f"[Analyse visuelle : {self.VISION_DESCRIPTION}]" in content
+        assert "substrats de shiitakes usés" in content
+        assert mock_turn.call_args_list[1].args == ("42", "assistant", self.VISION_DESCRIPTION)
+
     # Dégradation gracieuse — pas de llm_execution_router
     @patch("execution.routers.image_router.write_image_artifact")
     def test_sans_llm_router_retourne_vision_brute(self, mock_store):

@@ -14,7 +14,7 @@
 # Pipeline IMAGE_INPUT — deux modes :
 #
 #   Mode standard (caption descriptive ou absente) :
-#     photo → vision → {"text": description brute}
+#     photo → vision → {"text": description brute} + tours écrits dans aria_conversation
 #
 #   Mode enrichi (caption interrogative : "c'est quoi ?", "tu reconnais ?") :
 #     photo → vision → description injectée dans LLMExecutionRouter
@@ -42,7 +42,7 @@ from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
 from cognition.cognitive_context import CognitiveOperation
 from cognition.cognitive_classifier import is_interrogative_caption
-from memory.writer import write_image_artifact
+from memory.writer import write_image_artifact, write_conversation_turn
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -96,7 +96,7 @@ class ImageExecutionRouter(BaseRouter):
         Deux modes selon la caption :
 
         Mode standard — caption absente ou descriptive ("substrats usés") :
-            → retourne {"text": description_vision}
+            → retourne {"text": description_vision}, écrite dans aria_conversation (#57)
 
         Mode enrichi — caption interrogative ("c'est quoi ?", "tu reconnais ?") :
             → description vision injectée dans LLMExecutionRouter comme contexte
@@ -138,8 +138,24 @@ class ImageExecutionRouter(BaseRouter):
                     payload=payload,
                 )
 
-        # Mode standard : description vision brute
-        return {"text": artifact.caption or ""}
+        # Mode standard : description vision brute.
+        # Historique conversationnel (#57) : sans cette écriture, une relance
+        # texte (« évalue la position ») ne voit pas la photo. Format aligné
+        # sur le mode enrichi (décision Q3) ; le mode enrichi écrit déjà via
+        # LLMExecutionRouter, d'où l'écriture ici seulement. Non bloquante.
+        description = artifact.caption or ""
+        conversation_key = str(payload.get("metadata", {}).get("chat_id", "default"))
+        user_turn = f"[Analyse visuelle : {description}]"
+        if user_caption:
+            user_turn += "\n\n" + user_caption
+        try:
+            write_conversation_turn(conversation_key, "user", user_turn)
+            write_conversation_turn(conversation_key, "assistant", description)
+            log.info("conversation_write OK key=%s", conversation_key)
+        except Exception:
+            log.exception("conversation_write ERROR key=%s", conversation_key)
+
+        return {"text": description}
 
     def _handle_input_enriched(
         self,
