@@ -302,3 +302,28 @@ def test_skip_intent_bypasses_resolve_and_apply(mock_store, mock_conv):
     intent_engine.apply.assert_not_called()
     assert router.controller.run.call_args[0][0].intent is None
     assert result == {"text": "réponse photo"}
+
+
+@patch("execution.routers.llm_router.extract_intent_name", return_value=None)
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_namer_aucun_skips_intent(mock_store, mock_conv, mock_namer):
+    """#59 : recall create + namer « aucun » → ni apply ni write_interaction."""
+    router, _, intent_engine, _, bridge = make_router()
+    intent_engine.resolve.return_value = (MagicMock(action="create"), None)
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": "photo d'échiquier", "timestamp": "t1"},
+        {"role": "assistant", "content": "un échiquier", "timestamp": "t2"},
+    ]
+    router.controller.run = MagicMock(return_value=_fake_ctx(None, "réponse"))
+
+    router.execute({
+        "op_type": CognitiveOperation.REASONING.value,
+        "content": "évalue la position",
+        "metadata": {},
+    })
+
+    assert mock_namer.call_args.kwargs["previous_message"] == "photo d'échiquier"
+    intent_engine.apply.assert_not_called()
+    mock_store.assert_not_called()
+    mock_conv.assert_called()

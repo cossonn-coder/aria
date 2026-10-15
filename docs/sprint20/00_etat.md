@@ -64,7 +64,7 @@
 | # | Kickoff | Dette | État |
 |---|---|---|---|
 | 01 | `01_photo_historique.md` — photo standard écrite dans `aria_conversation` | #57 | ✅ (259 verts) |
-| 02 | `02_namer_contextuel.md` — namer contextuel, « aucun » → pas d'intent | #59 | ⏳ |
+| 02 | `02_namer_contextuel.md` — namer contextuel, « aucun » → pas d'intent | #59 | ✅ (261 verts) |
 | 03 | `03_run_live.md` — run live (Nico) | — | ⏳ |
 
 Esprit (Nico) : ARIA doit juger, comme un humain, si un intérêt vaut
@@ -82,7 +82,8 @@ d'être retenu comme intent.
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
-Tronçon 01 ✅ (non commité à la sortie du sous-agent) : `image_router.py`
-écrit les tours user/assistant en mode standard, 1 test ajouté.
-Prochaine étape : tronçon 02 (`02_namer_contextuel.md`), puis run live 03
-par Nico.
+Tronçon 01 ✅ commité (`2359a4f`). Tronçon 02 ✅ (non commité à la
+sortie du sous-agent) : namer contextuel (intents actifs + tour user
+précédent, « aucun » → `None`), historique chargé avant l'intent,
+namer appelé en create/split, `SPLIT` dédoublonne par nom ; 2 tests.
+Prochaine étape : run live 03 par Nico (`03_run_live.md`).

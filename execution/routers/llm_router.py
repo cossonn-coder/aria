@@ -116,6 +116,21 @@ class LLMExecutionRouter(BaseRouter):
             session_memories={},
         )
 
+        # ── 1b. Historique conversationnel (wing aria_conversation) ─────────
+        # Chargé avant l'intent : le namer (étape 3) lit le tour précédent.
+        # Clé = chat_id Telegram (passé en metadata), "default" sinon.
+        # Convention : max_history_turns compte des tours (user + assistant),
+        # load_conversation_history compte des messages → n = tours × 2.
+        # C'est le router qui lit, jamais l'agent (règle inviolable 3).
+        conversation_key = str(metadata.get("chat_id", "default"))
+        conversation_history = self.mempalace_bridge.load_conversation_history(
+            conversation_key, n=config.max_history_turns * 2,
+        )
+        log.info(
+            "conversation_history loaded key=%s messages=%d",
+            conversation_key, len(conversation_history),
+        )
+
         # ── 2-3. Drapeau skip_intent (photo interrogative, #51) ─────────────
         # Le message enrichi d'une photo ne doit ni résoudre, ni créer, ni
         # modifier un intent : sinon la description vision devient un
@@ -135,17 +150,32 @@ class LLMExecutionRouter(BaseRouter):
             )
 
             # ── 3. Intent mutation ──────────────────────────────────────────
-            # Extraction du nom canonique uniquement si création d'un nouvel intent.
-            # Ce LLM call est coûteux — on ne l'effectue qu'en cas de nécessité.
+            # Le namer (appel LLM coûteux) n'est sollicité qu'en create/split.
+            # Il reçoit le contexte (tour user précédent + intents actifs) et
+            # peut répondre un nom existant (→ rattachement dans apply), un
+            # nouveau nom, ou « aucun » → pas d'intent pour ce message (#59).
             intent_name = None
-            if recall_decision.action == "create":
-                intent_name = extract_intent_name(message, self.llm_router)
+            skip_apply = False
+            if recall_decision.action in ("create", "split"):
+                user_turns = [t["content"] for t in conversation_history if t.get("role") == "user"]
+                previous_message = user_turns[-1] if user_turns else None
+                intent_name = extract_intent_name(
+                    message,
+                    self.llm_router,
+                    previous_message=previous_message,
+                    active_intent_names=[i.name for i in active_intents],
+                )
+                skip_apply = intent_name is None
 
-            intent = self.intent_engine.apply(
-                decision=recall_decision,
-                message=message,
-                intent_name=intent_name,
-            )
+            if skip_apply:
+                log.info("intent SKIPPED reason=namer_aucun")
+                intent = None
+            else:
+                intent = self.intent_engine.apply(
+                    decision=recall_decision,
+                    message=message,
+                    intent_name=intent_name,
+                )
 
         # ── 4. Mémoire de session (contexte post-intent) ────────────────────
         # retrieve_by_intent cible les souvenirs liés à l'intent résolu —
@@ -170,20 +200,6 @@ class LLMExecutionRouter(BaseRouter):
             active_intents=self.intent_engine.list_attention_active(),
             session_memories=session_memories,
             global_memories=global_memories,
-        )
-
-        # ── 4c. Historique conversationnel (wing aria_conversation) ─────────
-        # Clé = chat_id Telegram (passé en metadata), "default" sinon.
-        # Convention : max_history_turns compte des tours (user + assistant),
-        # load_conversation_history compte des messages → n = tours × 2.
-        # C'est le router qui lit, jamais l'agent (règle inviolable 3).
-        conversation_key = str(metadata.get("chat_id", "default"))
-        conversation_history = self.mempalace_bridge.load_conversation_history(
-            conversation_key, n=config.max_history_turns * 2,
-        )
-        log.info(
-            "conversation_history loaded key=%s messages=%d",
-            conversation_key, len(conversation_history),
         )
 
         # ── 5. Construction du contexte agent ───────────────────────────────

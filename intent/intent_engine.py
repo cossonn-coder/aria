@@ -177,6 +177,14 @@ class IntentEngine:
         # SPLIT
         # -------------------------
         if decision.action == IntentActionType.SPLIT:
+            # Même dédoublonnage par nom que CREATE : un nom existant renvoyé
+            # par le namer rattache à l'intent correspondant (#59).
+            if intent_name:
+                existing = self._find_by_name(intent_name) or self._find_by_name_semantic(intent_name)
+                if existing:
+                    existing.add_action(message)
+                    self.compression_cycle_if_needed()
+                    return existing
 
             intent = self._create(
                 name=name
