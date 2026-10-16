@@ -15,3 +15,4 @@ class LLMRole(str, Enum):
     REASONING = "reasoning"
     PLANNING = "planning"
     REFLECTION = "reflection"
+    DIGEST = "digest"  # synthèse d'une page lue (sprint 23), chaîne sans Groq

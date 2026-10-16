@@ -31,11 +31,11 @@ def _run(history=None):
     llm_router = MagicMock()
     llm_router.complete.return_value.content = "réponse"
     AnalystAgent().run(ctx, llm_router)
-    return llm_router.complete.call_args.kwargs["messages"]
+    return llm_router.complete.call_args.kwargs
 
 
 def test_empty_history_gives_system_and_user():
-    messages = _run([])
+    messages = _run([])["messages"]
     assert [m["role"] for m in messages] == ["system", "user"]
     assert messages[1]["content"] == "message courant"
 
@@ -45,7 +45,7 @@ def test_history_inserted_in_order_without_timestamp():
         {"role": "user", "content": "u1", "timestamp": "2026-10-15T10:00:00"},
         {"role": "assistant", "content": "a1", "timestamp": "2026-10-15T10:00:01"},
     ]
-    messages = _run(history)
+    messages = _run(history)["messages"]
     assert messages[1:] == [
         {"role": "user", "content": "u1"},
         {"role": "assistant", "content": "a1"},
@@ -56,7 +56,12 @@ def test_history_inserted_in_order_without_timestamp():
 def test_system_prompt_contains_profile_context_and_intent(monkeypatch):
     import llm.llm_router as llm_router_module
     monkeypatch.setattr(llm_router_module, "_USER", "Nico, profil de test")
-    system = _run()[0]["content"]
+    system = _run()["messages"][0]["content"]
     assert "PROFIL UTILISATEUR" in system
     assert "bloc de contexte injecté" in system
     assert "projet_terrarium" in system
+
+
+def test_reasoning_answer_budget_is_1500_tokens():
+    # Sprint 23 tronçon 04 : 800 tronquait les réponses longues (run live D).
+    assert _run()["max_tokens"] == 1500

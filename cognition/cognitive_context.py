@@ -17,6 +17,12 @@ class CognitiveOperation(Enum):
     IMAGE_INPUT = "image_input"
     IMAGE_GENERATION = "image_generation"
     WEB_SEARCH = "web_search"  # délégué en REASONING par web_router (sprint 22)
+    URL_READ = "url_read"      # lecture d'URL collée, déléguée en REASONING (sprint 23)
+
+
+# Préfixe du marqueur de lecture partielle posé par web_router dans le
+# message enrichi (donc dans l'historique) ; relu au tronçon 02 du sprint 23.
+URL_PARTIAL_MARKER = "[Lecture partielle :"
 
 
 # TOP_K mémoire par opération
