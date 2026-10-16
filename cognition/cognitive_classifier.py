@@ -6,14 +6,16 @@
 #
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
-#   2. Heuristique texte image generation           → IMAGE_GENERATION
-#   3. Message court → CONFIRMATION                 ← anti-intents parasites
-#   4. Cache MemPalace (pattern déjà vu)             → opération mise en cache
-#   5. Classifieur LLM                               → opération LLM
-#   6. Fallback                                      → UNKNOWN
+#   2. Heuristique texte recherche web              → WEB_SEARCH
+#   3. Heuristique texte image generation           → IMAGE_GENERATION
+#   4. Message court → CONFIRMATION                 ← anti-intents parasites
+#   5. Cache MemPalace (pattern déjà vu)             → opération mise en cache
+#   6. Classifieur LLM                               → opération LLM
+#   7. Fallback                                      → UNKNOWN
 #
 # Fonctions exportées :
 #   classify_operation()              — mapping message → CognitiveOperation
+#   detect_web_search_intent()        — heuristique recherche web explicite
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   detect_generation_intent_from_caption() — génération depuis caption photo
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
@@ -145,6 +147,39 @@ def is_interrogative_caption(caption: str | None) -> bool:
 
 
 # =========================================================
+# HEURISTIQUE RECHERCHE WEB
+# =========================================================
+
+# Phrases explicites de Nico déclenchant WEB_SEARCH (sous-chaîne, minuscules).
+_WEB_SEARCH_PHRASES = [
+    "cherche en ligne", "cherche sur le web", "cherche sur internet",
+    "recherche en ligne", "recherche sur le web",
+    "donne-moi les sources", "donne moi les sources",
+]
+
+# Messages courts qui, seuls, demandent les sources de la réponse précédente.
+# Comparaison exacte : « la source de la Seine » ne doit pas matcher.
+_WEB_SEARCH_EXACT = {"source", "sources"}
+
+
+def detect_web_search_intent(message: str) -> bool:
+    """
+    Retourne True si un message texte demande explicitement une recherche web.
+
+    Placée avant la règle « message court → CONFIRMATION » dans
+    classify_operation(), sinon « source ? » serait avalé comme confirmation.
+
+    Exemples positifs : "cherche sur le web le score du match", "source ?"
+    Exemples négatifs : "il faut trouver une source d'eau", "la source de la Seine"
+    """
+    lower = message.lower()
+    if any(p in lower for p in _WEB_SEARCH_PHRASES):
+        return True
+    # Nettoyage : ponctuation finale et espaces retirés (« Sources ? » → « sources »)
+    return lower.strip().rstrip("?!. ") in _WEB_SEARCH_EXACT
+
+
+# =========================================================
 # CLASSIFIER LLM
 # =========================================================
 
@@ -158,6 +193,7 @@ Classe ce message dans UNE des catégories suivantes :
 - memory_query     : demande de rappel ("rappelle moi ma liste", "qu'est ce que j'avais dit")
 - planning         : demande de plan, programme, étapes ("crée un programme", "planifie", "comment apprendre")
 - reasoning        : analyse, comparaison, explication ("analyse mon jardin", "compare", "pourquoi")
+- web_search : information récente ou externe que tu ne peux pas connaître (actualité, résultats sportifs, prix, météo, horaires, événements récents) ("quel temps demain à Caen", "score du match d'hier", "prix actuel du cuivre")
 - meta_memory      : synthèse globale ("quels sujets on a abordé", "résume notre conversation")
 - profile_query    : question sur soi-même ("est ce que je peux manger ça", "suis-je allergique")
 - unknown          : aucune des catégories ci-dessus
@@ -196,11 +232,16 @@ def classify_operation(
     if metadata.get("image") is not None:
         return CognitiveOperation.IMAGE_INPUT
 
-    # ── 2. Heuristique génération image ─────────────────────────────────────
+    # ── 2. Heuristique recherche web ────────────────────────────────────────
+    # Avant la règle « message court » : « source ? » ferait 8 caractères.
+    if detect_web_search_intent(message):
+        return CognitiveOperation.WEB_SEARCH
+
+    # ── 3. Heuristique génération image ─────────────────────────────────────
     if detect_image_generation_intent(message):
         return CognitiveOperation.IMAGE_GENERATION
 
-    # ── 3. Message court → CONFIRMATION ────────────────────────────────────
+    # ── 4. Message court → CONFIRMATION ────────────────────────────────────
     # Les salutations ("Salut", "Ok"), réponses brèves ("Les deux", "Oui"),
     # et continuations contextuelles ne doivent pas créer d'intent.
     # CONFIRMATION est routé vers llm_router mais n'implique pas de création
@@ -208,12 +249,12 @@ def classify_operation(
     if len(message.strip()) <= MIN_MESSAGE_LENGTH:
         return CognitiveOperation.CONFIRMATION
 
-    # ── 4. Cache MemPalace ───────────────────────────────────────────────────
+    # ── 5. Cache MemPalace ───────────────────────────────────────────────────
     cached = _search_cache(message, bridge)
     if cached:
         return cached
 
-    # ── 5. Classifieur LLM ───────────────────────────────────────────────────
+    # ── 6. Classifieur LLM ───────────────────────────────────────────────────
     if llm_router is None:
         return CognitiveOperation.UNKNOWN
 

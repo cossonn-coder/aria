@@ -30,7 +30,7 @@
 | # | Kickoff | Statut |
 |---|---------|--------|
 | 01 | `01_effecteur_web.md` — Tavily + `web_router` + kernel + config | ✅ (265 verts) |
-| 02 | `02_classification_web.md` — heuristique + catégorie LLM | ⏳ |
+| 02 | `02_classification_web.md` — heuristique + catégorie LLM | ✅ (269 verts) |
 | 03 | `03_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -49,8 +49,9 @@ Fermée par le sprint (à la clôture) : idée « recherche web » du sprint 5
 ## §REPRISE
 
 Lire `CLAUDE.md` + ce fichier + le kickoff du prochain tronçon ⏳.
-Tronçon 01 fait (effecteur web câblé, non commité au moment de l'écriture ;
-`web_search` atteint `WebExecutionRouter` via `_build_dispatcher`, mais
-n'est encore émis par aucun classifier).
-Prochaine étape : tronçon 02 (`02_classification_web.md`), puis run live 03
-par Nico (clé `TAVILY_API_KEY` dans `.env`).
+Tronçons 01 (commité) et 02 faits (02 non commité au moment de l'écriture) :
+`classify_operation` émet `WEB_SEARCH` via `detect_web_search_intent`
+(étape 2, avant image et « message court ») et via la catégorie LLM
+`web_search` de `CLASSIFIER_PROMPT`.
+Prochaine étape : run live 03 par Nico (`03_run_live.md`, clé
+`TAVILY_API_KEY` dans `.env`).
