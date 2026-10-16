@@ -6,21 +6,24 @@
 #
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
-#   2. Heuristique texte recherche web              → WEB_SEARCH
-#   3. Heuristique texte image generation           → IMAGE_GENERATION
-#   4. Message court → CONFIRMATION                 ← anti-intents parasites
-#   5. Cache MemPalace (pattern déjà vu)             → opération mise en cache
-#   6. Classifieur LLM                               → opération LLM
-#   7. Fallback                                      → UNKNOWN
+#   2. URL http(s):// dans le message                → URL_READ
+#   3. Heuristique texte recherche web              → WEB_SEARCH
+#   4. Heuristique texte image generation           → IMAGE_GENERATION
+#   5. Message court → CONFIRMATION                 ← anti-intents parasites
+#   6. Cache MemPalace (pattern déjà vu)             → opération mise en cache
+#   7. Classifieur LLM                               → opération LLM
+#   8. Fallback                                      → UNKNOWN
 #
 # Fonctions exportées :
 #   classify_operation()              — mapping message → CognitiveOperation
+#   detect_url()                      — première URL http(s) du message
 #   detect_web_search_intent()        — heuristique recherche web explicite
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   detect_generation_intent_from_caption() — génération depuis caption photo
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
 
 import json
+import re
 from cognition.cognitive_context import CognitiveOperation
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
@@ -147,6 +150,29 @@ def is_interrogative_caption(caption: str | None) -> bool:
 
 
 # =========================================================
+# HEURISTIQUE LECTURE D'URL
+# =========================================================
+
+_URL_RE = re.compile(r"https?://\S+")
+
+# Ponctuation finale retirée : « regarde https://x.fr/page. » → https://x.fr/page
+_URL_TRAILING_PUNCT = ".,;:!?)»"
+
+
+def detect_url(message: str) -> str | None:
+    """
+    Retourne la première URL http(s) du message, ou None.
+
+    Seule la première URL est lue (sprint 23) ; la ponctuation collée en
+    fin d'URL est retirée.
+    """
+    match = _URL_RE.search(message)
+    if match is None:
+        return None
+    return match.group(0).rstrip(_URL_TRAILING_PUNCT)
+
+
+# =========================================================
 # HEURISTIQUE RECHERCHE WEB
 # =========================================================
 
@@ -232,16 +258,22 @@ def classify_operation(
     if metadata.get("image") is not None:
         return CognitiveOperation.IMAGE_INPUT
 
-    # ── 2. Heuristique recherche web ────────────────────────────────────────
+    # ── 2. URL collée → lecture de la page ──────────────────────────────────
+    # Prioritaire sur la recherche web (URL + « cherche en ligne » = lecture)
+    # et sur « message court » (une URL seule = résumé de la page).
+    if detect_url(message):
+        return CognitiveOperation.URL_READ
+
+    # ── 3. Heuristique recherche web ────────────────────────────────────────
     # Avant la règle « message court » : « source ? » ferait 8 caractères.
     if detect_web_search_intent(message):
         return CognitiveOperation.WEB_SEARCH
 
-    # ── 3. Heuristique génération image ─────────────────────────────────────
+    # ── 4. Heuristique génération image ─────────────────────────────────────
     if detect_image_generation_intent(message):
         return CognitiveOperation.IMAGE_GENERATION
 
-    # ── 4. Message court → CONFIRMATION ────────────────────────────────────
+    # ── 5. Message court → CONFIRMATION ────────────────────────────────────
     # Les salutations ("Salut", "Ok"), réponses brèves ("Les deux", "Oui"),
     # et continuations contextuelles ne doivent pas créer d'intent.
     # CONFIRMATION est routé vers llm_router mais n'implique pas de création
@@ -249,12 +281,12 @@ def classify_operation(
     if len(message.strip()) <= MIN_MESSAGE_LENGTH:
         return CognitiveOperation.CONFIRMATION
 
-    # ── 5. Cache MemPalace ───────────────────────────────────────────────────
+    # ── 6. Cache MemPalace ───────────────────────────────────────────────────
     cached = _search_cache(message, bridge)
     if cached:
         return cached
 
-    # ── 6. Classifieur LLM ───────────────────────────────────────────────────
+    # ── 7. Classifieur LLM ───────────────────────────────────────────────────
     if llm_router is None:
         return CognitiveOperation.UNKNOWN
 

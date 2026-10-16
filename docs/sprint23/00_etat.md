@@ -41,7 +41,7 @@
 
 | # | Kickoff | Statut |
 |---|---------|--------|
-| 01 | `01_lecture_url.md` — DIGEST sans Groq, `extract`, handler `URL_READ`, tranches, logs, heuristique URL | ⏳ |
+| 01 | `01_lecture_url.md` — DIGEST sans Groq, `extract`, handler `URL_READ`, tranches, logs, heuristique URL | ✅ (pytest 278 verts, non commité) |
 | 02 | `02_lire_la_suite.md` — « oui » / « lis la suite » via marqueur dans l'historique | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico) | ⏳ |
 
@@ -54,4 +54,7 @@
 ## §REPRISE
 
 Lire `CLAUDE.md` + `docs/sprint23/audit_lecture_url.md` + ce fichier.
-Prochaine étape : `/sprint-auto sprint 23` (tronçon 01 puis 02), puis run live 03 par Nico.
+Tronçon 01 implémenté (pytest 278 verts) : `_read_slice(url, start, message, metadata)`
+et `_cut_slice` dans `web_router.py`, `URL_PARTIAL_MARKER` dans `cognitive_context.py`,
+marqueur émis : `[Lecture partielle : <url> caractères <start>-<end> sur <total>]`.
+Prochaine étape : tronçon 02 (`02_lire_la_suite.md`), puis run live 03 par Nico.

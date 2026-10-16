@@ -83,6 +83,12 @@ ROUTING_TABLE = {
     LLMRole.PLANNING: _text_chain(config.deepseek_model),
     LLMRole.REASONING: _text_chain(config.deepseek_reasoning_model),
     LLMRole.REFLECTION: _text_chain(config.deepseek_model),
+    # Synthèse de page (sprint 23) : Groq exclu (contexte trop court pour
+    # une page entière) → DeepSeek puis Anthropic.
+    LLMRole.DIGEST: [
+        e for e in _text_chain(config.deepseek_model)
+        if not e["provider"].startswith("groq")
+    ],
 }
 
 # fallback global si role inconnu
