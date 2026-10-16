@@ -1,6 +1,6 @@
 # Sprint 24 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-16), prête pour `/sprint-auto sprint 24`.
+**Phase** : CLOS (run live 02 OK, 2026-10-16).
 **Cible** : #44 génération d'images.
 **Branche** : `feat/sprint24-generation-images`.
 
@@ -25,24 +25,21 @@ _(aucune)_
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_generation.md` — Pollinations avec clé + secours anonyme, HF hors table, prompt brut, photo → toujours IMAGE_INPUT, mots-clés resserrés | ✅ (281 verts, non commité) |
-| 02 | `02_run_live.md` — run live (Nico) | ⏳ |
+| 01 | `01_generation.md` — Pollinations avec clé + secours anonyme, HF hors table, prompt brut, photo → toujours IMAGE_INPUT, mots-clés resserrés | ✅ `2d893ec` (281 verts) |
+| 02 | `02_run_live.md` — run live (Nico) | ✅ A, C, D conformes ; B technique OK (clé, 4 s), contenu infidèle — ignoré (Nico) |
 
 ## Dettes
 
-- Fermée par le sprint (si run live OK) : #44.
+- Fermée : #44.
 - Ouverte : #77 image-to-image (photo + légende de génération ; Pollinations
   accepte `image=` mais il faut une URL publique de la photo).
-- Ouverte : `llm/image_gen/hf_client.py` + `config.hf_image_model` morts
-  après tronçon 01 (numéro à attribuer à la clôture).
+- Ouverte : #78 `llm/image_gen/hf_client.py` + `config.hf_image_model` morts.
+- Constatée au live : #73 (Groq 413 avec 20 messages d'historique, message C,
+  bascule DeepSeek) — déjà ouverte.
+- Écartée par Nico : fidélité du prompt FR brut (B : le chat n'arrose pas) [n=1].
 - Notée : génération Pollinations = 404 sur un prompt enrichi [n=1, cause
   non isolée] — devient sans objet sans bloc contexte.
 
 ## §REPRISE
 
-Tronçon 01 implémenté (pytest 281 verts ; baseline 282 − 6 tests du bloc
-contexte supprimés + 5 ajoutés). Écarts au kickoff : mode à clé du client
-déclenché par la présence de `model` (clé vide → `RuntimeError` → secours) ;
-`tests/images/test_architecture_rules.py` garde `HuggingFaceImageClient`
-(le test porte sur les clients, pas sur la table). Prochaine étape :
-commit du tronçon 01, puis run live 02 par Nico.
+Sprint clos (tag `sprint-24`). Suite : `docs/sprint25/context_kickoff_sprint_25.md`.
