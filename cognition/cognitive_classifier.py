@@ -20,7 +20,6 @@
 #   detect_url()                      — première URL http(s) du message
 #   detect_web_search_intent()        — heuristique recherche web explicite
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
-#   detect_generation_intent_from_caption() — génération depuis caption photo
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
 
 import json
@@ -58,26 +57,10 @@ _TEXT_GENERATION_KEYWORDS = [
     "produis une image",
     # Formats spécifiques — très peu ambigus
     "meme", "mème",
-    "illustration",
-    "infographie",
-    "logo",
-    "affiche",
     "bannière",
-    # Visualisation explicite
-    "visualise", "montre moi",
     # Anglais
     "generate image", "draw", "make an image",
-    "create image", "render",
-]
-
-# Mots-clés indiquant une demande de génération dans une caption photo.
-_CAPTION_GENERATION_KEYWORDS = [
-    "génère", "generé", "genere",
-    "dessine", "crée", "cree",
-    "transforme", "refais", "fais",
-    "produis", "render", "generate",
-    "draw", "create", "make",
-    "version", "style", "comme ça mais",
+    "create image",
 ]
 
 # Marqueurs signalant que la caption est une question sur le contenu de l'image.
@@ -115,27 +98,9 @@ def detect_image_generation_intent(message: str) -> bool:
     return any(k in lower for k in _TEXT_GENERATION_KEYWORDS)
 
 
-def detect_generation_intent_from_caption(caption: str | None) -> bool:
-    """
-    Retourne True si la caption d'une photo exprime une demande de génération.
-
-    Utilisé par CognitiveEngine.classify() pour les events IMAGE :
-    une photo envoyée avec une caption de transformation → IMAGE_GENERATION.
-    Une photo envoyée avec une description neutre       → IMAGE_INPUT.
-    """
-    if not caption:
-        return False
-    lower = caption.lower()
-    return any(k in lower for k in _CAPTION_GENERATION_KEYWORDS)
-
-
 def is_interrogative_caption(caption: str | None) -> bool:
     """
     Retourne True si la caption d'une photo est une question sur son contenu.
-
-    Distinction critique avec detect_generation_intent_from_caption() :
-      - génération   : "transforme-la en aquarelle", "refais dans le style Monet"
-      - interrogative: "c'est quoi ?", "tu reconnais ça ?", "qu'est-ce que c'est ?"
 
     Quand True, ImageExecutionRouter._handle_input() bascule vers le pipeline
     enrichi : description vision → LLMExecutionRouter (mémoire + intents).

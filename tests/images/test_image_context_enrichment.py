@@ -1,36 +1,13 @@
 # tests/images/test_image_context_enrichment.py
 #
-# Tests du pipeline d'enrichissement contextuel de la génération image.
+# Tests de la génération image côté ImageExecutionRouter.
 #
-# Ce qu'on vérifie :
-#   - _inject_context() : logique d'injection prompt/contexte
-#   - _build_generation_context() : assemblage intents + mémoire
-#   - ImageExecutionRouter._handle_generation() : pipeline complet
-#
-# Stratégie de mock :
-#   Le bridge est injecté directement dans le router (MagicMock).
-#   bridge.retrieve_memories doit retourner le format dict standard :
-#     {"hits": [{"text": "..."}], "count": N}
-#   et NON une liste brute — _build_generation_context appelle .get("hits").
+# Depuis le sprint 24, le prompt de génération est le message brut :
+# aucun bloc de contexte (intents, souvenirs) n'y est injecté.
 
 from unittest.mock import MagicMock, patch
-from execution.routers.image_router import ImageExecutionRouter, _inject_context
+from execution.routers.image_router import ImageExecutionRouter
 from images.image_types import ImageArtifact
-
-
-# ── Tests unitaires _inject_context ─────────────────────────────────────────
-
-def test_inject_context_empty_returns_prompt():
-    """Un contexte vide ne doit pas modifier le prompt."""
-    assert _inject_context("mon jardin", "") == "mon jardin"
-
-
-def test_inject_context_prepends_block():
-    """Un contexte non vide doit être préfixé au prompt sous forme de bloc."""
-    result = _inject_context("mon jardin", "Projets actifs :\n- jardin potager")
-    assert result.startswith("[Contexte :")
-    assert "mon jardin"     in result
-    assert "jardin potager" in result
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,73 +79,22 @@ def test_generation_without_context_passes_raw_prompt():
     assert call_prompt == "dessine mon jardin"
 
 
-def test_generation_with_intents_injects_context():
+def test_generation_with_intents_and_memories_passes_raw_prompt():
     """
-    Le nom des intents actifs doit apparaître dans le prompt enrichi.
+    Avec intents actifs et souvenirs disponibles, le prompt passé à
+    generate reste exactement le message brut (pas de bloc contexte).
     """
-    router, internal = _make_router(intent_names=["jardin potager"])
+    router, internal = _make_router(
+        intent_names=["jardin potager"],
+        memories=["Nico a planté des tomates en mars"],
+    )
     with patch("execution.routers.image_router.write_image_artifact"):
         router.execute({
             "op_type"  : "image_generation",
             "content"  : "dessine mon jardin",
             "metadata" : {},
         })
-    call_prompt = internal.generate.call_args[1]["message"]
-    assert "jardin potager"   in call_prompt
-    assert "dessine mon jardin" in call_prompt
-
-
-def test_generation_with_memories_injects_context():
-    """
-    Le contenu des souvenirs pertinents doit apparaître dans le prompt enrichi.
-
-    Le bridge retourne {"hits": [{"text": "..."}], "count": N}.
-    _build_generation_context lit hits[n]["text"] pour construire le bloc contexte.
-    """
-    router, internal = _make_router(memories=["Nico a planté des tomates en mars"])
-    with patch("execution.routers.image_router.write_image_artifact"):
-        router.execute({
-            "op_type"  : "image_generation",
-            "content"  : "mon potager",
-            "metadata" : {},
-        })
-    call_prompt = internal.generate.call_args[1]["message"]
-    assert "tomates" in call_prompt
-
-
-def test_generation_memory_error_is_non_blocking():
-    """
-    Une erreur du bridge (ex: ChromaDB indisponible) ne doit pas bloquer
-    la génération. Le prompt brut est utilisé à la place du prompt enrichi.
-    """
-    router, internal = _make_router(intent_names=["jardin"])
-    router.mempalace_bridge = MagicMock()
-    router.mempalace_bridge.retrieve_memories.side_effect = Exception("ChromaDB down")
-
-    with patch("execution.routers.image_router.write_image_artifact"):
-        result = router.execute({
-            "op_type"  : "image_generation",
-            "content"  : "test",
-            "metadata" : {},
-        })
-
-    assert result["path"] == "/tmp/out.png"
-
-
-def test_generation_with_empty_memories_passes_raw_prompt():
-    """
-    Un bridge retournant zéro souvenir ne doit pas injecter de bloc vide.
-    Le prompt original doit être transmis intact.
-    """
-    router, internal = _make_router(memories=[])
-    with patch("execution.routers.image_router.write_image_artifact"):
-        router.execute({
-            "op_type"  : "image_generation",
-            "content"  : "dessine une forêt",
-            "metadata" : {},
-        })
-    call_prompt = internal.generate.call_args[1]["message"]
-    assert call_prompt == "dessine une forêt"
+    assert internal.generate.call_args[1]["message"] == "dessine mon jardin"
 
 
 def test_generation_result_contains_path_and_caption():

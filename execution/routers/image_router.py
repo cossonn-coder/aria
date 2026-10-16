@@ -31,7 +31,7 @@
 #
 # Responsabilités :
 #   - Transmettre la caption utilisateur au modèle de vision
-#   - Enrichir le prompt de génération avec intents + mémoire épisodique
+#   - Générer une image depuis le message brut (sans bloc de contexte, sprint 24)
 #   - Stocker chaque artefact image dans la mémoire épisodique (aria_episodic)
 #
 # Règle d'architecture :
@@ -54,8 +54,9 @@ class ImageExecutionRouter(BaseRouter):
 
     Args:
         internal_router      : llm.image_router.ImageRouter (vision + génération)
-        intent_engine        : IntentEngine — accès aux intents actifs (optionnel)
-        mempalace_bridge     : MempalaceBridge — recall épisodique (optionnel)
+        intent_engine        : IntentEngine — passé par le kernel, inutilisé
+                               depuis le sprint 24 (génération sans contexte)
+        mempalace_bridge     : MempalaceBridge — idem, inutilisé depuis le sprint 24
         llm_execution_router : LLMExecutionRouter — pipeline cognitif texte (optionnel)
                                Requis pour le mode enrichi (caption interrogative).
                                Sans lui, IMAGE_INPUT retourne toujours la description brute.
@@ -223,35 +224,26 @@ class ImageExecutionRouter(BaseRouter):
 
     def _handle_generation(self, content, payload: dict) -> dict:
         """
-        Génère une image depuis un prompt enrichi par le contexte cognitif.
+        Génère une image depuis le message brut de l'utilisateur.
 
         Contrat de sortie : {"path": str, "caption": str}
         _normalize() détecte l'extension image dans path et route vers send_photo().
 
         Flux :
             1. Extraction du prompt brut (message utilisateur)
-            2. Construction du contexte : intents actifs + mémoire épisodique
-            3. Enrichissement du prompt (pour le générateur uniquement)
-            4. Génération via ImageRouter
-            5. Stockage épisodique
-            6. Retour path + caption basée sur raw_prompt (pas le prompt enrichi)
+            2. Génération via ImageRouter, prompt brut tel quel
+            3. Stockage épisodique (demande brute)
+            4. Retour path + caption basée sur raw_prompt
 
-        Pourquoi séparer raw_prompt et enriched_prompt pour la caption ?
-            Le bloc [Contexte :...] est multi-lignes et peut dépasser 100 chars.
-            L'afficher dans la caption Telegram produit un texte debug illisible
-            tronqué à 79 chars. La caption doit refléter l'intention utilisateur,
-            pas le contexte cognitif interne.
+        Pourquoi pas de bloc de contexte (intents, souvenirs) ?
+            Sprint 24 : il polluait le prompt du générateur et la mémoire
+            épisodique (auto-pollution, audit §3.4).
         """
         raw_prompt = content if isinstance(content, str) else str(content)
         intent_id  = payload.get("metadata", {}).get("intent_id")
 
-        # ── Enrichissement du prompt pour le générateur ──────────────────────
-        # raw_prompt est conservé séparément pour la caption finale.
-        context_block   = self._build_generation_context(raw_prompt)
-        enriched_prompt = _inject_context(raw_prompt, context_block)
-
         artifact = self.internal_router.generate(
-            message=enriched_prompt,
+            message=raw_prompt,
             intent_id=intent_id,
         )
 
@@ -261,82 +253,9 @@ class ImageExecutionRouter(BaseRouter):
         except Exception as e:
             log.error("memory write error: %s", e)
 
-        # Caption basée sur raw_prompt — lisible, sans le bloc contexte interne.
         caption = raw_prompt[:100] if raw_prompt else artifact.caption or ""
 
         return {
             "path"    : artifact.path,
             "caption" : caption,
         }
-
-    # =========================================================
-    # CONTEXT BUILDER (privé)
-    # =========================================================
-
-    def _build_generation_context(self, prompt: str) -> str:
-        """
-        Assemble le contexte cognitif disponible pour enrichir le prompt image.
-
-        Retourne une chaîne vide si aucune information utile n'est disponible,
-        ce qui évite d'injecter du bruit dans le prompt de génération.
-
-        Deux sources :
-        - Intents actifs (triés par salience décroissante, max 3)
-        - Mémoire épisodique pertinente (max 3 souvenirs)
-        """
-        parts = []
-
-        # ── Intents actifs ───────────────────────────────────────────────────
-        if self.intent_engine is not None:
-            active = self.intent_engine.list_attention_active()
-            # Trier par salience décroissante, garder les 3 plus saillants
-            active_sorted = sorted(
-                active,
-                key=lambda i: getattr(i, "salience", 0.0),
-                reverse=True,
-            )[:3]
-
-            if active_sorted:
-                intent_lines = [f"- {i.name}" for i in active_sorted]
-                parts.append("Projets actifs de l'utilisateur :\n" + "\n".join(intent_lines))
-
-        # ── Mémoire épisodique ───────────────────────────────────────────────
-        if self.mempalace_bridge is not None:
-            try:
-                memories = self.mempalace_bridge.retrieve_memories(
-                    query=prompt,
-                    n=3,
-                )
-                hits = memories.get("hits", [])
-                if hits:
-                    mem_lines = [f"- {h.get('text', '')}" for h in hits if h.get("text")]
-                    if mem_lines:
-                        parts.append("Souvenirs pertinents :\n" + "\n".join(mem_lines))
-            except Exception as e:
-                log.error("[CONTEXT BUILD ERROR] episodic recall: %s", e)
-
-        return "\n\n".join(parts)
-
-
-# =========================================================
-# HELPERS
-# =========================================================
-
-def _inject_context(prompt: str, context: str) -> str:
-    """
-    Injecte le contexte cognitif dans le prompt de génération.
-
-    Si le contexte est vide, retourne le prompt original sans modification.
-    Le contexte est placé AVANT le prompt pour que le modèle le traite
-    comme information de fond plutôt que comme contrainte directe.
-
-    Format :
-        [Contexte :
-        ...]
-
-        <prompt utilisateur>
-    """
-    if not context.strip():
-        return prompt
-
-    return f"[Contexte :\n{context}]\n\n{prompt}"

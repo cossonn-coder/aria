@@ -24,7 +24,6 @@ from typing import Any, Optional
 from core.event import Event, EventType
 from cognition.cognitive_classifier import (
     classify_operation,
-    detect_generation_intent_from_caption,
     is_interrogative_caption,
 )
 from cognition.cognitive_context import CognitiveOperation
@@ -66,10 +65,10 @@ class CognitiveEngine:
     Le llm_router est optionnel : sans lui, le classifier tombe sur UNKNOWN
     pour les cas ambigus. Utile pour les tests sans API.
 
-    Pour les events IMAGE, trois cas :
-      caption de génération ("transforme en aquarelle")  → IMAGE_GENERATION
+    Pour les events IMAGE, toujours IMAGE_INPUT (jamais de génération
+    depuis une photo depuis le sprint 24 ; image-to-image = dette #77) :
       caption interrogative ("c'est quoi ?")             → IMAGE_INPUT  + interrogative=True
-      caption descriptive ou absente                     → IMAGE_INPUT  + interrogative=False
+      autre caption ou absente                           → IMAGE_INPUT  + interrogative=False
     """
 
     def __init__(
@@ -87,13 +86,6 @@ class CognitiveEngine:
         if event.type == EventType.IMAGE:
             content = event.content if isinstance(event.content, dict) else {}
             caption = content.get("caption")
-
-            # Caption = demande de génération → IMAGE_GENERATION
-            if detect_generation_intent_from_caption(caption):
-                return CognitiveResult(
-                    type=CognitiveOperation.IMAGE_GENERATION.value,
-                    operation=CognitiveOperation.IMAGE_GENERATION,
-                )
 
             # Caption = question sur le contenu → IMAGE_INPUT enrichi
             # Le flag interrogative est transmis au kernel pour injection
