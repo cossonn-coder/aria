@@ -158,11 +158,12 @@ class TestCognitiveEngineInterrogativeFlag:
         result = engine.classify(self._image_event("c'est quoi ?"))
         assert result.operation == CognitiveOperation.IMAGE_INPUT
 
-    def test_caption_generation_reste_image_generation(self):
+    def test_caption_generation_donne_image_input(self):
+        # Sprint 24 : plus de génération depuis une photo (dette #77).
         from cognition.cognitive_context import CognitiveOperation
         engine = self._engine()
         result = engine.classify(self._image_event("transforme en aquarelle"))
-        assert result.operation == CognitiveOperation.IMAGE_GENERATION
+        assert result.operation == CognitiveOperation.IMAGE_INPUT
         assert result.interrogative is False
 
 

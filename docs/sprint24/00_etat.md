@@ -25,7 +25,7 @@ _(aucune)_
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_generation.md` — Pollinations avec clé + secours anonyme, HF hors table, prompt brut, photo → toujours IMAGE_INPUT, mots-clés resserrés | ⏳ |
+| 01 | `01_generation.md` — Pollinations avec clé + secours anonyme, HF hors table, prompt brut, photo → toujours IMAGE_INPUT, mots-clés resserrés | ✅ (281 verts, non commité) |
 | 02 | `02_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -40,5 +40,9 @@ _(aucune)_
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, `docs/sprint24/audit_generation_images.md` (§5 = sonde
-clé), ce fichier. Prochaine étape : `/sprint-auto sprint 24` (tronçon 01), puis run live 02 par Nico.
+Tronçon 01 implémenté (pytest 281 verts ; baseline 282 − 6 tests du bloc
+contexte supprimés + 5 ajoutés). Écarts au kickoff : mode à clé du client
+déclenché par la présence de `model` (clé vide → `RuntimeError` → secours) ;
+`tests/images/test_architecture_rules.py` garde `HuggingFaceImageClient`
+(le test porte sur les clients, pas sur la table). Prochaine étape :
+commit du tronçon 01, puis run live 02 par Nico.

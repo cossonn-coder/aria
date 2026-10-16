@@ -18,7 +18,6 @@ from images.image_types import ImageArtifact, ImageInput
 from config import config
 from llm.vision.groq_vision import GroqVisionClient
 from llm.image_gen.pollinations_client import PollinationsClient
-from llm.image_gen.hf_client import HuggingFaceImageClient
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -68,17 +67,20 @@ VISION_ROUTING_TABLE = [
 ]
 
 GENERATION_ROUTING_TABLE = [
+    # Pollinations avec la clé de Nico (sprint 24) : sans filigrane.
+    # Clé vide → le client lève, on tombe sur le secours anonyme.
     {
-        "provider": "pollinations",
+        "provider": "pollinations_key",
+        "client": PollinationsClient,
+        "base_url": "https://gen.pollinations.ai",
+        "model": "tongyi-mai/z-image-turbo",
+        "api_key": lambda: config.pollination_api_key,
+    },
+    # Secours : Pollinations anonyme (filigrane, 1 image / 45 s).
+    {
+        "provider": "pollinations_anon",
         "client": PollinationsClient,
         "base_url": "https://image.pollinations.ai",
-    },
-    {
-        "provider": "huggingface",
-        "client": HuggingFaceImageClient,
-        "model": config.hf_image_model,
-        "base_url": "https://api-inference.huggingface.co/models",
-        "api_key": lambda: config.hf_token,
     },
 ]
 
@@ -168,7 +170,7 @@ class ImageRouter:
         Génère une image depuis un prompt texte.
 
         Args:
-            message   : prompt de génération (déjà traduit en EN par l'appelant)
+            message   : prompt de génération (message brut de l'utilisateur)
             intent_id : intent cognitif associé — pour lier l'image à un projet
 
         Returns:
@@ -210,9 +212,11 @@ class ImageRouter:
                     extra=entry.get("extra"),
                 )
                 result = getattr(client, method)(**kwargs)
-                # _dispatch sert aussi à la génération : ce log ne vise que la vision.
+                # Log du fournisseur qui a servi, pour lecture en run live.
                 if method == "describe":
                     log.info("[VISION] %s (%s) a répondu.", entry.get("provider"), entry.get("model"))
+                else:
+                    log.info("[IMAGE GEN] %s a répondu.", entry.get("provider"))
                 return result
 
             except Exception as e:

@@ -24,13 +24,14 @@ def test_photo_descriptive_caption_routes_to_input():
     assert result.operation == CognitiveOperation.IMAGE_INPUT
 
 
-def test_photo_generation_caption_routes_to_generation():
+# Sprint 24 : une photo ne déclenche plus de génération (img2img = dette #77).
+def test_photo_generation_caption_routes_to_input():
     engine = CognitiveEngine(llm_router=None)
     result = engine.classify(make_image_event(caption="génère une version estivale"))
-    assert result.operation == CognitiveOperation.IMAGE_GENERATION
+    assert result.operation == CognitiveOperation.IMAGE_INPUT
 
 
-def test_photo_draw_caption_routes_to_generation():
+def test_photo_draw_caption_routes_to_input():
     engine = CognitiveEngine(llm_router=None)
     result = engine.classify(make_image_event(caption="dessine ça en aquarelle"))
-    assert result.operation == CognitiveOperation.IMAGE_GENERATION
+    assert result.operation == CognitiveOperation.IMAGE_INPUT

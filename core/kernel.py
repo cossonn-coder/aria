@@ -78,7 +78,7 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
     )
 
     # Router image : analyse (IMAGE_INPUT) et génération (IMAGE_GENERATION)
-    # llm_router injecté pour la traduction FR→EN des prompts de génération
+    # llm_execution_router injecté pour le mode vision enrichi (caption interrogative)
     registry.register("image_router", ImageExecutionRouter(
         internal_router=InternalImageRouter(),
         intent_engine=intent_engine,
