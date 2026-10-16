@@ -20,7 +20,7 @@ _(aucune)_
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_saut_groq_413.md` — 413 Groq saute les autres Groq de la requête + corps HTTP dans le log de fallback | ⏳ |
+| 01 | `01_saut_groq_413.md` — 413 Groq saute les autres Groq de la requête + corps HTTP dans le log de fallback | ✅ (pytest 282 verts) |
 | 02 | `02_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -32,4 +32,5 @@ _(aucune)_
 ## §REPRISE
 
 Lire `CLAUDE.md`, `docs/sprint25/audit_groq_413.md`, ce fichier.
-Prochaine étape : `/sprint-auto sprint 25` (tronçon 01), puis run live 02 par Nico.
+Tronçon 01 ✅ (`llm/llm_router.py` + `tests/llm/test_groq_413.py`, non commité).
+Prochaine étape : commit du tronçon 01, puis run live 02 par Nico.
