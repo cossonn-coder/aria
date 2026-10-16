@@ -45,7 +45,7 @@ class AnalystAgent(BaseAgent):
             messages=messages,
             role=role,
             temperature=0.3,
-            max_tokens=800,
+            max_tokens=1500,
         )
         ctx.result = response.content
         return ctx

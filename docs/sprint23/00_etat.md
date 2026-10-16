@@ -42,8 +42,9 @@
 | # | Kickoff | Statut |
 |---|---------|--------|
 | 01 | `01_lecture_url.md` — DIGEST sans Groq, `extract`, handler `URL_READ`, tranches, logs, heuristique URL | ✅ (pytest 278 verts, commit 44a8b1b) |
-| 02 | `02_lire_la_suite.md` — « oui » / « lis la suite » via marqueur dans l'historique | ✅ (pytest 281 verts, non commité) |
-| 03 | `03_run_live.md` — run live (Nico) | ⏳ |
+| 02 | `02_lire_la_suite.md` — « oui » / « lis la suite » via marqueur dans l'historique | ✅ (pytest 281 verts, commit 6975fe4) |
+| 03 | `03_run_live.md` — run live (Nico) | ✅ A-G conformes (2026-10-16) ; D tronqué → tronçon 04 |
+| 04 | `04_reponse_tronquee.md` — AnalystAgent `max_tokens` 800 → 1500 | ✅ (pytest 282 verts) ; re-live D à faire |
 
 ## Dettes
 
@@ -54,11 +55,12 @@
 ## §REPRISE
 
 Lire `CLAUDE.md` + `docs/sprint23/audit_lecture_url.md` + ce fichier.
-Tronçons 01 (commit 44a8b1b) et 02 (pytest 281 verts, non commité) implémentés.
-Tronçon 02 : `detect_url_resume()` dans `cognitive_classifier.py` (règle 2b,
-avant « court → CONFIRMATION », lit l'historique seulement sur une réponse de
-reprise) ; dans `web_router._handle_url_read`, pas d'URL = reprise : regex
-`_PARTIAL_RE` sur le dernier tour `user`, `_read_slice(url, end, …)` ; en
-reprise la synthèse reçoit « (suite de la lecture : résumé général) » au lieu
-du message. Marqueur absent → consigne « Page illisible ».
-Prochaine étape : run live 03 par Nico (`03_run_live.md`).
+Tronçons 01 (44a8b1b), 02 (6975fe4) commités. Run live 03 : A-G conformes ;
+D tronqué (« cloches de V ») car l'AnalystAgent plafonne la réponse REASONING
+à `max_tokens=800` (hypothèse initiale `llm_router` défaut 1000 réfutée).
+Tronçon 04 : 800 → 1500 global (arbitrage Nico), toutes réponses REASONING.
+Relevé au live, à verser en dettes à la clôture : Groq 413 sur toute réponse
+dès qu'une synthèse est dans l'historique (→ #73) ; réponse hors sujet
+« Prochaine action… projet potager » ; intent parasite « vacances normandie
+train » sur E.
+Prochaine étape : re-live C + D par Nico, puis clôture.
