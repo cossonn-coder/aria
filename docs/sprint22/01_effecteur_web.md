@@ -23,8 +23,8 @@ dans `cognition/cognitive_classifier.py`.
    - `search(query: str, max_results: int = 5) -> list[dict]` ;
    - `httpx.post("https://api.tavily.com/search", headers={"Authorization": f"Bearer {config.tavily_api_key}"}, json={"query": query, "max_results": max_results, "search_depth": "basic"}, timeout=15.0)`, `raise_for_status()` ;
    - retourne `[{"title", "url", "content"}]` lus dans `data["results"]`
-     (format courant de l'API, **non vérifié sur source officielle** : le run
-     live tranche ; en cas d'écart, seule cette fonction change) ;
+     (format **vérifié** par un appel réel le 2026-10-16 : HTTP 200, clés
+     `results[].title/url/content/score/id/raw_content`, auth Bearer OK) ;
    - clé vide → lève une exception (le router la traite comme un échec).
    - Commentaire d'en-tête : ce module est le seul à connaître le fournisseur ;
      changer de moteur = changer ce fichier.

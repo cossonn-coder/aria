@@ -23,6 +23,6 @@ sudo journalctl -u aria -f -o cat
 
 A, B, D conformes. C conforme ou, si le LLM classe autrement, noté comme
 calibrage de prompt (non bloquant). Toute ligne `web_search FAILED` : relever
-l'erreur (format de réponse Tavily, cf. 01 §3).
+l'erreur (format Tavily vérifié en conception, chercher ailleurs : clé, réseau).
 
 Retour à Claude : verdicts A-D + extraits journalctl pertinents.
