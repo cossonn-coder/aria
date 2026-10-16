@@ -1,6 +1,6 @@
 # Sprint 22 — État de conception
 
-**Phase courante** : B — conception FIGÉE (OK Nico 2026-10-16), prête pour `/sprint-auto sprint 22`
+**Phase courante** : CLOS (run live 03 OK 2026-10-16, tag `sprint-22`)
 **Branche** : `feat/sprint22-web-search`
 
 ## Décisions arrêtées
@@ -31,7 +31,7 @@
 |---|---------|--------|
 | 01 | `01_effecteur_web.md` — Tavily + `web_router` + kernel + config | ✅ (265 verts) |
 | 02 | `02_classification_web.md` — heuristique + catégorie LLM | ✅ (269 verts) |
-| 03 | `03_run_live.md` — run live (Nico) | ⏳ |
+| 03 | `03_run_live.md` — run live (Nico) | ✅ A, B, C, D conformes |
 
 ## Dettes
 
@@ -46,12 +46,18 @@ Fermée par le sprint (à la clôture) : idée « recherche web » du sprint 5
 - Code sans caller apparent : `cognition/cognitive_dispatcher.py`,
   `execution/execution_plan_builder.py`, `cognition/dispatcher_types.py`.
 
+## Run live 03 (2026-10-16, 13:00–13:02)
+
+| # | Verdict | Trace |
+|---|---------|-------|
+| A | ✅ | `web_search OK provider=tavily results=5 query='score dernier match Stade Malherbe Caen'`, réponse avec URL |
+| B | ✅ | 1er message sans `web_search` ; `Source?` → `query='Robert Stirling moteur Stirling brevet 1816'`, 5 URL |
+| C | ✅ | (Albertville au lieu de Caen) classifier LLM → `web_search`, `query='météo Albertville demain'` |
+| D | ✅ | aucune ligne `web_search`, réponse mémoire potager |
+
+Observé : deux 429 Groq en ~45 s (groq puis groq_2), fallback groq_3 a tenu.
+Noté en dette #73.
+
 ## §REPRISE
 
-Lire `CLAUDE.md` + ce fichier + le kickoff du prochain tronçon ⏳.
-Tronçons 01 (commité) et 02 faits (02 non commité au moment de l'écriture) :
-`classify_operation` émet `WEB_SEARCH` via `detect_web_search_intent`
-(étape 2, avant image et « message court ») et via la catégorie LLM
-`web_search` de `CLASSIFIER_PROMPT`.
-Prochaine étape : run live 03 par Nico (`03_run_live.md`, clé
-`TAVILY_API_KEY` dans `.env`).
+Sprint clos. Suite : `docs/sprint23/context_kickoff_sprint_23.md`.
