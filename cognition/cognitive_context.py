@@ -16,6 +16,7 @@ class CognitiveOperation(Enum):
     UNKNOWN       = "unknown"
     IMAGE_INPUT = "image_input"
     IMAGE_GENERATION = "image_generation"
+    WEB_SEARCH = "web_search"  # délégué en REASONING par web_router (sprint 22)
 
 
 # TOP_K mémoire par opération
