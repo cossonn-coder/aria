@@ -13,6 +13,7 @@
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
 from telegram import Update
+from telegram.error import NetworkError
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
@@ -27,6 +28,15 @@ from pathlib import Path
 from config import config
 from interfaces.base_interface import BaseInterface
 from core.event import Event, EventType
+from logger import get_logger
+
+log = get_logger(__name__)
+
+# Retry des envois sur erreur réseau : 3 tentatives, attentes 2 s puis 4 s.
+# Doublon possible si Telegram a reçu le message mais que la réponse s'est
+# perdue en route — accepté (sprint 21, Q3).
+SEND_ATTEMPTS = 3
+SEND_BACKOFF_SECONDS = (2, 4)
 
 
 class TelegramInterface(BaseInterface):
@@ -50,7 +60,18 @@ class TelegramInterface(BaseInterface):
             MessageHandler(filters.PHOTO, self._handle_photo)
         )
 
-        self.app.run_polling()
+        # Erreurs non rattrapées (getUpdates en échec, envoi définitivement
+        # échoué) : une ligne WARNING au lieu d'une trace ERROR complète.
+        self.app.add_error_handler(self._on_error)
+
+        # Retries de bootstrap infinis : PTB réessaie indéfiniment l'initialisation
+        # (get_me) au lieu de lever et de tuer le process au démarrage.
+        self.app.run_polling(bootstrap_retries=-1)
+
+    async def _on_error(self, update, context: ContextTypes.DEFAULT_TYPE):
+        """Error handler PTB : journalise l'erreur en une ligne, sans trace."""
+        err = context.error
+        log.warning("telegram error: %s: %s", type(err).__name__, err)
 
     # =========================================================
     # HANDLERS ENTRANTS
@@ -58,6 +79,13 @@ class TelegramInterface(BaseInterface):
 
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Reçoit un message texte, crée un Event TEXT, attend la réponse."""
+
+        # Trace de réception — sert à diagnostiquer un éventuel double
+        # traitement d'un même update (#63).
+        log.info(
+            "telegram_update update_id=%s message_id=%s type=text",
+            update.update_id, update.message.message_id,
+        )
 
         user_id = str(update.effective_user.id)
         chat_id = update.effective_chat.id
@@ -81,6 +109,12 @@ class TelegramInterface(BaseInterface):
         La caption éventuelle (texte accompagnant la photo) est transmise
         dans le content pour que le router vision puisse l'utiliser.
         """
+
+        # Trace de réception (#63), cf. _handle_message.
+        log.info(
+            "telegram_update update_id=%s message_id=%s type=photo",
+            update.update_id, update.message.message_id,
+        )
 
         user_id = str(update.effective_user.id)
         chat_id = update.effective_chat.id
@@ -112,6 +146,26 @@ class TelegramInterface(BaseInterface):
     # ENVOI SORTANT
     # =========================================================
 
+    async def _send_with_retry(self, chat_id: int, make_call):
+        """
+        Exécute un envoi Telegram, réessayé sur NetworkError (TimedOut inclus).
+
+        make_call est une fabrique de coroutine : chaque tentative recrée
+        l'appel (et rouvre le fichier pour une photo). Après la dernière
+        tentative, l'exception remonte jusqu'à l'error handler.
+        """
+        for attempt in range(1, SEND_ATTEMPTS + 1):
+            try:
+                return await make_call()
+            except NetworkError as e:
+                if attempt == SEND_ATTEMPTS:
+                    raise
+                log.warning(
+                    "telegram send failed (attempt %d/%d): %s, chat_id=%s",
+                    attempt, SEND_ATTEMPTS, type(e).__name__, chat_id,
+                )
+                await asyncio.sleep(SEND_BACKOFF_SECONDS[attempt - 1])
+
     async def send(self, chat_id: int, message):
         """
         Envoie la réponse du kernel à l'utilisateur Telegram.
@@ -131,19 +185,23 @@ class TelegramInterface(BaseInterface):
             caption = message.get("caption", "") or ""
 
             if path and Path(path).exists():
-                with open(path, "rb") as photo:
-                    await self.app.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo,
-                        caption=caption[:1024] if caption else None,
-                    )
+                # Fichier rouvert à chaque tentative : un handle déjà lu
+                # ne peut pas être renvoyé.
+                async def _send_photo():
+                    with open(path, "rb") as photo:
+                        return await self.app.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=photo,
+                            caption=caption[:1024] if caption else None,
+                        )
+                await self._send_with_retry(chat_id, _send_photo)
                 return
 
             # Fichier introuvable — on envoie le path en texte (debug)
-            await self.app.bot.send_message(
+            await self._send_with_retry(chat_id, lambda: self.app.bot.send_message(
                 chat_id=chat_id,
                 text=f"Image générée mais fichier introuvable : {path}",
-            )
+            ))
             return
 
         # ── Résultat texte ───────────────────────────────────────────────────
@@ -157,7 +215,7 @@ class TelegramInterface(BaseInterface):
         MAX = 4096
         chunks = [text[i:i+MAX] for i in range(0, len(text), MAX)]
         for chunk in chunks:
-            await self.app.bot.send_message(
+            await self._send_with_retry(chat_id, lambda: self.app.bot.send_message(
                 chat_id=chat_id,
                 text=chunk,
-            )
+            ))
