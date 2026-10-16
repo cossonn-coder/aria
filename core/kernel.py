@@ -36,6 +36,7 @@ from execution.routing_table import RoutingTable
 from execution.router_registry import RouterRegistry
 from execution.routers.image_router import ImageExecutionRouter
 from execution.routers.llm_router import LLMExecutionRouter
+from execution.routers.web_router import WebExecutionRouter
 
 
 # ── Table de routing opération → nom de router ──────────────────────────────
@@ -55,6 +56,7 @@ _ROUTING_TABLE = RoutingTable({
     CognitiveOperation.PROFILE_QUERY.value     : "llm_router",
     CognitiveOperation.CONFIRMATION.value      : "llm_router",
     CognitiveOperation.UNKNOWN.value           : "llm_router",
+    CognitiveOperation.WEB_SEARCH.value        : "web_router",
 })
 
 
@@ -85,6 +87,13 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
 
     # Router LLM : pipeline cognitif complet (mémoire + intents + agents)
     registry.register("llm_router", llm_execution_router)
+
+    # Router web : recherche (WEB_SEARCH), réponse déléguée au pipeline texte
+    registry.register("web_router", WebExecutionRouter(
+        llm_router=llm_router,
+        mempalace_bridge=mempalace_bridge,
+        llm_execution_router=llm_execution_router,
+    ))
 
     return ExecutionDispatcher(
         registry=registry._routers,

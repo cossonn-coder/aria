@@ -147,10 +147,10 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 21 clos (tag `sprint-21`, #62 fermée, #63 instrumentée, #65-#67 ouvertes).
-Prochain : **sprint 22**, cible à choisir par Nico.
-Kickoff : `docs/sprint22/context_kickoff_sprint_22.md`.
-Prochaine étape : `/conception sprint 22`.
+Sprint 22 clos (tag `sprint-22`, recherche web Tavily, #68-#73 ouvertes).
+Prochain : **sprint 23**, cible à choisir par Nico.
+Kickoff : `docs/sprint23/context_kickoff_sprint_23.md`.
+Prochaine étape : `/conception sprint 23`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
