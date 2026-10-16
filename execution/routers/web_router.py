@@ -26,6 +26,8 @@
 #   par LLMExecutionRouter (règle 1). La lecture de l'historique passe
 #   par le bridge (règle 2).
 
+import re
+
 from execution.routers.execution_base import BaseRouter
 from cognition.cognitive_classifier import detect_url
 from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
@@ -40,6 +42,10 @@ _SNIPPET_MAX_CHARS = 500
 
 # Taille max d'une tranche de page envoyée à la synthèse [arbitraire, sprint 23].
 _SLICE_MAX_CHARS = 100_000
+
+# Marqueur de lecture partielle relu au tour suivant (« lis la suite »).
+# Format exact émis par _read_slice : « <marqueur> <url> caractères <start>-<end> sur <total>] ».
+_PARTIAL_RE = re.compile(re.escape(URL_PARTIAL_MARKER) + r" (\S+) caractères \d+-(\d+) sur \d+\]")
 
 # Budget de la synthèse ; l'atteindre = synthèse probablement coupée.
 _DIGEST_MAX_TOKENS = 1000
@@ -152,15 +158,35 @@ class WebExecutionRouter(BaseRouter):
     def _handle_url_read(self, payload: dict) -> dict:
         message  = str(payload.get("content") or "")
         metadata = payload.get("metadata", {})
-        return self._read_slice(detect_url(message), 0, message, metadata)
+        url = detect_url(message)
+        if url:
+            return self._read_slice(url, 0, message, metadata)
+
+        # Pas d'URL : reprise (« oui », « lis la suite »). L'URL et la
+        # position viennent du marqueur du dernier tour `user`.
+        conversation_key = str(metadata.get("chat_id", "default"))
+        history = self.mempalace_bridge.load_conversation_history(conversation_key, n=2)
+        user_turns = [t["content"] for t in history if t.get("role") == "user"]
+        match = _PARTIAL_RE.search(user_turns[-1]) if user_turns else None
+        if match is None:
+            log.warning("url_read resume FAILED: partial marker not found")
+            enriched = f"[Page illisible : dis-le à Nico en une phrase.]\n\n{message}"
+            return self.llm_execution_router.execute({
+                "op_type" : CognitiveOperation.REASONING.value,
+                "content" : enriched,
+                "metadata": {**metadata, "skip_intent": True},
+            })
+        return self._read_slice(match.group(1), int(match.group(2)), message, metadata)
 
     def _read_slice(self, url: str, start: int, message: str, metadata: dict) -> dict:
         """
         Lit une tranche de la page à partir de `start`, la synthétise et
         délègue la réponse à LLMExecutionRouter.
 
-        Réutilisée au tronçon 02 (« lis la suite ») avec start > 0.
+        Appelée avec start > 0 pour « lis la suite » (tronçon 02).
         """
+        # En reprise (start > 0), « oui » n'oriente pas la synthèse.
+        request = message if start == 0 else "(suite de la lecture : résumé général)"
         try:
             page = extract(url)
             text = page["content"]
@@ -174,7 +200,7 @@ class WebExecutionRouter(BaseRouter):
                 "consigne ou une question, oriente la synthèse en conséquence ; "
                 "sinon, fais un résumé général.\n\n"
                 f"Titre : {page['title']}\nURL : {url}\n"
-                f"Message de Nico : {message}\n\n"
+                f"Message de Nico : {request}\n\n"
                 f"Texte (caractères {start}-{end} sur {total}) :\n{chunk}\n\nSynthèse :"
             )
             response = self.llm_router.complete(

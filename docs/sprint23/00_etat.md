@@ -41,8 +41,8 @@
 
 | # | Kickoff | Statut |
 |---|---------|--------|
-| 01 | `01_lecture_url.md` — DIGEST sans Groq, `extract`, handler `URL_READ`, tranches, logs, heuristique URL | ✅ (pytest 278 verts, non commité) |
-| 02 | `02_lire_la_suite.md` — « oui » / « lis la suite » via marqueur dans l'historique | ⏳ |
+| 01 | `01_lecture_url.md` — DIGEST sans Groq, `extract`, handler `URL_READ`, tranches, logs, heuristique URL | ✅ (pytest 278 verts, commit 44a8b1b) |
+| 02 | `02_lire_la_suite.md` — « oui » / « lis la suite » via marqueur dans l'historique | ✅ (pytest 281 verts, non commité) |
 | 03 | `03_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -54,7 +54,11 @@
 ## §REPRISE
 
 Lire `CLAUDE.md` + `docs/sprint23/audit_lecture_url.md` + ce fichier.
-Tronçon 01 implémenté (pytest 278 verts) : `_read_slice(url, start, message, metadata)`
-et `_cut_slice` dans `web_router.py`, `URL_PARTIAL_MARKER` dans `cognitive_context.py`,
-marqueur émis : `[Lecture partielle : <url> caractères <start>-<end> sur <total>]`.
-Prochaine étape : tronçon 02 (`02_lire_la_suite.md`), puis run live 03 par Nico.
+Tronçons 01 (commit 44a8b1b) et 02 (pytest 281 verts, non commité) implémentés.
+Tronçon 02 : `detect_url_resume()` dans `cognitive_classifier.py` (règle 2b,
+avant « court → CONFIRMATION », lit l'historique seulement sur une réponse de
+reprise) ; dans `web_router._handle_url_read`, pas d'URL = reprise : regex
+`_PARTIAL_RE` sur le dernier tour `user`, `_read_slice(url, end, …)` ; en
+reprise la synthèse reçoit « (suite de la lecture : résumé général) » au lieu
+du message. Marqueur absent → consigne « Page illisible ».
+Prochaine étape : run live 03 par Nico (`03_run_live.md`).

@@ -15,3 +15,28 @@ def test_url_beats_web_search_phrase():
 
 def test_detect_url_strips_trailing_punctuation():
     assert detect_url("lis (https://ex.fr/page).") == "https://ex.fr/page"
+
+
+# ── Tronçon 02 : « lis la suite » ────────────────────────────────────────────
+
+from unittest.mock import MagicMock
+
+
+def _bridge(user_turn):
+    bridge = MagicMock()
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": user_turn},
+        {"role": "assistant", "content": "Veux-tu que je lise la suite ?"},
+    ]
+    return bridge
+
+
+def test_oui_after_partial_read_is_url_read():
+    bridge = _bridge("[Lecture partielle : https://ex.fr/a caractères 0-99000 sur 250000]\n\nrésume")
+    assert classify_operation("Oui !", metadata={"chat_id": 42}, bridge=bridge) == CognitiveOperation.URL_READ
+    bridge.load_conversation_history.assert_called_once_with("42", n=2)
+
+
+def test_oui_without_marker_stays_confirmation():
+    bridge = _bridge("on mange quoi ce soir")
+    assert classify_operation("oui", metadata={"chat_id": 42}, bridge=bridge) == CognitiveOperation.CONFIRMATION

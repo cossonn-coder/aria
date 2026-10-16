@@ -7,6 +7,7 @@
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
 #   2. URL http(s):// dans le message                → URL_READ
+#   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
 #   3. Heuristique texte recherche web              → WEB_SEARCH
 #   4. Heuristique texte image generation           → IMAGE_GENERATION
 #   5. Message court → CONFIRMATION                 ← anti-intents parasites
@@ -24,7 +25,7 @@
 
 import json
 import re
-from cognition.cognitive_context import CognitiveOperation
+from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
 from logger import get_logger
@@ -172,6 +173,36 @@ def detect_url(message: str) -> str | None:
     return match.group(0).rstrip(_URL_TRAILING_PUNCT)
 
 
+# Réponses de reprise après une lecture partielle (sprint 23, tronçon 02).
+# Comparaison exacte après nettoyage ; « lis/lire la suite » matche aussi
+# en sous-chaîne.
+_URL_RESUME_EXACT = {
+    "oui", "ouais", "vas-y", "vas y", "ok", "continue",
+    "la suite", "lis la suite", "oui lis la suite",
+}
+_URL_RESUME_PHRASES = ["lis la suite", "lire la suite"]
+
+
+def detect_url_resume(message: str, metadata: dict, bridge) -> bool:
+    """
+    Retourne True si le message demande la suite d'une lecture partielle.
+
+    L'historique n'est lu (via le bridge) que si le message est une
+    réponse de reprise : le dernier tour `user` doit contenir le marqueur
+    URL_PARTIAL_MARKER posé par WebExecutionRouter. Sinon, un « oui »
+    reste une CONFIRMATION ordinaire.
+    """
+    lower = message.lower().strip().rstrip("?!. ")
+    if lower not in _URL_RESUME_EXACT and not any(p in lower for p in _URL_RESUME_PHRASES):
+        return False
+    if bridge is None:
+        return False
+    conversation_key = str(metadata.get("chat_id", "default"))
+    history = bridge.load_conversation_history(conversation_key, n=2)
+    user_turns = [t["content"] for t in history if t.get("role") == "user"]
+    return bool(user_turns) and URL_PARTIAL_MARKER in user_turns[-1]
+
+
 # =========================================================
 # HEURISTIQUE RECHERCHE WEB
 # =========================================================
@@ -262,6 +293,11 @@ def classify_operation(
     # Prioritaire sur la recherche web (URL + « cherche en ligne » = lecture)
     # et sur « message court » (une URL seule = résumé de la page).
     if detect_url(message):
+        return CognitiveOperation.URL_READ
+
+    # ── 2b. Suite d'une lecture partielle ───────────────────────────────────
+    # Avant « message court » : « oui » serait sinon une CONFIRMATION.
+    if detect_url_resume(message, metadata, bridge):
         return CognitiveOperation.URL_READ
 
     # ── 3. Heuristique recherche web ────────────────────────────────────────

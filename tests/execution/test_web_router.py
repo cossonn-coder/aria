@@ -114,3 +114,29 @@ def test_url_read_extract_failure_delegates_notice(monkeypatch):
     router.execute(_url_payload())
 
     assert "Page illisible" in llm_exec.execute.call_args.args[0]["content"]
+
+
+# ── Reprise « lis la suite » (sprint 23, tronçon 02) ─────────────────────────
+
+def test_url_read_resume_reads_next_slice(monkeypatch):
+    text = "a" * 99_000 + "DEBUT_SUITE" + "b" * 150_989  # 250 000 car.
+    extracted = []
+    def _extract(url):
+        extracted.append(url)
+        return {"title": "Titre", "url": url, "content": text}
+    monkeypatch.setattr(web_router_mod, "extract", _extract)
+    router, llm_exec = _make_router()
+    router.mempalace_bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": f"[Lecture partielle : {_URL} caractères 0-99000 sur 250000]\n\nrésume {_URL}"},
+        {"role": "assistant", "content": "Je lis la suite ?"},
+    ]
+    router.llm_router.complete.return_value = MagicMock(content="S2", usage=None)
+
+    router.execute({"op_type": "url_read", "content": "oui", "metadata": {"chat_id": 42}})
+
+    assert extracted == [_URL]
+    prompt = router.llm_router.complete.call_args.kwargs["prompt"]
+    assert "caractères 99000-" in prompt
+    assert prompt.split("sur 250000) :\n")[1].startswith("DEBUT_SUITE")
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert f"[Lecture partielle : {_URL} caractères 99000-" in content
