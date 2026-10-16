@@ -1,14 +1,14 @@
 # Sprint 21 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-15), prêt pour `/sprint-auto sprint 21`.
+**Phase** : CLOS (2026-10-16). Run live 02 conforme (A, B, C).
 **Branche** : `feat/sprint21-telegram-reseau` (créée depuis `main` @ `2b34f3b`).
 
 ## Tronçons
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_telegram_robustesse.md` — bootstrap_retries, retry send, error handler, log réception | ✅ (non commité, pytest 262 verts) |
-| 02 | `02_run_live.md` — coupure iptables (Nico) | ⏳ |
+| 01 | `01_telegram_robustesse.md` — bootstrap_retries, retry send, error handler, log réception | ✅ `7c2c072` (262 verts) |
+| 02 | `02_run_live.md` — coupure iptables (Nico) | ✅ conforme (A, B, C) |
 
 ## Décisions arrêtées
 
@@ -25,10 +25,16 @@
 
 ## Dettes
 
-- Visées : #62 (fermeture au run live), #63 (instrumentée, reste ouverte « à confirmer »).
+- Fermée : #62 (run live 02 conforme).
+- Ouverte : #63 (instrumentée, « à confirmer » — ne se reproduit pas sur commande).
 - Nouvelles, hors scope : `aria.service` versionné pointe `/home/nico/projects/aria` (installé : Nextcloud) ; découpage 4096 de `send()` coupe au milieu des mots (commentaire faux) ; IPv6 VM → Telegram injoignable (piste si timeouts persistent).
+
+## Run live 02 (2026-10-16)
+
+Scénarios A (démarrage sans réseau), B (envoi pendant coupure), C (log
+de réception photo) conformes selon Nico. #62 fermée.
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, `docs/sprint21/context_kickoff_sprint_21.md`, ce fichier.
-+ `audit_telegram_reseau.md`. Tronçon 01 implémenté (`interfaces/telegram_interface.py`, `tests/interfaces/test_telegram_interface.py`), en attente de commit orchestrateur. Prochaine étape : run live 02 par Nico (`02_run_live.md`).
+Sprint clos, tag `sprint-21`. Suite : `docs/sprint22/context_kickoff_sprint_22.md`,
+`/conception sprint 22`.
