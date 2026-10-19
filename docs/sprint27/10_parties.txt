@@ -1,0 +1,60 @@
+===== Partie 1 — Smith-Morra (Nico blancs) =====
+[White "staroflexeur"]
+[Black "Test"]
+
+1. e4 c5 2. d4 cxd4 3. c3 dxc3 4. Nxc3 Nc6 5. Nf3 Nf6 6. Bc4 e6 7. O-O a6 8. e5 *
+
+
+===== Partie 2 — Dame précoce, en-têtes indentés (Nico noirs) =====
+[White "Test"]
+  [Black "staroflexeur"]
+  1. e4 e5 2. Qh5 Nc6 *
+
+
+===== Partie 3 — gambit letton (Nico noirs) =====
+[White "MitenPandya"]
+[Black "staroflexeur"]
+[Result "0-1"]
+[ECO "C40"]
+[ECOUrl "https://www.chess.com/openings/Kings-Pawn-Opening-Latvian-Gambit-Accepted"]
+[WhiteElo "1190"]
+[BlackElo "1316"]
+
+1. e4 e5 2. Nf3 f5 3. exf5 e4 4. Ng1 Nf6 5. d3 exd3 6. Bxd3 d5 7. Bg5 Be7 8.
+Bxf6 Bxf6 9. Qh5+ Kf8 10. c3 Bd7 11. Ne2 Qe8 12. O-O Qxh5 13. Nf4 Qf7 14. Bc2
+Be5 15. Ne2 Bxf5 16. Bxf5 Qxf5 17. f4 Bd6 18. Nd4 Qf7 19. Nd2 Nd7 20. N2b3 c5
+21. Nb5 Qf6 22. Rae1 Kf7 23. g4 Rhe8 24. Rd1 Kg8 25. Rxd5 Bxf4 26. Rxd7 Be3+ 27.
+Kg2 Qc6+ 28. Kh3 Qxd7 29. Na3 Qd3 30. Rf3 Qe2 31. Rg3 Qf1+ 32. Rg2 Re6 33. Nc2
+Rh6+ 34. Kg3 Qf4# 0-1
+
+
+===== Partie 4 — Von Hennig (Nico blancs) =====
+[White "staroflexeur"]
+[Black "CANNIBALISM_22"]
+[Result "*"]
+[ECO "B15"]
+[ECOUrl "https://www.chess.com/openings/Caro-Kann-Defense-von-Hennig-Gambit"]
+[WhiteElo "1337"]
+[BlackElo "1217"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Bc4 Nf6 5. f3 exf3 6. Nxf3 Bg4 7. Ne5 Be6 8.
+Bxe6 fxe6 9. O-O Nbd7 10. Nf3 g6 11. Ng5 Bg7 12. Nxe6 *
+
+
+===== Partie 5 — Écossaise / gambit Göring (Nico blancs) =====
+[White "staroflexeur"]
+[Black "ghzwansl"]
+[Result "1-0"]
+[ECO "C45"]
+[ECOUrl "https://www.chess.com/openings/Scotch-Game-Goring-Double-Pawn-Sacrifice-Variation-5...cxb2-6.Bxb2"]
+[WhiteElo "1345"]
+[BlackElo "1263"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. c3 dxc3 5. Bc4 cxb2 6. Bxb2 Nf6 7. O-O h6 8.
+e5 Nxe5 9. Nxe5 d6 10. Nxf7 Qd7 11. Nxh8 Qc6 12. Bf7+ Kd7 13. Ng6 b6 14. Ne5+
+Kd8 15. Nxc6+ Kd7 16. Ne5+ Ke7 17. Bd5 dxe5 18. Bxa8 Kf7 19. Bxe5 Nd7 20. Bd5+
+Kg6 21. Qg4+ Kh7 22. Be4+ Kh8 23. Bxc7 b5 24. Qf3 a5 25. Bxa5 Nf6 26. Nc3 Bg4
+27. Qf4 Be6 28. Rad1 Bc4 29. Rfe1 Bc5 30. Rd8+ Bg8 31. Qb8 Be7 32. Rxg8+ Nxg8
+33. Bd5 Kh7 34. Qxg8+ Kg6 35. Rxe7 b4 36. Qxg7+ Kf5 37. Be4+ Kf4 38. Bc7# 1-0
+
+
