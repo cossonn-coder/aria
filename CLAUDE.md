@@ -150,11 +150,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 27 clos (tag `sprint-27`, coach d'échecs : occasions explosives, tournants,
-variantes coupées à l'avantage clair, format court ; run live partiel, résidus #89-#93).
-Prochain : **sprint 28**, cible pressentie modèle joueur (#81, touche le palace prod).
-Kickoff : `docs/sprint28/context_kickoff_sprint_28.md`.
-Prochaine étape : `/conception sprint 28`.
+Sprint 28 clos (tag `sprint-28`, modèle joueur RPG : difficulté Maia-2, Elo par thème,
+Global = moyenne des thèmes + Résultats, badges, inventaire d'ouvertures ; Groq hors REASONING).
+Prochain : **sprint 29**, cible pressentie thèmes par motif tactique (#100).
+Kickoff : `docs/sprint29/context_kickoff_sprint_29.md`.
+Prochaine étape : `/conception sprint 29`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

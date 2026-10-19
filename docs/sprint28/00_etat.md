@@ -1,6 +1,6 @@
 # Sprint 28 — modèle joueur façon RPG (#81) — état
 
-**Phase** : B figée (2026-10-19) → exécution `/sprint-auto sprint 28`.
+**Phase** : CLOS (2026-10-20) — run live 04 + contrôle du correctif 05 OK.
 **Branche** : `feat/sprint28-modele-joueur` (créée depuis `main` @ `sprint-27`).
 **Audit** : `docs/sprint28/audit_modele_joueur.md`.
 **Palace prod** : lu seulement ; seule écriture = fiches `chess_game` existantes
@@ -13,7 +13,7 @@
 | 01 | Difficulté des coups par Maia-2 (install `--no-deps`, `chess_coach/difficulty.py`, champs fiche) | `01_difficulte_maia.md` | ✅ |
 | 02 | Modèle joueur pur (XP Elo par thème, niveaux, badges, ouvertures) + `bridge.load_chess_games` | `02_modele_joueur.md` | ✅ |
 | 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ✅ |
-| 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ✅ partiel (2026-10-19) |
+| 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ✅ (2026-10-19) |
 | 05 | Correctif post-live : Global = moyenne des thèmes + « Résultats », lignes fusionnées, Groq hors REASONING | `05_correctif_global.md` | ✅ |
 
 ## Décisions arrêtées
@@ -100,3 +100,7 @@ thèmes (`_THEMES`), recalculée après l'ouverture, après chaque épreuve de c
 pytest 325 verts.
 Prochaine étape : run live de contrôle (Global d'une défaite, ligne fusionnée, pas de 413
 Groq en `journalctl`), puis clôture. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
+
+Contrôle live du tronçon 05 (2026-10-20 00:52) : analyse sans Groq (DeepSeek direct),
+ligne « Résultats (−17) : défaite contre 1352 », Global −1 = moyenne. Ligne fusionnée non
+observée (#101). Sprint clos ; suite : `docs/sprint29/context_kickoff_sprint_29.md`.
