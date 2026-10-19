@@ -1,6 +1,6 @@
 # Sprint 27 — état de conception
 
-**Phase** : B correctif 2 figée (2026-10-19) — prêt pour `/sprint-auto sprint 27` (tronçons 08-09, puis run live 10)
+**Phase** : CLOS (2026-10-19) — run live 10 partiel, clôture décidée par Nico ; résidus en dettes #89-#93
 **Cible** : #87 coups conseillés « explosifs »
 **Branche** : `feat/sprint27-coups-explosifs`
 **Audit** : `docs/sprint27/audit_coups_explosifs.md`
@@ -119,7 +119,7 @@
 | 07 | `07_run_live_correctif.md` — run live (Nico) : moteur ✅ Morra / Dame précoce / letton ; ❌ Von Hennig (repli « pire coup » → erreur 4.Bc4) ; texte ❌ (notation française résiduelle, suite du piège omise, faits inventés) | ❌ |
 | 08 | `08_selection_tournant.md` — fin du repli « pire coup », seuil coup unique 15, sorte e tournant, explosif ≠ meilleur de la 1re passe, règle d'avantage clair (`clear_advantage`) | ✅ |
 | 09 | `09_router_format_concis.md` — format court + Niveau, faits calculés (matériel, attaquées), bloc tournant + variante, consigne d, conversion C/F/T/D → N/B/R/Q | ✅ |
-| 10 | `10_run_live_correctif2.md` — run live (Nico) : Morra, Dame précoce, letton, Von Hennig, Écossaise Göring | ⏳ |
+| 10 | `10_run_live_correctif2.md` — run live (Nico) : sélection ✅ sur les 5 parties (d:8.e5, d:2...Nc6, e:12...Qxh5 au lieu de c, c:12.Nxe6, e:8.e5), format court + notation anglaise ✅, durée ≤ 35 s ✅ ; ❌ variante du tournant jamais montrée, « avantage clair » à 36-54 % [n=4], explosifs sans vrai piège, 2 faits inventés | ⚠️ partiel, clos |
 
 ## Dettes
 
@@ -145,12 +145,6 @@ Aucune.
 
 ## §REPRISE
 
-Correctif 2 figé. Tronçons 08 et 09 faits (312 tests verts). Tronçon 09 (router) :
-consigne au format court (ancre, 1 à 3 phrases par position, ligne « Niveau : »), axes de
-travail retirés ; lignes `matériel :` / `attaquées :` par position ; ligne
-« Niveau (données) » tirée de `summarize` ; sorte e (légende « tournant après … », erreur
-adverse, variante coupée + critère, idem c) ; bloc d réécrit (réponse logique, variante +
-critère, fin de variante, difficulté ; plus de coût ni de ligne moteur du coup explosif) ;
-`_to_english` sur le texte rendu. Reste : run live 10 par Nico.
-`test_explosive_early_queen_nf6` reste intermittent ~1/10 [n=10].
-Lire `CLAUDE.md`, ce fichier, `audit_run_live_07.md`, puis le kickoff du tronçon 10.
+Sprint CLOS le 2026-10-19 sur décision de Nico (« on va clôturer et passer à la suite »)
+après le run live 10 partiel. Résidus du texte → dettes #89-#93 dans
+`docs/sprint28/context_kickoff_sprint_28.md`. Suite : `/conception sprint 28`.
