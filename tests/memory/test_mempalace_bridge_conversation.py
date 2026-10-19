@@ -139,3 +139,22 @@ def test_load_history_raises_if_get_by_metadata_not_injected():
 
     with pytest.raises(RuntimeError, match="get_by_metadata"):
         bridge.load_conversation_history("conv-1", n=10)
+
+
+# ── load_chess_games (sprint 28) ─────────────────────────────────────────────
+
+def test_load_chess_games_filters_and_sorts():
+    fake_get, captured = _make_get({
+        "ids": ["chess_game_b", "chess_game_a"],
+        "documents": ["b", "a"],
+        "metadatas": [
+            {"type": "chess_game", "timestamp": "2026-10-19T12:00:00+00:00"},
+            {"type": "chess_game", "timestamp": "2026-10-18T12:00:00+00:00"},
+        ],
+    })
+    bridge = MempalaceBridge(store=lambda **kw: {}, get_by_metadata=fake_get)
+
+    games = bridge.load_chess_games()
+
+    assert captured[0]["where"] == {"$and": [{"wing": "aria_episodic"}, {"type": "chess_game"}]}
+    assert [g["id"] for g in games] == ["chess_game_a", "chess_game_b"]

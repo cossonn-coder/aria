@@ -27,6 +27,16 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 chess>=1.11
+# Maia-2 (sprint 28) : à installer en --no-deps (maia2 épingle d'anciennes versions
+# de chess / numpy et tirerait torch CUDA) :
+#   pip install --no-cache-dir --no-deps maia2==0.10.0 einops==0.8.0 pyzstd backports.zstd gdown beautifulsoup4 soupsieve
+maia2==0.10.0
+einops==0.8.0
+pyzstd==0.20.0
+backports.zstd==1.8.0
+gdown==6.4.2
+beautifulsoup4==4.15.0
+soupsieve==3.0.3
 
 # === RELIABILITY ===
 tenacity>=9.0.0

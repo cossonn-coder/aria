@@ -27,6 +27,7 @@ def test_summarize_nominal():
         _ply(2, 2, "white", "Qh5+", "d1h5", "mistake", 25.0, 55.0, 590.0),
         _ply(3, 2, "black", "g6", "g7g6", "blunder", 35.0, 75.0, 50.0),
     ]
+    plies[3].difficulty, plies[3].second_gap = 1523.4, 17.26
     analysis = GameAnalysis(
         headers={"White": "Ami", "Black": "staroflexeur", "BlackElo": "1307",
                  "WhiteElo": "1272", "Result": "0-1", "Date": "2026.10.19",
@@ -50,6 +51,9 @@ def test_summarize_nominal():
     assert s["unconverted"] is False and s["saved"] is False
     plies_back = json.loads(s["plies_json"])
     assert len(plies_back) == 4 and plies_back[3]["kind"] == "b" and plies_back[0]["kind"] is None
+    # Sprint 28 : difficulté (Elo entier) et écart au 2e coup, None par défaut.
+    assert plies_back[0]["difficulty"] is None and plies_back[0]["second_gap"] is None
+    assert plies_back[3]["difficulty"] == 1523 and plies_back[3]["second_gap"] == 17.3
 
     text = summary_text(analysis, s)
     assert "Nico (noirs, 1307) contre Ami (1272)" in text and "victoire" in text

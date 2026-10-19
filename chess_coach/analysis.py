@@ -71,6 +71,8 @@ class PlyAnalysis:
     # règle d'avantage clair ; pv_mate : le moteur annonce un mat pour le trait.
     pv_uci: list = field(default_factory=list)
     pv_mate: bool = False
+    # Difficulté du coup en Elo (Maia-2, sprint 28) : coups de Nico après le coup 10.
+    difficulty: float | None = None
 
 
 @dataclass
@@ -404,8 +406,12 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     return sorted(selected, key=lambda c: c.ply.ply)
 
 
-def analyze(text: str, message: str, username: str, engine_path: str) -> GameAnalysis | None:
-    """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible)."""
+def analyze(text: str, message: str, username: str, engine_path: str,
+            maia_models_dir: str | None = None) -> GameAnalysis | None:
+    """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
+
+    maia_models_dir : dossier des poids Maia-2 ; None → pas de difficulté.
+    """
     started = time.monotonic()
     game = parse_pgn(text)
     if game is None:
@@ -413,6 +419,15 @@ def analyze(text: str, message: str, username: str, engine_path: str) -> GameAna
     headers = dict(game.headers)
     nico_color, source = detect_color(headers, message, username)
     plies = analyze_game(game, nico_color, engine_path)
+    if maia_models_dir is not None:
+        # Maia est une dépendance lourde optionnelle : son échec laisse
+        # difficulty = None partout et l'analyse continue.
+        try:
+            from chess_coach.difficulty import assign_difficulty
+            elo = headers.get("WhiteElo" if nico_color == "white" else "BlackElo", "")
+            assign_difficulty(plies, nico_color, int(elo) if elo.isdigit() else None, maia_models_dir)
+        except Exception:
+            log.exception("maia_difficulty FAILED")
     # Import local : explosive.py importe ce module (CriticalPosition, _win).
     from chess_coach.explosive import find_explosive
     explosive = find_explosive(plies, nico_color, engine_path)
