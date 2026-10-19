@@ -304,6 +304,29 @@ def test_skip_intent_bypasses_resolve_and_apply(mock_store, mock_conv):
     assert result == {"text": "réponse photo"}
 
 
+@patch("execution.routers.llm_router.extract_intent_name")
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_forced_intent_name_bypasses_resolve_and_namer(mock_store, mock_conv, mock_namer):
+    """Audit 05 bug 1 : forced_intent_name → ni resolve ni namer, apply create imposé, écrit."""
+    router, _, intent_engine, fake_intent, bridge = make_router()
+    bridge.load_conversation_history.return_value = []
+    router.controller.run = MagicMock(return_value=_fake_ctx(fake_intent, "analyse"))
+
+    router.execute({
+        "op_type": CognitiveOperation.REASONING.value,
+        "content": "Partie contre Ami\n[Analyse Stockfish …]",
+        "metadata": {"forced_intent_name": "jeux echecs"},
+    })
+
+    intent_engine.resolve.assert_not_called()
+    mock_namer.assert_not_called()
+    kwargs = intent_engine.apply.call_args.kwargs
+    assert kwargs["decision"].action == "create"
+    assert kwargs["intent_name"] == "jeux echecs"
+    mock_store.assert_called_once()
+
+
 @patch("execution.routers.llm_router.extract_intent_name", return_value=None)
 @patch("execution.routers.llm_router.write_conversation_turn")
 @patch("execution.routers.llm_router.write_interaction")

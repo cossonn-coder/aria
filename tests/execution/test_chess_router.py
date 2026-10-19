@@ -46,6 +46,9 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert delegated["op_type"] == "reasoning"
     assert "skip_intent" not in delegated["metadata"]
     assert "Position 1" in delegated["content"]
+    assert delegated["metadata"]["forced_intent_name"] == "jeux echecs"
+    assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
+    assert "Commence ta réponse par la ligne exacte « Partie contre Ami »" in delegated["content"]
     write_game.assert_called_once()
     assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"
 

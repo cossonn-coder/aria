@@ -53,6 +53,10 @@ _TAG_FR = {
     "castle": "roque", "retreat": "recul", "hanging": "pièce en prise",
 }
 
+# Intent imposé aux échanges d'analyse de partie (bug 1, audit correctif 05) :
+# le namer répondait « aucun » → échange non écrit en épisodique.
+FORCED_INTENT_NAME = "jeux echecs"
+
 # Clés de compteurs (qualité PlyAnalysis) → libellé français, dans l'ordre affiché.
 _QUALITY_FR = [
     ("best", "meilleurs"), ("correct", "corrects"), ("inaccuracy", "imprécisions"),
@@ -99,6 +103,17 @@ def _header_lines(headers: dict) -> list:
     if h("Result"):
         lines.append(f"Résultat : {h('Result')}")
     return lines
+
+
+def _anchor(summary: dict) -> str:
+    """« Partie contre <adversaire> <date> <ouverture> » : identifiant lisible
+    de la partie, pour qu'une question de suivi retrouve la bonne (Q11 b)."""
+    parts = ["Partie contre", summary["opponent"] or "adversaire inconnu"]
+    if summary["date"]:
+        parts.append(summary["date"])
+    if summary["opening"]:
+        parts.append(summary["opening"].replace("-", " "))
+    return " ".join(parts)
 
 
 def _caption(index: int, critical) -> str:
@@ -151,33 +166,34 @@ class ChessExecutionRouter(BaseRouter):
         game_hash = hashlib.sha256(
             "".join(p.uci for p in analysis.plies).encode()
         ).hexdigest()[:16]
+        summary = summarize(analysis)
         try:
-            summary = summarize(analysis)
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary)
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
 
-        enriched = self._build_enriched(analysis, message)
+        enriched = self._build_enriched(analysis, message, _anchor(summary))
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
-            # Pas de skip_intent (Q4) : la partie doit aller en mémoire épisodique.
-            "metadata": metadata,
+            # Pas de skip_intent (Q4) : la partie doit aller en mémoire épisodique,
+            # sous un intent imposé (le namer répondait « aucun », audit 05).
+            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME},
         })
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         return {"text": result["text"], "images": images}
 
-    def _build_enriched(self, analysis, message: str) -> str:
-        """Message enrichi des faits moteur, en français, suivi du message original."""
+    def _build_enriched(self, analysis, message: str, anchor: str) -> str:
+        """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         nico_plies = [p for p in analysis.plies if p.color == color]
         counts = ", ".join(
             f"{label} {sum(1 for p in nico_plies if p.quality == key)}" for key, label in _QUALITY_FR
         )
 
-        lines = [f"[Analyse Stockfish de la partie — Nico joue les {_COLOR_FR[color]} "
+        lines = [anchor, f"[Analyse Stockfish de la partie — Nico joue les {_COLOR_FR[color]} "
                  f"({_SOURCE_FR[analysis.color_source]}) :"]
         lines += _header_lines(analysis.headers)
         lines.append(f"Compteurs Nico : {counts}")
@@ -202,7 +218,8 @@ class ChessExecutionRouter(BaseRouter):
             "Position 1, 2, 3 — Nico voit les diagrammes du même numéro. Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation. Notation française (C, F, T, D, R). Termine par 1 à 3 "
-            "axes de travail.]"
+            "axes de travail. Commence ta réponse par la ligne exacte "
+            f"« {anchor} ».]"
         )
         parts = [block, consigne]
         if analysis.color_source == "default":

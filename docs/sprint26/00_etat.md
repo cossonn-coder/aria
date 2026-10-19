@@ -1,6 +1,6 @@
 # Sprint 26 — état de conception
 
-**Phase** : correctif 05 figé (2026-10-19) — prêt pour `/sprint-auto sprint 26` (tronçon 05), puis run live 06
+**Phase** : tronçon 05 fait (2026-10-19) — prochaine étape : run live 06 (Nico)
 **Cible** : coach d'échecs (PGN → Stockfish → positions critiques illustrées + fiche par partie)
 **Branche** : `feat/sprint26-coach-echecs`
 **Audit** : `docs/sprint26/audit_coach_echecs.md`
@@ -49,7 +49,7 @@ exception au calibrage faible sur ce tronçon.
 | 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ `4ee056f` |
 | 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ✅ `b3d79f0` |
 | 04 | `04_run_live.md` — run live (Nico) | ❌ partiel (voir ci-dessous) |
-| 05 | `05_correctif.md` — intent `jeux echecs` imposé (bug 1) + ancre « Partie contre … » (bug 2) | ⏳ |
+| 05 | `05_correctif.md` — intent `jeux echecs` imposé (bug 1) + ancre « Partie contre … » (bug 2) || ✅ (non commité) |
 | 06 | `06_run_live.md` — run live du correctif (Nico) | ⏳ |
 
 ## Dettes
@@ -126,6 +126,14 @@ Dettes ouvertes par le run live :
   2…Cf6 −0,21 vs 2…Cc6 −0,40 ; 3…Fe7 seul coup ; après 4…O-O −0,22). Nico fournira
   d'autres cas par ouverture.
 
-§REPRISE correctif : conception figée. Exécution : `/sprint-auto sprint 26` (tronçon 05),
+§REPRISE correctif : tronçon 05 fait (2026-10-19). `llm_router._run_pipeline` : branche
+`forced_intent_name` (ni resolve ni namer, `apply(RecallDecision("create"), intent_name=…)`,
+log `intent FORCED name=…`). `chess_router` : `FORCED_INTENT_NAME = "jeux echecs"` posé dans
+une copie du metadata ; `summarize` sorti du `try` ; `_anchor(summary)` en 1re ligne du
+message enrichi + consigne « Commence ta réponse par la ligne exacte « <ancre> » ».
+Tests : router LLM (intent imposé) + chess_router (métadonnée, ancre) — pytest 294 verts.
+Écart : aucun. À valider en run live 06 : `intent FORCED` puis `memory_write OK … intent_name=jeux echecs`
+sur A-D ; la réponse commence par l'ancre ; C répond sur la bonne partie.
+Ancien §REPRISE (avant exécution) : conception figée. Exécution : `/sprint-auto sprint 26` (tronçon 05),
 puis run live 06 par Nico. Lire `CLAUDE.md`, ce fichier, `audit_correctif_05.md`, puis
 `05_correctif.md`.
