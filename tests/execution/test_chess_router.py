@@ -49,7 +49,11 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert "Position 1" in delegated["content"]
     assert delegated["metadata"]["forced_intent_name"] == "jeux echecs"
     assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
-    assert "Commence ta réponse par la ligne exacte « Partie contre Ami »" in delegated["content"]
+    assert "1re ligne exacte « Partie contre Ami »" in delegated["content"]
+    assert "Niveau" in delegated["content"]
+    assert "axes de travail" not in delegated["content"]
+    # Faits calculés depuis le FEN (après 1.e4) : matériel égal, rien d'attaqué.
+    assert "  matériel : égal\n  attaquées : aucune" in delegated["content"]
     assert "idées classiques de cette ouverture" not in delegated["content"]
     write_game.assert_called_once()
     assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"
@@ -62,7 +66,10 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
         san="Qh4", uci="d8h4", loss=4.0, win_after=46.0, pv_san=["Qh4", "Nxh4"],
         sacrifice=9, forcing=["threat"], trap=12.0, trap_reply_san="Nxh4",
         volatility=0.0, score=12.0, offered=9, trap_line_san=["Nxh4", "e5"],
-        replies=[{"san": "d3", "line_san": ["d3", "Nc6"], "win": 47.0}],
+        replies=[{"san": "d3", "line_san": ["d3", "Nc6"], "win": 47.0},
+                 {"san": "Nxh4", "line_san": ["Nxh4"], "win": 62.0}],
+        trap_end_fen="rnb1kbnr/pppp1ppp/8/4p3/4P2N/8/PPPP1PPP/RNBQKB1R w KQkq - 0 6",
+        trap_end_win=75.0, evidence="development",
     )
     analysis = GameAnalysis(
         headers={"Opening": "Scotch Gambit"}, nico_color="black", color_source="header", plies=[ply],
@@ -86,16 +93,64 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
     assert "Position 1 (occasion explosive)" in content
-    assert "explosif 4...Qh4!? : coût 4 pts de % de gain (50 % → 46 %), ligne : 4...Qh4 5.Nxh4" in content
     assert "offre la dame (9) ; forçant : menace" in content
-    assert "si l'adversaire prend Nxh4 : 5.Nxh4 e5 (il perd 12 pts)" in content
+    assert "réponse logique : Nxh4 (prend la dame offerte)" in content
+    assert "variante : 5.Nxh4 e5 (avance de développement)" in content
+    assert "fin de variante : matériel : Nico −9, % de gain Nico 75 %" in content
+    assert "difficulté pour l'adversaire : la réponse logique gagne du matériel à vue" in content
+    assert "seule réponse qui tient : d3 (l'autre : Nico ≥ 62 %)" in content
+    assert "coût" not in content.split("[Consigne")[0]
     assert "si d3 : 5.d3 Nc6, 47 % pour Nico" in content
     assert ("pièces : blancs Ke1 Qd1 Ra1 Rh1 Bc1 Bf1 Nb1 Ng1, pions a2 b2 c2 d2 f2 g2 h2 e4 ; "
             "noirs Ke8 Qd8") in content
     assert "Notation anglaise : N, B, R, Q, K" in content
-    assert "ouverture jouée : Scotch Gambit. Relie chaque position aux idées classiques" in content
+    assert "ouverture jouée : Scotch Gambit." in content
     assert "volatilité" not in content
     assert "ne le présente jamais comme le meilleur coup" in content
+
+
+def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
+    # Sorte e : 7...h6? (erreur adverse) puni par 8.e5 (Nico blancs).
+    error = PlyAnalysis(
+        ply=0, move_number=7, color="black", san="h6", uci="h7h6",
+        fen_before="rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+        win_before=50.0, win_after=32.0, loss=18.0, best_san="Be7", best_uci="f8e7",
+        pv_san=["Be7"], second_gap=None, quality="mistake", phase="opening", tags=[],
+        clock=None, eval_before_cp=0, eval_after_cp=0,
+    )
+    punish = PlyAnalysis(
+        ply=1, move_number=8, color="white", san="e5", uci="e4e5",
+        fen_before="rnbqkbnr/ppppppp1/7p/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+        win_before=68.0, win_after=68.0, loss=0.0, best_san="e5", best_uci="e4e5",
+        pv_san=["e5", "d5"], second_gap=None, quality="best", phase="opening", tags=[],
+        clock=None, eval_before_cp=0, eval_after_cp=0,
+    )
+    analysis = GameAnalysis(
+        headers={}, nico_color="white", color_source="header", plies=[error, punish],
+        critical=[CriticalPosition(kind="e", ply=punish, score=18.0,
+                                   evidence="material", line_san=["e5", "d5", "exd6"])],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "2.Dh5 Cxe5 Tae1 Fe7, Cela"}
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert result["images"][0]["caption"] == (
+        "Position 1 — coup 8 (blancs) : tournant après 7...h6?, joué 8.e5 (meilleur 8.e5)"
+    )
+    assert "Position 1 (tournant (erreur adverse punie))" in content
+    assert "erreur adverse 7...h6 : perte 18 pts (meilleur 7...Be7)" in content
+    assert "variante : 8.e5 d5 9.exd6 (gain matériel)" in content
+    assert "montre la variante qui la punit" in content
+    # Conversion de la notation française résiduelle en sortie.
+    assert result["text"] == "2.Qh5 Nxe5 Rae1 Be7, Cela"
 
 
 def test_normalize_images_result_is_images_text():
