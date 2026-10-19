@@ -1,6 +1,6 @@
 # Sprint 26 — état de conception
 
-**Phase** : tronçon 05 fait (2026-10-19) — prochaine étape : run live 06 (Nico)
+**Phase** : CLOS (2026-10-19) — run live 06 partiel, C en dette #88 (décision Nico)
 **Cible** : coach d'échecs (PGN → Stockfish → positions critiques illustrées + fiche par partie)
 **Branche** : `feat/sprint26-coach-echecs`
 **Audit** : `docs/sprint26/audit_coach_echecs.md`
@@ -49,8 +49,8 @@ exception au calibrage faible sur ce tronçon.
 | 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ `4ee056f` |
 | 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ✅ `b3d79f0` |
 | 04 | `04_run_live.md` — run live (Nico) | ❌ partiel (voir ci-dessous) |
-| 05 | `05_correctif.md` — intent `jeux echecs` imposé (bug 1) + ancre « Partie contre … » (bug 2) || ✅ (non commité) |
-| 06 | `06_run_live.md` — run live du correctif (Nico) | ⏳ |
+| 05 | `05_correctif.md` — intent `jeux echecs` imposé (bug 1) + ancre « Partie contre … » (bug 2) | ✅ `9006900` |
+| 06 | `06_run_live.md` — run live du correctif (Nico) | ✅ partiel (C → dette #88) |
 
 ## Dettes
 
@@ -61,6 +61,7 @@ exception au calibrage faible sur ce tronçon.
   #83 lien de partie Chess.com → PGN via API publique.
 - Fermée : aucune.
 - Ouvertes au run live 04 : #84-#87 (voir § Correctif 05).
+- Ouverte au run live 06 : #88 (voir § Run live 06).
 
 ## §REPRISE
 
@@ -137,3 +138,21 @@ sur A-D ; la réponse commence par l'ancre ; C répond sur la bonne partie.
 Ancien §REPRISE (avant exécution) : conception figée. Exécution : `/sprint-auto sprint 26` (tronçon 05),
 puis run live 06 par Nico. Lire `CLAUDE.md`, ce fichier, `audit_correctif_05.md`, puis
 `05_correctif.md`.
+
+## Run live 06 (2026-10-19) — clôture
+
+- A (11:12:48) et B (11:13:20) : `intent FORCED name=jeux echecs` puis
+  `memory_write OK … intent_name=jeux echecs`, réponse ouverte par l'ancre. ✅
+- C « pourquoi la position 1 de cette partie était critique ? » : réponse sur 16…Fe6 /
+  Cg4+ (partie A, Position 1 du run 04) au lieu de 15…Ce4 (B). ❌ → dette #88.
+  Hypothèse non vérifiée : historique de conversation (20 messages) encore pollué par la
+  mauvaise réponse C du run 04.
+- C2 (ancre King_walks_19) : 3…g6 = nouvelle Position 1 de A. ✅
+- F (Falestinhurra, ECOUrl) : ancre `Partie contre Falestinhurra 2026.10.19 Scotch Game
+  Goring Double Pawn Sacrifice Variation`, même hash `ebeb5dae` (1 seule fiche). ✅
+- Constats : positions critiques instables entre deux analyses (#85 : A 16…Fe6 → 3…g6 ;
+  F 12.e5 → 38.Dc4+) ; 413 Groq sur tous les échanges, suivis compris (#86) ; quarantaine
+  HNSW `dba15bea…` 11:12:57 (#31) ; partie tapée en texte libre sans en-tête → LLM seul,
+  15.Cg5+ conseillé à tort (SF d22 [1 run] : 15.exd6 +2,8) — illustre #80 / #82.
+
+Décision Nico 2026-10-19 : C passe en dette, sprint 26 clos.
