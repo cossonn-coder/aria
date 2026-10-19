@@ -270,3 +270,35 @@ class MempalaceBridge:
         ]
         turns.sort(key=lambda t: t["timestamp"])
         return turns[-n:]
+
+    def load_chess_games(self) -> list[dict]:
+        """
+        Fiches `chess_game` de la mémoire épisodique (sprint 28), triées par
+        timestamp croissant. Lecture non-vectorielle par filtre wing + type,
+        comme load_conversation_history.
+
+        Returns:
+            liste de {**metadata, "id": doc_id}.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata.
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for chess games; "
+                "inject at construction"
+            )
+
+        from config import config as _config
+
+        where = {"$and": [
+            {"wing": "aria_episodic"},
+            {"type": "chess_game"},
+        ]}
+        result = self._get_by_metadata(_config.mempalace_path, where) or {}
+        ids = result.get("ids") or []
+        metas = result.get("metadatas") or []
+
+        games = [{**(meta or {}), "id": doc_id} for doc_id, meta in zip(ids, metas)]
+        games.sort(key=lambda g: g.get("timestamp", ""))
+        return games
