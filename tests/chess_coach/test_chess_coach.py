@@ -10,7 +10,6 @@ from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
 from chess_coach.explosive import _line_sacrifice
-from chess_coach.notation import to_french
 from chess_coach.render import SIZE, render_position
 
 STOCKFISH = "/usr/games/stockfish"
@@ -20,12 +19,6 @@ SCHOLAR_PGN = """je joue les noirs
 [Black "staroflexeur"]
 1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0
 """
-
-
-def test_to_french():
-    assert to_french("Nxe5") == "Cxe5"
-    assert to_french("e8=Q+") == "e8=D+"
-    assert to_french("Kf2") == "Rf2"
 
 
 def test_detect_color():

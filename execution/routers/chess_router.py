@@ -5,7 +5,7 @@
 # Pipeline CHESS_ANALYSIS :
 #   PGN collé → chess_coach.analysis.analyze (Stockfish)
 #   → un diagramme PNG par position critique (≤ 3, flèche = meilleur coup)
-#   → message enrichi des faits moteur (notation française)
+#   → message enrichi des faits moteur (notation anglaise, sprint 27)
 #   → LLMExecutionRouter en REASONING, SANS skip_intent : l'échange suit
 #     le pipeline normal (intent + écriture épisodique), décision Q4.
 #
@@ -20,8 +20,9 @@ import hashlib
 from pathlib import Path
 from uuid import uuid4
 
+import chess
+
 from chess_coach.analysis import analyze
-from chess_coach.notation import to_french
 from chess_coach.render import render_position
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -47,6 +48,9 @@ _KIND_FR = {
     "d": "occasion explosive",
 }
 
+# Nom français de la pièce offerte (libellé du bloc d'occasion explosive).
+_PIECE_FR = {"N": "le cavalier", "B": "le fou", "R": "la tour", "Q": "la dame", "K": "le roi"}
+
 _FORCING_FR = {"check": "échec", "capture": "prise", "threat": "menace"}
 
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu de partie", "endgame": "finale"}
@@ -70,18 +74,18 @@ _QUALITY_FR = [
 def _move_label(move_number: int, color: str, san: str) -> str:
     """« 17.Cg4+ » pour les blancs, « 17...Cg4+ » pour les noirs."""
     dots = "." if color == "white" else "..."
-    return f"{move_number}{dots}{to_french(san)}"
+    return f"{move_number}{dots}{san}"
 
 
 def _format_line(pv_san: list, move_number: int, color: str) -> str:
-    """Ligne principale numérotée en notation française (ex. « 17...Fd7 18.Cf3 Cc6 »)."""
+    """Ligne principale numérotée en notation anglaise (ex. « 17...Bd7 18.Nf3 Nc6 »)."""
     parts = []
     for i, san in enumerate(pv_san):
         if color == "white":
-            parts.append(f"{move_number}.{to_french(san)}")
+            parts.append(f"{move_number}.{san}")
             color = "black"
         else:
-            parts.append(f"{move_number}...{to_french(san)}" if i == 0 else to_french(san))
+            parts.append(f"{move_number}...{san}" if i == 0 else san)
             color = "white"
             move_number += 1
     return " ".join(parts)
@@ -119,6 +123,29 @@ def _anchor(summary: dict) -> str:
     return " ".join(parts)
 
 
+def _pieces_line(fen: str) -> str:
+    """Pièces par camp tirées du FEN (ex. « pièces : blancs Kg1 Nf3, pions e4 ; noirs … ») :
+    le LLM ne voit pas l'échiquier, cette liste l'empêche de placer une pièce inexistante."""
+    board = chess.Board(fen)
+    sides = []
+    for color, label in ((chess.WHITE, "blancs"), (chess.BLACK, "noirs")):
+        pieces = [
+            f"{chess.piece_symbol(piece).upper()}{chess.square_name(sq)}"
+            for piece in (chess.KING, chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT)
+            for sq in board.pieces(piece, color)
+        ]
+        pawns = [chess.square_name(sq) for sq in board.pieces(chess.PAWN, color)]
+        sides.append(f"{label} {' '.join(pieces)}, pions {' '.join(pawns) or 'aucun'}")
+    return "  pièces : " + " ; ".join(sides)
+
+
+def _reply_start(p) -> tuple:
+    """(numéro, couleur) du premier coup adverse après le coup de Nico en p."""
+    if p.color == "white":
+        return p.move_number, "black"
+    return p.move_number + 1, "white"
+
+
 def _explosive_lines(p, e) -> list:
     """Faits moteur du coup explosif d'une position de sorte d (éléments nuls omis)."""
     lines = [
@@ -127,17 +154,24 @@ def _explosive_lines(p, e) -> list:
         f"ligne : {_format_line(e.pv_san, p.move_number, p.color)}"
     ]
     facts = []
-    if e.sacrifice:
-        facts.append(f"sacrifice : {e.sacrifice} pion(s)")
+    # Matériel : pièce offerte (posée en prise) prioritaire sur le sacrifice de ligne.
+    if e.offered:
+        facts.append(f"offre {_PIECE_FR.get(e.san[0], 'le pion')} ({e.offered})")
+    elif e.sacrifice:
+        facts.append(f"sacrifie {e.sacrifice} pion(s) sur la ligne")
     if e.forcing:
         facts.append("forçant : " + "/".join(_FORCING_FR[f] for f in e.forcing))
-    if e.trap_reply_san and round(e.trap):
-        facts.append(f"piège : si l'adversaire joue {to_french(e.trap_reply_san)}, "
-                     f"il perd {e.trap:.0f} pts")
     if round(e.volatility):
         facts.append(f"volatilité {e.volatility:.0f} pts")
     if facts:
         lines.append("  " + " ; ".join(facts))
+    number, color = _reply_start(p)
+    if e.trap_reply_san and round(e.trap):
+        lines.append(f"  si l'adversaire prend {e.trap_reply_san} : "
+                     f"{_format_line(e.trap_line_san, number, color)} (il perd {e.trap:.0f} pts)")
+    for reply in e.replies:
+        lines.append(f"  si {reply['san']} : {_format_line(reply['line_san'], number, color)}, "
+                     f"{reply['win']:.0f} % pour Nico")
     return lines
 
 
@@ -205,7 +239,7 @@ class ChessExecutionRouter(BaseRouter):
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
 
-        enriched = self._build_enriched(analysis, message, _anchor(summary))
+        enriched = self._build_enriched(analysis, message, _anchor(summary), summary["opening"])
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
@@ -217,7 +251,7 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         return {"text": result["text"], "images": images}
 
-    def _build_enriched(self, analysis, message: str, anchor: str) -> str:
+    def _build_enriched(self, analysis, message: str, anchor: str, opening: str) -> str:
         """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         nico_plies = [p for p in analysis.plies if p.color == color]
@@ -239,6 +273,7 @@ class ChessExecutionRouter(BaseRouter):
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
                 f"  étiquettes : {tags}, phase : {_PHASE_FR[p.phase]}",
+                _pieces_line(p.fen_before),
             ]
             if critical.kind == "d":
                 lines += _explosive_lines(p, critical.explosive)
@@ -251,11 +286,20 @@ class ChessExecutionRouter(BaseRouter):
             "(plans, menaces, pourquoi le meilleur coup est meilleur), dans l'ordre "
             "Position 1, 2, 3 — Nico voit les diagrammes du même numéro. Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
-            "ni évaluation. Notation française (C, F, T, D, R). Termine par 1 à 3 "
+            "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
+            "Notation anglaise : N, B, R, Q, K. Termine par 1 à 3 "
             "axes de travail. Commence ta réponse par la ligne exacte "
             f"« {anchor} ».]"
         )
         parts = [block, consigne]
+        if opening:
+            parts.append(
+                f"[Consigne : ouverture jouée : {opening.replace('-', ' ')}. Relie chaque "
+                "position aux idées classiques de cette ouverture (plans typiques, "
+                "structures, pourquoi le coup s'inscrit ou non dans ces idées). Un gambit "
+                "d'ouverture choisi par Nico est un choix assumé (tempo, développement, "
+                "sortir l'adversaire de sa théorie), pas une faute à corriger.]"
+            )
         if any(c.kind == "d" for c in analysis.critical):
             parts.append(
                 "[Consigne : pour chaque position « occasion explosive », explique "

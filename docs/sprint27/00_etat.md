@@ -1,6 +1,6 @@
 # Sprint 27 — état de conception
 
-**Phase** : B correctif figée (2026-10-19) — prêt pour `/sprint-auto sprint 27` (tronçons 04-06, puis run live 07)
+**Phase** : B correctif figée (2026-10-19) — tronçons 04-06 ✅ — reste run live 07 (Nico)
 **Cible** : #87 coups conseillés « explosifs »
 **Branche** : `feat/sprint27-coups-explosifs`
 **Audit** : `docs/sprint27/audit_coups_explosifs.md`
@@ -70,7 +70,7 @@
 | 03 | `03_run_live.md` — run live (Nico) : Morra ✅ (8.Cd5, bruit 6.b4), Dame précoce ✗ (en-têtes indentés), letton ✗ (tout en ouverture) | ❌ |
 | 04 | `04_selection_pgn.md` — en-têtes indentés, occasion explosive en bonus, ouverture assumée | ✅ |
 | 05 | `05_moteur_sacrifice_suites.md` — sacrifice réel (ligne stabilisée + matériel offert), suites piège / réponses | ✅ |
-| 06 | `06_router_notation_faits.md` — notation anglaise, pièces par camp, suites, idées d'ouverture | ⏳ |
+| 06 | `06_router_notation_faits.md` — notation anglaise, pièces par camp, suites, idées d'ouverture | ✅ |
 | 07 | `07_run_live_correctif.md` — run live (Nico) : Morra, Dame précoce indentée, letton, Von Hennig | ⏳ |
 
 ## Dettes
@@ -98,7 +98,13 @@ position, garde la c si même ply ; seuil a/b ≥ 20 jusqu'au coup 10).
 Tronçon 05 ✅ (`_line_sacrifice` : mesure après la fin de l'échange, 6 à 10 demi-coups ;
 `ExplosiveMove` gagne `offered`, `trap_line_san`, `replies` [{san, line_san, win côté Nico}] ;
 sacrifice = max(ligne, offert) ; Morra 8.Nd5 : offered 3, piège 12,5 / 13,0 [n=2] ;
-304 tests verts). Champs nouveaux pas encore affichés : rôle du tronçon 06.
-Suite : `/sprint-auto sprint 27` → tronçon 06 (01-02 commités `ed7d4de`, `e2d267c` ;
-03 = run live KO, remplacé par 07). Puis run live 07 par Nico.
+304 tests verts).
+Tronçon 06 ✅ (notation anglaise partout, `chess_coach/notation.py` + `test_to_french`
+supprimés ; ligne « pièces : » par position tirée de `fen_before` ; bloc d : « offre la
+dame (9) » / « sacrifie N pion(s) sur la ligne », suite du piège numérotée, une ligne par
+réponse MultiPV avec % pour Nico ; consigne d'ouverture si `summary["opening"]` connu,
+gambit = choix assumé ; 303 tests verts [−1 = test_to_french supprimé]).
+Test flaky observé 1 fois [n=3 runs] : `test_explosive_early_queen_nf6` (non-déterminisme
+moteur sous charge, dette déjà notée).
+Suite : run live 07 par Nico (`07_run_live_correctif.md`).
 Lire `CLAUDE.md`, ce fichier, `audit_correctif.md`, puis le kickoff du tronçon.
