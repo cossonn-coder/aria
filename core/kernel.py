@@ -37,6 +37,7 @@ from execution.router_registry import RouterRegistry
 from execution.routers.image_router import ImageExecutionRouter
 from execution.routers.llm_router import LLMExecutionRouter
 from execution.routers.web_router import WebExecutionRouter
+from execution.routers.chess_router import ChessExecutionRouter
 
 
 # ── Table de routing opération → nom de router ──────────────────────────────
@@ -58,6 +59,7 @@ _ROUTING_TABLE = RoutingTable({
     CognitiveOperation.UNKNOWN.value           : "llm_router",
     CognitiveOperation.WEB_SEARCH.value        : "web_router",
     CognitiveOperation.URL_READ.value          : "web_router",
+    CognitiveOperation.CHESS_ANALYSIS.value    : "chess_router",
 })
 
 
@@ -93,6 +95,11 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
     registry.register("web_router", WebExecutionRouter(
         llm_router=llm_router,
         mempalace_bridge=mempalace_bridge,
+        llm_execution_router=llm_execution_router,
+    ))
+
+    # Router échecs : analyse Stockfish d'un PGN, explication déléguée au pipeline texte
+    registry.register("chess_router", ChessExecutionRouter(
         llm_execution_router=llm_execution_router,
     ))
 
@@ -186,6 +193,8 @@ class AriaKernel:
         - str               → réponse texte standard
         - dict {"type": "image", "path": ..., "caption": ...}
                             → signal à TelegramInterface d'envoyer send_photo()
+        - dict {"type": "images_text", "images": [...], "text": ...}
+                            → photos d'abord, puis le texte (sprint 26)
 
         On ne lève jamais d'exception ici.
         """
@@ -196,6 +205,13 @@ class AriaKernel:
             data = exec_result.get("data")
 
             if isinstance(data, dict):
+                # Résultat texte + images (coach d'échecs) : avant le test "path"
+                if data.get("images"):
+                    return {
+                        "type": "images_text",
+                        "images": data["images"],
+                        "text": data.get("text", ""),
+                    }
                 # Résultat image : le router retourne "path" + "caption"
                 # On détecte par la présence de "path" avec extension image
                 path = data.get("path", "")

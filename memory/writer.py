@@ -136,6 +136,31 @@ def write_image_artifact(
     col.upsert(documents=[indexed_text], ids=[doc_id], metadatas=[meta])
 
 
+# ── Écriture épisodique (fiche de partie d'échecs) ───────────────────────────
+
+def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None) -> None:
+    """
+    Stocke la fiche d'une partie d'échecs analysée dans aria_episodic.
+
+    doc_id = chess_game_<game_hash> : renvoyer la même partie remplace sa
+    fiche (upsert). game_hash est calculé par le caller à partir des coups
+    joués. wing/room/type sont structurels et non overridables (invariant W4).
+    """
+    col = get_collection(config.mempalace_path)
+    doc_id = f"chess_game_{game_hash}"
+
+    meta = {
+        **(extra or {}),
+        "wing": "aria_episodic",
+        "room": "chess",
+        "type": "chess_game",
+        "timestamp": _now_iso(),
+        "source": "chess_router",
+    }
+    _validate(meta)
+    col.upsert(documents=[text], ids=[doc_id], metadatas=[meta])
+
+
 # ── Écriture sémantique (faits stables) ──────────────────────────────────────
 
 def write_semantic_fact(

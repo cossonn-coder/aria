@@ -92,7 +92,8 @@ Si tu hésites, tu ne pushes pas.
 
 1. Une opération = un handler = un seul point d'écriture mémoire.
    Toute écriture passe par memory/writer.py (write_interaction,
-   write_image_artifact, write_semantic_fact, write_classifier_cache).
+   write_image_artifact, write_semantic_fact, write_classifier_cache,
+   write_chess_game).
    Wing/room/type sont structurels, posés APRÈS le spread de `extra`,
    jamais surchargeables via metadata. C'est l'anti-régression du
    bug W4 (sprint 3.1 / dette #11).
@@ -101,8 +102,9 @@ Si tu hésites, tu ne pushes pas.
    mempalace_store directement.
 3. Les agents reçoivent un AgentContext pré-assemblé — ils ne font
    AUCUNE requête mémoire eux-mêmes. Le kernel assemble tout.
-4. Les routers retournent {"text": str} ou {"path": str, "caption": str} —
-   jamais {"status": ...} (c'est le rôle du dispatcher).
+4. Les routers retournent {"text": str}, {"path": str, "caption": str} ou
+   {"text": str, "images": [{"path": str, "caption": str}, …]} — jamais
+   {"status": ...} (c'est le rôle du dispatcher).
 5. Le kernel ne décide rien, n'exécute rien, ne stocke rien.
    Il séquence : classify → dispatch → normalize.
 6. CognitiveEngine peut tenir des dépendances injectées (llm_router,
@@ -115,7 +117,8 @@ Si tu hésites, tu ne pushes pas.
 État post-sprint-4 (détail, compteurs et dettes :
 voir `docs/architecture/memory_layers.md`) :
 
-- `aria_episodic` : interactions et images. Actif.
+- `aria_episodic` : interactions, images et fiches de parties d'échecs
+  (`type=chess_game`, room `chess`). Actif.
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
@@ -147,10 +150,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 25 clos (tag `sprint-25`, Groq 413 #73 : un 413 saute les autres Groq).
-Prochain : **sprint 26**, cible à choisir par Nico.
-Kickoff : `docs/sprint26/context_kickoff_sprint_26.md`.
-Prochaine étape : `/conception sprint 26`.
+Sprint 26 clos (tag `sprint-26`, coach d'échecs : PGN → Stockfish → positions
+critiques illustrées + fiche `chess_game`).
+Prochain : **sprint 27**, cible pressentie #87 (coups conseillés « explosifs »).
+Kickoff : `docs/sprint27/context_kickoff_sprint_27.md`.
+Prochaine étape : `/conception sprint 27`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

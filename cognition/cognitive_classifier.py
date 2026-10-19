@@ -6,6 +6,7 @@
 #
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
+#   1b. PGN collé (en-tête White/Black + coups)      → CHESS_ANALYSIS
 #   2. URL http(s):// dans le message                → URL_READ
 #   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
 #   3. Heuristique texte recherche web              → WEB_SEARCH
@@ -18,6 +19,7 @@
 # Fonctions exportées :
 #   classify_operation()              — mapping message → CognitiveOperation
 #   detect_url()                      — première URL http(s) du message
+#   detect_pgn()                      — partie PGN collée (sprint 26)
 #   detect_web_search_intent()        — heuristique recherche web explicite
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
@@ -113,6 +115,25 @@ def is_interrogative_caption(caption: str | None) -> bool:
         return False
     lower = caption.lower().strip()
     return any(marker in lower for marker in _INTERROGATIVE_MARKERS)
+
+
+# =========================================================
+# HEURISTIQUE PGN (sprint 26)
+# =========================================================
+
+_PGN_HEADER_RE = re.compile(r'\[(?:White|Black) "')
+_PGN_MOVES_RE = re.compile(r"\b1\.\s*\S")
+
+
+def detect_pgn(message: str) -> bool:
+    """
+    Retourne True si le message contient une partie PGN : un en-tête
+    `[White "` ou `[Black "` ET un texte de coups commençant par `1.`.
+
+    Une suite de coups sans en-tête (« après 1.e4 e5 quelles idées ? »)
+    reste au LLM.
+    """
+    return bool(_PGN_HEADER_RE.search(message) and _PGN_MOVES_RE.search(message))
 
 
 # =========================================================
@@ -253,6 +274,11 @@ def classify_operation(
     # ── 1. Image reçue via Telegram ─────────────────────────────────────────
     if metadata.get("image") is not None:
         return CognitiveOperation.IMAGE_INPUT
+
+    # ── 1b. PGN collé → analyse de la partie ────────────────────────────────
+    # Avant la règle URL : l'export Chess.com contient `[Link "https://…"]`.
+    if detect_pgn(message):
+        return CognitiveOperation.CHESS_ANALYSIS
 
     # ── 2. URL collée → lecture de la page ──────────────────────────────────
     # Prioritaire sur la recherche web (URL + « cherche en ligne » = lecture)

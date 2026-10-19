@@ -28,6 +28,7 @@ from config import config
 from logger import get_logger
 
 from intent.intent_engine import IntentEngine
+from intent.intent_recall_engine import RecallDecision
 from llm.llm_router import LLMRouter
 from memory.writer import write_interaction, write_conversation_turn
 from memory.mempalace_bridge import MempalaceBridge
@@ -139,6 +140,20 @@ class LLMExecutionRouter(BaseRouter):
             log.info("intent SKIPPED reason=skip_intent")
             recall_decision = None
             intent = None
+        elif metadata.get("forced_intent_name"):
+            # ── 2-3 bis. Nom d'intent imposé (analyse de partie, audit 05) ──
+            # Le namer répondait « aucun » sur un PGN enrichi → échange non
+            # écrit en épisodique (bug 1). Le router appelant impose le nom :
+            # ni resolve (pour ne pas rattacher la partie à un autre projet),
+            # ni namer. apply en CREATE retrouve l'intent du même nom, sinon le crée.
+            forced_name = metadata["forced_intent_name"]
+            log.info("intent FORCED name=%s", forced_name)
+            recall_decision = RecallDecision(action="create")
+            intent = self.intent_engine.apply(
+                decision=recall_decision,
+                message=message,
+                intent_name=forced_name,
+            )
         else:
             # ── 2. Intent recall ────────────────────────────────────────────
             active_intents = self.intent_engine.list_attention_active()
