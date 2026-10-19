@@ -1,6 +1,6 @@
 # Sprint 27 — état de conception
 
-**Phase** : B correctif figée (2026-10-19) — tronçons 04-06 ✅ — reste run live 07 (Nico)
+**Phase** : B correctif 2 figée (2026-10-19) — prêt pour `/sprint-auto sprint 27` (tronçons 08-09, puis run live 10)
 **Cible** : #87 coups conseillés « explosifs »
 **Branche** : `feat/sprint27-coups-explosifs`
 **Audit** : `docs/sprint27/audit_coups_explosifs.md`
@@ -61,6 +61,36 @@
 - Plan correctif validé par Nico (« ok », 2026-10-19) : tronçons 04-07 ci-dessous.
 - Nico : libellés clairs dans les échanges (plus de codes A1/C6/M2 seuls).
 
+### Correctif 2 (post-run live 07, audit `audit_run_live_07.md`)
+
+- Nico (« on va suivre tes recommandations », 2026-10-19) :
+  - repli « pire coup » **supprimé** (aucune position retenue → texte sans diagramme) ;
+  - seuil du coup unique **20 → 15** (bruit 18-24 sur 12.Nxe6) ;
+  - faits : **lignes calculées** par position (bilan matériel, pièces attaquées / en prise)
+    + consigne « aucune attaque, défense ou colonne absente de ces lignes » ;
+  - sans question : exclure le meilleur coup de la 1re passe des occasions explosives ;
+    conversion C/F/T/D → N/B/R/Q dans le texte LLM (R laissé) ; consigne d : exiger suite
+    du piège et réponses.
+- Nico : réponse **moins verbeuse** — idéalement seulement moments critiques, coups au
+  potentiel explosif, appréciation du niveau de jeu (format : question ouverte).
+- Nico : « PGN unreadable » de 14:43:16 = mauvais format de son côté, ignoré.
+- Nouvelle partie exemple (Écossaise / gambit Göring, Nico blancs, gagnée) : PGN dans
+  `docs/sprint27/audit_run_live_07.md` §6. Moteur actuel (1 run) : seule position retenue
+  `d:2.Nf3` (explosif 2.f4) ; le tournant 7...h6 (−18) / 8...Nxe5 (−14) puni par 8.e5 / 9.Nxe5
+  n'est montré par aucune sorte.
+- Format — Nico (« ok ») : réponse courte (ancre, 1 à 3 phrases par position, ligne
+  « Niveau : » de 2 phrases) ; **axes de travail retirés**, ils reviennent après le sprint 28
+  (modèle joueur façon RPG).
+- Tournant — Nico (« ok ») : nouvelle sorte **e** (erreur adverse ≥ 15 punie, coup de Nico
+  perte < 10, partie non décidée avant l'erreur), dans le budget ≤ 3 ; ordre a/b, e, c
+  (choix Claude) ; Nico exige que **la variante de la punition** soit montrée.
+- Niveau par partie — Nico (« ok ») : données de `summarize` (compteurs, précision par phase,
+  erreurs adverses punies) → 2 phrases ; appréciation sur l'historique = sprint 28.
+- Scope sprint 28 — Nico (« ok ») : modèle joueur (axes RPG + style sur l'historique, #81),
+  pensé comme premier usage de la consolidation mémoire (#17 `aria_semantic`, #54
+  REFLECTION, `extract_every_n_turns`).
+- Plan correctif 2 : tronçons 08 (sélection), 09 (router), 10 (run live).
+
 ## Tronçons
 
 | # | Kickoff | Statut |
@@ -71,7 +101,10 @@
 | 04 | `04_selection_pgn.md` — en-têtes indentés, occasion explosive en bonus, ouverture assumée | ✅ |
 | 05 | `05_moteur_sacrifice_suites.md` — sacrifice réel (ligne stabilisée + matériel offert), suites piège / réponses | ✅ |
 | 06 | `06_router_notation_faits.md` — notation anglaise, pièces par camp, suites, idées d'ouverture | ✅ |
-| 07 | `07_run_live_correctif.md` — run live (Nico) : Morra, Dame précoce indentée, letton, Von Hennig | ⏳ |
+| 07 | `07_run_live_correctif.md` — run live (Nico) : moteur ✅ Morra / Dame précoce / letton ; ❌ Von Hennig (repli « pire coup » → erreur 4.Bc4) ; texte ❌ (notation française résiduelle, suite du piège omise, faits inventés) | ❌ |
+| 08 | `08_selection_tournant.md` — fin du repli « pire coup », seuil coup unique 15, sorte e tournant, explosif ≠ meilleur de la 1re passe | ⏳ |
+| 09 | `09_router_format_concis.md` — format court + Niveau, faits calculés (matériel, attaquées), bloc tournant + variante, consigne d, conversion C/F/T/D → N/B/R/Q | ⏳ |
+| 10 | `10_run_live_correctif2.md` — run live (Nico) : Morra, Dame précoce, letton, Von Hennig, Écossaise Göring | ⏳ |
 
 ## Dettes
 
@@ -81,6 +114,10 @@
 - **Sprint 28 pressenti — modèle joueur** (fusion #81) : axes de travail façon RPG (acquis
   après 3 validations, maîtrisé si jamais raté, priorité qui remonte en cas d'échec) +
   appréciation du style (mal joué / passif / solide / brillant) sur l'historique. Touche le palace prod.
+  Retour des axes de travail dans la réponse d'analyse. À concevoir avec la consolidation
+  mémoire (#17, #54, `extract_every_n_turns`).
+- #84 (récit inventé) : traité partiellement par le tronçon 09 (faits calculés) ; résidu
+  attendu, rédaction déterministe écartée.
 - Nouvelle : échiquier d'analyse rejouable (chessground) avec flèches meilleur / explosif ;
   calque Chess.com limité à l'écran d'analyse post-partie (fair-play).
 - Nouvelle : Groq 413 (limite 7000 tokens/min en entrée) sur chaque analyse d'échecs →
@@ -93,18 +130,6 @@ Aucune.
 
 ## §REPRISE
 
-Correctif en cours. Tronçon 04 ✅ (parse_pgn dépouille chaque ligne ; d en bonus 4e
-position, garde la c si même ply ; seuil a/b ≥ 20 jusqu'au coup 10).
-Tronçon 05 ✅ (`_line_sacrifice` : mesure après la fin de l'échange, 6 à 10 demi-coups ;
-`ExplosiveMove` gagne `offered`, `trap_line_san`, `replies` [{san, line_san, win côté Nico}] ;
-sacrifice = max(ligne, offert) ; Morra 8.Nd5 : offered 3, piège 12,5 / 13,0 [n=2] ;
-304 tests verts).
-Tronçon 06 ✅ (notation anglaise partout, `chess_coach/notation.py` + `test_to_french`
-supprimés ; ligne « pièces : » par position tirée de `fen_before` ; bloc d : « offre la
-dame (9) » / « sacrifie N pion(s) sur la ligne », suite du piège numérotée, une ligne par
-réponse MultiPV avec % pour Nico ; consigne d'ouverture si `summary["opening"]` connu,
-gambit = choix assumé ; 303 tests verts [−1 = test_to_french supprimé]).
-Test flaky observé 1 fois [n=3 runs] : `test_explosive_early_queen_nf6` (non-déterminisme
-moteur sous charge, dette déjà notée).
-Suite : run live 07 par Nico (`07_run_live_correctif.md`).
-Lire `CLAUDE.md`, ce fichier, `audit_correctif.md`, puis le kickoff du tronçon.
+Correctif 2 figé. Exécution : `/sprint-auto sprint 27` → tronçons 08, 09 (01-06 commités ;
+03 et 07 = runs live KO). Puis run live 10 par Nico.
+Lire `CLAUDE.md`, ce fichier, `audit_run_live_07.md`, puis le kickoff du tronçon.
