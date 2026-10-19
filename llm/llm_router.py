@@ -205,6 +205,10 @@ class LLMRouter:
 
         chain = ROUTING_TABLE.get(role, DEFAULT_CHAIN)
         last_error = None
+        # Un 413 Groq (requête trop grosse pour le palier ITPM) est
+        # déterministe : les autres entrées groq* (même modèle, même
+        # limite) échoueraient pareil. Local à cette requête : pas de cache.
+        groq_too_large = False
 
         for i, provider_cfg in enumerate(chain):
             provider = provider_cfg["provider"]
@@ -212,6 +216,10 @@ class LLMRouter:
             # Skip direct si récemment 429 — pas de tentative HTTP.
             if self._is_rate_limited(provider):
                 log.info("[LLM] provider %s skipped (cached 429)", provider)
+                continue
+
+            if groq_too_large and provider.startswith("groq"):
+                log.info("[LLM] provider %s skipped (413 sur groq)", provider)
                 continue
 
             # On ne forwarde `messages` à `_call` que dans la branche
@@ -229,7 +237,15 @@ class LLMRouter:
             try:
                 return self._call(**call_kwargs)
             except Exception as e:
-                log.error("[LLM FALLBACK] %s failed: %s", provider, e)
+                if isinstance(e, httpx.HTTPStatusError):
+                    # Le corps porte la limite et la taille demandée.
+                    log.error("[LLM FALLBACK] %s failed: %s | %s",
+                              provider, e, e.response.text[:200])
+                    if (e.response.status_code == 413
+                            and provider.startswith("groq")):
+                        groq_too_large = True
+                else:
+                    log.error("[LLM FALLBACK] %s failed: %s", provider, e)
                 # Cache uniquement les 429 explicites — un crash réseau
                 # ou un 5xx ne bloque pas le provider 5 min.
                 if (isinstance(e, httpx.HTTPStatusError)
