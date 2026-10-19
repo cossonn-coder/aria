@@ -117,7 +117,7 @@
 | 05 | `05_moteur_sacrifice_suites.md` — sacrifice réel (ligne stabilisée + matériel offert), suites piège / réponses | ✅ |
 | 06 | `06_router_notation_faits.md` — notation anglaise, pièces par camp, suites, idées d'ouverture | ✅ |
 | 07 | `07_run_live_correctif.md` — run live (Nico) : moteur ✅ Morra / Dame précoce / letton ; ❌ Von Hennig (repli « pire coup » → erreur 4.Bc4) ; texte ❌ (notation française résiduelle, suite du piège omise, faits inventés) | ❌ |
-| 08 | `08_selection_tournant.md` — fin du repli « pire coup », seuil coup unique 15, sorte e tournant, explosif ≠ meilleur de la 1re passe | ⏳ |
+| 08 | `08_selection_tournant.md` — fin du repli « pire coup », seuil coup unique 15, sorte e tournant, explosif ≠ meilleur de la 1re passe, règle d'avantage clair (`clear_advantage`) | ✅ |
 | 09 | `09_router_format_concis.md` — format court + Niveau, faits calculés (matériel, attaquées), bloc tournant + variante, consigne d, conversion C/F/T/D → N/B/R/Q | ⏳ |
 | 10 | `10_run_live_correctif2.md` — run live (Nico) : Morra, Dame précoce, letton, Von Hennig, Écossaise Göring | ⏳ |
 
@@ -145,6 +145,10 @@ Aucune.
 
 ## §REPRISE
 
-Correctif 2 figé. Exécution : `/sprint-auto sprint 27` → tronçons 08, 09 (01-06 commités ;
-03 et 07 = runs live KO). Puis run live 10 par Nico.
+Correctif 2 figé. Tronçon 08 fait (311 tests verts) : `clear_advantage` dans
+`chess_coach/analysis.py` ; `CriticalPosition.evidence` / `line_san` (c, e) ;
+`ExplosiveMove.trap_end_fen` / `trap_end_win` / `evidence` ; `PlyAnalysis.pv_uci` (16) / `pv_mate` ;
+`_KIND_FR["e"] = "tournant"` provisoire. Reste : tronçon 09 (`/sprint-auto sprint 27`), puis
+run live 10 par Nico. `test_explosive_early_queen_nf6` reste intermittent ~1/10 [n=10]
+(1re passe : meilleur 2...d6 → aucune d), sans lien avec l'exclusion du meilleur coup.
 Lire `CLAUDE.md`, ce fichier, `audit_run_live_07.md`, puis le kickoff du tronçon.

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import chess
 import chess.engine
 
-from chess_coach.analysis import ENGINE_OPTIONS, _MATE_SCORE, CriticalPosition, _win
+from chess_coach.analysis import _CLEAR_MAX, ENGINE_OPTIONS, _MATE_SCORE, CriticalPosition, _win, clear_advantage
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -26,6 +26,8 @@ _BUDGET = 30.0
 # Durées d'analyse : référence MultiPV / candidats par forme, puis approfondissement.
 _ROOT_TIME = 0.5
 _DEEP_TIME = 0.3
+# Réanalyse de la réponse logique quand sa PV est trop courte pour la règle d'avantage clair.
+_EVIDENCE_TIME = 0.6
 _MULTIPV = 5
 # Positions éligibles : coups de Nico non décidés des 20 premiers coups.
 _MAX_MOVE_NUMBER = 20
@@ -40,8 +42,8 @@ _MAX_DEEP = 3
 # que l'échange continue, borne dure 10.
 _LINE_PLIES = 6
 _LINE_MAX = 10
-# Longueurs affichées : suite du piège (prise comprise), lignes des réponses.
-_TRAP_LINE_PLIES = 8
+# Longueur affichée des lignes des réponses (la suite du piège est coupée
+# par la règle d'avantage clair, chess_coach.analysis.clear_advantage).
 _REPLY_LINE_PLIES = 6
 _SACRIFICE_CAP = 5
 _VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
@@ -67,6 +69,11 @@ class ExplosiveMove:
     trap_line_san: list = field(default_factory=list)
     # Réponses MultiPV adverses : {"san", "line_san", "win"} (win = % de gain côté Nico).
     replies: list = field(default_factory=list)
+    # Règle d'avantage clair (tronçon 08) : position au point d'arrêt de la suite
+    # logique, % de gain de Nico pour cette suite, critère (None = non admissible).
+    trap_end_fen: str | None = None
+    trap_end_win: float | None = None
+    evidence: str | None = None
 
 
 def _material(board: chess.Board, color: chess.Color) -> int:
@@ -187,12 +194,29 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
     sacrifice = max(sacrifice_line, offered)
 
     # Piège : % de gain adverse après sa meilleure réponse − après la prise naturelle.
-    trap, trap_reply_san, trap_line_san = 0.0, None, []
+    trap, trap_reply_san = 0.0, None
+    logical = replies[0]
     if capture is not None:
-        captured = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=[capture])
-        trap = max(0.0, _win_of(replies[0]) - _win_of(captured))
+        logical = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=[capture])
+        trap = max(0.0, _win_of(replies[0]) - _win_of(logical))
         trap_reply_san = after.san(capture)
-        trap_line_san = _san_line(after, captured["pv"][:_TRAP_LINE_PLIES])
+
+    # Suite logique (prise naturelle, sinon 1re réponse) coupée au point où
+    # l'avantage devient clair pour un humain ; PV trop courte → réanalyse plus longue.
+    if len(logical["pv"]) + 1 < _CLEAR_MAX:
+        logical = engine.analyse(after, chess.engine.Limit(time=_EVIDENCE_TIME), root_moves=[logical["pv"][0]])
+    score_logical = logical["score"].relative
+    mate = score_logical.is_mate() and score_logical.mate() < 0
+    trap_win = 100 - _win_of(logical)
+    clear = clear_advantage(board, [move] + logical["pv"], trap_win, mate)
+    trap_line_san, trap_end_fen, evidence = [], None, None
+    if clear is not None:
+        n, evidence = clear
+        trap_line_san = _san_line(after, logical["pv"][:n - 1])
+        end = after.copy(stack=False)
+        for reply_move in logical["pv"][:n - 1]:
+            end.push(reply_move)
+        trap_end_fen = end.fen()
 
     reply_lines = [
         {"san": after.san(info["pv"][0]), "line_san": _san_line(after, info["pv"][:_REPLY_LINE_PLIES]),
@@ -209,18 +233,24 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
         san=board.san(move), uci=move.uci(), loss=loss, win_after=win_after, pv_san=pv_san,
         sacrifice=sacrifice, forcing=forcing, trap=trap, trap_reply_san=trap_reply_san,
         volatility=volatility, score=score, offered=offered, trap_line_san=trap_line_san,
-        replies=reply_lines,
+        replies=reply_lines, trap_end_fen=trap_end_fen, trap_end_win=trap_win, evidence=evidence,
     )
 
 
 def _admissible(candidate: ExplosiveMove) -> bool:
-    """Fenêtre (Q5) et explosivité réelle (sacrifice ou piège)."""
+    """Fenêtre (Q5), explosivité réelle (sacrifice ou piège) et avantage clair."""
+    if candidate.evidence is None:
+        return False
     in_window = candidate.loss <= _WINDOW or (candidate.loss <= _TRAP_WINDOW and candidate.trap >= _TRAP_MIN)
     return in_window and (candidate.sacrifice >= 1 or candidate.trap >= _TRAP_MIN)
 
 
-def _search_position(engine, board: chess.Board, played_uci: str) -> ExplosiveMove | None:
-    """Meilleur coup explosif admissible d'une position, ou None."""
+def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci: str) -> ExplosiveMove | None:
+    """Meilleur coup explosif admissible d'une position, ou None.
+
+    Exclus : le coup joué, le meilleur coup de cette analyse et celui de la
+    1re passe (first_best_uci, celui que la légende affiche comme meilleur).
+    """
     reference = engine.analyse(board, chess.engine.Limit(time=_ROOT_TIME), multipv=_MULTIPV)
     win_best = _win_of(reference[0])
     best = reference[0]["pv"][0]
@@ -234,7 +264,7 @@ def _search_position(engine, board: chess.Board, played_uci: str) -> ExplosiveMo
 
     candidates = [
         (move, max(0.0, win_best - win)) for move, win in wins.items()
-        if move != best and move.uci() != played_uci and win_best - win <= _TRAP_WINDOW
+        if move != best and move.uci() not in (played_uci, first_best_uci) and win_best - win <= _TRAP_WINDOW
     ]
     # Sacrifices, échecs et prises passent d'abord, puis la perte croissante.
     candidates.sort(key=lambda c: (not _priority(board, c[0]), c[1]))
@@ -262,7 +292,7 @@ def find_explosive(plies: list, nico_color: str, engine_path: str) -> list:
             if time.monotonic() - started >= _BUDGET:
                 break
             examined += 1
-            explosive = _search_position(engine, chess.Board(p.fen_before), p.uci)
+            explosive = _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci)
             if explosive is not None:
                 found.append(CriticalPosition(kind="d", ply=p, score=explosive.score, explosive=explosive))
     log.info(

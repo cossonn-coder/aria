@@ -46,6 +46,7 @@ _KIND_FR = {
     "b": "occasion manquée après erreur adverse",
     "c": "coup unique trouvé",
     "d": "occasion explosive",
+    "e": "tournant",
 }
 
 # Nom français de la pièce offerte (libellé du bloc d'occasion explosive).
