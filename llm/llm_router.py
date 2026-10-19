@@ -81,7 +81,11 @@ def _text_chain(deepseek_model: str) -> list[dict]:
 ROUTING_TABLE = {
     LLMRole.CHAT: _text_chain(config.deepseek_model),
     LLMRole.PLANNING: _text_chain(config.deepseek_model),
-    LLMRole.REASONING: _text_chain(config.deepseek_reasoning_model),
+    # Groq exclu (sprint 28) : l'analyse d'échecs dépasse seule son quota gratuit (413).
+    LLMRole.REASONING: [
+        e for e in _text_chain(config.deepseek_reasoning_model)
+        if not e["provider"].startswith("groq")
+    ],
     LLMRole.REFLECTION: _text_chain(config.deepseek_model),
     # Synthèse de page (sprint 23) : Groq exclu (contexte trop court pour
     # une page entière) → DeepSeek puis Anthropic.

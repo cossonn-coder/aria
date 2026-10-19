@@ -17,11 +17,12 @@ def _ply(ply, color, *, loss=0.0, win_before=50.0, difficulty=None, second_gap=N
 
 def _game(trial=None, *, outcome="unknown", elo_nico=1300, elo_opponent=None,
           opening="", n_plies=30, with_difficulty=True, opponent="X"):
-    """Partie de 30 demi-coups calmes ; `trial` = (difficulty, loss) au demi-coup 24 (blancs)."""
+    """Partie de 30 demi-coups calmes ; `trial` = (difficulty, loss) au demi-coup 24 (blancs,
+    thème « Pièces en prise »)."""
     plies = [_ply(i, "white" if i % 2 == 0 else "black") for i in range(n_plies)]
     if trial is not None:
         difficulty, loss = trial
-        plies[24].update(difficulty=difficulty, loss=loss, second_gap=20.0)
+        plies[24].update(difficulty=difficulty, loss=loss, second_gap=20.0, tags=["hanging"])
     if not with_difficulty:
         for p in plies:
             del p["difficulty"]
@@ -80,3 +81,20 @@ def test_opening_inventory_win_rate():
     ])
     stats = profile.openings[("Scotch Game", "white")]
     assert (stats.wins, stats.losses, stats.win_rate) == (1, 1, 0.5)
+
+
+def test_loss_only_lowers_result_and_global():
+    profile = build_profile([_game(outcome="loss", elo_opponent=1300, opening="")])
+    # Ouverture réussie (+8, K 16) et défaite à égalité (−16, K 32) : le Global baisse.
+    assert profile.ratings["result"].value < 1300
+    assert profile.last_game["global"].delta < 0
+    assert profile.last_game["global"].top is None
+
+
+def test_found_move_raises_theme_and_global_is_mean():
+    profile = build_profile([_game((1500, 0.0))])
+    r = profile.ratings
+    assert r["hanging"].value > 1300
+    assert r["result"].value == r["punish"].value == 1300
+    themes = ["hanging", "punish", "opening", "convert", "endgame", "result"]
+    assert r["global"].value == sum(r[k].value for k in themes) / 6

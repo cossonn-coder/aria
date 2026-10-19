@@ -22,7 +22,11 @@ LABELS = {
     "opening": "Ouverture",
     "convert": "Convertir l'avantage",
     "endgame": "Finale",
+    "result": "Résultats",
 }
+
+# Classements joués ; « global » = leur moyenne arithmétique (tronçon 05).
+_THEMES = [key for key in LABELS if key != "global"]
 
 # Épreuve : seuils en points de % de gain.
 _TRIAL_MIN_STAKE = 10
@@ -129,6 +133,10 @@ def _record(game_deltas: dict, key: str, trial: Trial) -> None:
         gd.top = trial
 
 
+def _mean(ratings: dict) -> float:
+    return sum(ratings[key].value for key in _THEMES) / len(_THEMES)
+
+
 def _move_themes(plies: list, i: int) -> list:
     """Thèmes dont relève l'épreuve au demi-coup i (hors global et ouverture)."""
     p = plies[i]
@@ -181,6 +189,7 @@ def build_profile(games: list) -> Profile:
         label = _game_label(game)
         deltas = {key: GameDelta() for key in LABELS}
         unlocked = []
+        global_before = ratings["global"].value
 
         # Ouverture : une épreuve par partie (Maia muette avant le coup 10).
         opening_diff = game.get("elo_opponent") or game.get("elo_nico")
@@ -191,9 +200,9 @@ def build_profile(games: list) -> Profile:
                 for p in plies
             )
             score = 0.0 if missed else 1.0
-            for key in ("global", "opening"):
-                d = _apply(ratings[key], opening_diff, score)
-                _record(deltas, key, Trial("coups 1-10", opening_diff, score, d))
+            d = _apply(ratings["opening"], opening_diff, score)
+            _record(deltas, "opening", Trial("coups 1-10", opening_diff, score, d))
+            ratings["global"].value = _mean(ratings)
 
         # Épreuves coup par coup.
         for i, p in enumerate(plies):
@@ -203,17 +212,23 @@ def build_profile(games: list) -> Profile:
             score = 1.0 if p["loss"] < _FOUND_MAX_LOSS else 0.0
             if score and difficulty >= ratings["global"].value + 400:
                 unlocked.append("Coup de maître")
-            for key in ["global"] + _move_themes(plies, i):
+            for key in _move_themes(plies, i):
                 d = _apply(ratings[key], difficulty, score)
                 _record(deltas, key, Trial(_move_label(p), difficulty, score, d))
+            # Global tenu à jour pour le seuil de « Coup de maître » de l'épreuve suivante.
+            ratings["global"].value = _mean(ratings)
 
-        # Résultat de partie contre l'Elo adverse (global seulement).
+        # Résultat de partie contre l'Elo adverse (thème « Résultats »).
         outcome = game.get("outcome")
         elo_opp = game.get("elo_opponent")
         if outcome in _RESULT_SCORE and elo_opp is not None:
             score = _RESULT_SCORE[outcome]
-            d = _apply(ratings["global"], elo_opp, score, k=_K_RESULT)
-            _record(deltas, "global", Trial("résultat", elo_opp, score, d))
+            d = _apply(ratings["result"], elo_opp, score, k=_K_RESULT)
+            _record(deltas, "result", Trial("résultat", elo_opp, score, d))
+
+        # Global = moyenne des thèmes ; son delta = moyenne après − moyenne avant.
+        ratings["global"].value = _mean(ratings)
+        deltas["global"].delta = ratings["global"].value - global_before
 
         # Badges de la partie et des séries.
         win = outcome == "win"

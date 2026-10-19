@@ -282,11 +282,17 @@ def _progression_block(before, after, summary: dict) -> str:
              else f"🎮 Progression — saison 1, partie {after.n_games}"]
     lines.append(_rating_line("global", before, after))
     if not first:
+        # Thèmes dont l'épreuve décisive est la même : une seule ligne, segments
+        # joints par « · », texte de l'épreuve une fois (ordre de LABELS).
+        merged = {}
         for key in LABELS:
             gd = after.last_game[key]
             if key == "global" or round(gd.delta) == 0:
                 continue
-            lines.append(f"{_rating_line(key, before, after)} : {_trial_text(gd.top)}")
+            merged.setdefault(gd.top.label, (gd.top, []))[1].append(
+                _rating_line(key, before, after))
+        for trial, segments in merged.values():
+            lines.append(f"{' · '.join(segments)} : {_trial_text(trial)}")
     for badge in after.badges:
         if badge in before.badges:
             continue

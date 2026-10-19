@@ -14,7 +14,7 @@
 | 02 | Modèle joueur pur (XP Elo par thème, niveaux, badges, ouvertures) + `bridge.load_chess_games` | `02_modele_joueur.md` | ✅ |
 | 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ✅ |
 | 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ✅ partiel (2026-10-19) |
-| 05 | Correctif post-live : Global = moyenne des thèmes + « Résultats », lignes fusionnées, Groq hors REASONING | `05_correctif_global.md` | ⏳ |
+| 05 | Correctif post-live : Global = moyenne des thèmes + « Résultats », lignes fusionnées, Groq hors REASONING | `05_correctif_global.md` | ✅ |
 
 ## Décisions arrêtées
 
@@ -91,4 +91,12 @@ Arbitrages Nico : 1re partie sans 📖 ni thème = gardé ; Global = moyenne des
 thème « Résultats » ; lignes au même coup fusionnées ; Groq retiré de REASONING → tronçon 05.
 Thèmes par motif tactique (fourchette, sacrifice…) → sprint 29. Arrêt du service tué
 après 90 s (SIGKILL) : antérieur au sprint (14:41, 19:00) → dette.
-Prochaine étape : tronçon 05, puis clôture. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
+05 fait : thème `result` (« Résultats », dernier de `LABELS`) porte le résultat K 32 ;
+ouverture → `opening` seul ; coups → `_move_themes` seuls ; `global` = moyenne des 6
+thèmes (`_THEMES`), recalculée après l'ouverture, après chaque épreuve de coup (seuil
+« Coup de maître » = moyenne courante) et en fin de partie ; `last_game["global"].delta`
+= moyenne après − avant, `top` None. Router : lignes de thème groupées par `top.label`
+(segments ` · `, épreuve une fois). `ROUTING_TABLE[REASONING]` sans `groq*`.
+pytest 325 verts.
+Prochaine étape : run live de contrôle (Global d'une défaite, ligne fusionnée, pas de 413
+Groq en `journalctl`), puis clôture. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.

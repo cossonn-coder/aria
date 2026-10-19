@@ -196,6 +196,25 @@ def test_progression_block_level_up_and_new_badge():
     assert "Série" not in block
 
 
+def test_progression_block_merges_themes_on_same_move():
+    keys = chess_router_mod.LABELS
+    before = Profile(n_games=3, ratings={k: Rating(1335.0) for k in keys})
+    after = Profile(
+        n_games=4, ratings={**{k: Rating(1335.0) for k in keys},
+                            "hanging": Rating(1325.0), "convert": Rating(1348.0)},
+        last_game={**{k: GameDelta() for k in keys},
+                   "hanging": GameDelta(-10.0, Trial("19.Bg5", 1240.0, 0.0, -10.0)),
+                   "convert": GameDelta(-11.0, Trial("19.Bg5", 1240.0, 0.0, -11.0))},
+    )
+    summary = {"opening": "", "nico_color": "white"}
+
+    block = chess_router_mod._progression_block(before, after, summary)
+
+    assert ("\nPièces en prise 1325 (−10) · Convertir l'avantage 1348 (−11) : "
+            "19.Bg5 raté (difficulté ≈1240)") in block
+    assert block.count("19.Bg5") == 1
+
+
 def test_normalize_images_result_is_images_text():
     from core.kernel import AriaKernel
     # _normalize n'utilise pas l'état du kernel : pas de construction complète.
