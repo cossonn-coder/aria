@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
+from chess_coach.explosive import _line_sacrifice
 from chess_coach.notation import to_french
 from chess_coach.render import SIZE, render_position
 
@@ -61,6 +62,11 @@ def test_explosive_smith_morra_nd5():
     d = next(c for c in game.critical if c.kind == "d" and c.ply.move_number == 8)
     assert d.explosive.san == "Nd5"
     assert d.explosive.trap >= 10
+    # Tronçon 05 : le cavalier offert (attaqué par e6) compte même refusé dans la PV.
+    assert d.explosive.offered == 3
+    assert d.explosive.sacrifice >= 3
+    assert d.explosive.trap_line_san[0] == "exd5"
+    assert d.explosive.replies
 
 
 @pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
@@ -70,6 +76,17 @@ def test_explosive_early_queen_nf6():
     d = next(c for c in game.critical if c.kind == "d" and c.ply.move_number == 2)
     assert d.explosive.san == "Nf6"
     assert d.explosive.sacrifice >= 1
+
+
+def test_line_sacrifice_waits_end_of_exchange():
+    # Tronçon 05 : 1...d6 2.d4 e5 3.dxe5 dxe5 4.Dxd8+ Rxd8 — la dame est reprise, sacrifice 0.
+    board = chess.Board()
+    board.push_san("e4")
+    line = []
+    replay = board.copy()
+    for san in ["d6", "d4", "e5", "dxe5", "dxe5", "Qxd8+", "Kxd8"]:
+        line.append(replay.push_san(san))
+    assert _line_sacrifice(board, line) == (0, 7)
 
 
 def _ply(ply, loss, second_gap=None, move_number=None):

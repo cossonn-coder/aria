@@ -10,7 +10,7 @@
 # Module pur : aucun import mémoire / LLM / exécution.
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import chess
 import chess.engine
@@ -21,6 +21,7 @@ from logger import get_logger
 log = get_logger(__name__)
 
 # Budget global de la recherche (secondes), vérifié avant chaque position.
+# Threads=8 + limites en temps : deux rejeux du même PGN peuvent différer (accepté).
 _BUDGET = 30.0
 # Durées d'analyse : référence MultiPV / candidats par forme, puis approfondissement.
 _ROOT_TIME = 0.5
@@ -35,8 +36,13 @@ _TRAP_WINDOW = 15
 _TRAP_MIN = 10
 # Nombre maximal de candidats approfondis par position.
 _MAX_DEEP = 3
-# Longueur de la ligne mesurée (candidat compris).
+# Ligne mesurée (candidat compris) : au moins 6 demi-coups, prolongée tant
+# que l'échange continue, borne dure 10.
 _LINE_PLIES = 6
+_LINE_MAX = 10
+# Longueurs affichées : suite du piège (prise comprise), lignes des réponses.
+_TRAP_LINE_PLIES = 8
+_REPLY_LINE_PLIES = 6
 _SACRIFICE_CAP = 5
 _VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
@@ -55,6 +61,12 @@ class ExplosiveMove:
     trap_reply_san: str | None
     volatility: float
     score: float
+    # Matériel offert par le candidat lui-même (pièce posée en prise), en pions.
+    offered: int = 0
+    # Suite si l'adversaire prend le matériel offert (SAN depuis la position après le candidat).
+    trap_line_san: list = field(default_factory=list)
+    # Réponses MultiPV adverses : {"san", "line_san", "win"} (win = % de gain côté Nico).
+    replies: list = field(default_factory=list)
 
 
 def _material(board: chess.Board, color: chess.Color) -> int:
@@ -63,6 +75,34 @@ def _material(board: chess.Board, color: chess.Color) -> int:
         value * (len(board.pieces(piece, color)) - len(board.pieces(piece, not color)))
         for piece, value in _VALUES.items()
     )
+
+
+def _san_line(board: chess.Board, moves: list) -> list:
+    """Ligne de coups en SAN depuis board (non modifié)."""
+    board = board.copy(stack=False)
+    san = []
+    for move in moves:
+        san.append(board.san(move))
+        board.push(move)
+    return san
+
+
+def _line_sacrifice(board: chess.Board, line: list) -> tuple:
+    """Matériel perdu par le trait de board sur une ligne stabilisée, et sa longueur.
+
+    Point de mesure : le premier demi-coup à partir du 6e après lequel le coup
+    suivant n'est pas une prise (on laisse finir l'échange), borne _LINE_MAX ;
+    fin de la ligne si elle s'épuise avant.
+    """
+    mover = board.turn
+    pv_board = board.copy(stack=False)
+    plies = 0
+    for move in line[:_LINE_MAX]:
+        if plies >= _LINE_PLIES and not pv_board.is_capture(move):
+            break
+        pv_board.push(move)
+        plies += 1
+    return max(0, _material(board, mover) - _material(pv_board, mover)), plies
 
 
 def _win_of(info: dict) -> float:
@@ -128,27 +168,37 @@ def _priority(board: chess.Board, move: chess.Move) -> bool:
 
 def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after: float) -> ExplosiveMove:
     """Approfondit un candidat : ligne, sacrifice, forçant, piège, volatilité."""
-    nico = board.turn
     after = board.copy(stack=False)
     after.push(move)
     replies = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), multipv=3)
 
-    # Ligne : candidat + PV adverse ; sacrifice = bilan matériel perdu sur la ligne.
-    line = [move] + replies[0]["pv"][:_LINE_PLIES - 1]
-    pv_board = board.copy(stack=False)
-    pv_san = []
-    for pv_move in line:
-        pv_san.append(pv_board.san(pv_move))
-        pv_board.push(pv_move)
-    sacrifice = max(0, _material(board, nico) - _material(pv_board, nico))
+    # Ligne : candidat + PV adverse, mesurée une fois l'échange terminé.
+    line = [move] + replies[0]["pv"]
+    sacrifice_line, plies = _line_sacrifice(board, line)
+    pv_san = _san_line(board, line[:plies])
+
+    # Matériel offert : pièce posée en prise (même si l'adversaire refuse dans la PV),
+    # moins la pièce éventuellement prise par le candidat.
+    capture = _natural_capture(after, move.to_square)
+    offered = 0
+    if capture is not None:
+        taken = chess.PAWN if board.is_en_passant(move) else board.piece_type_at(move.to_square)
+        offered = max(0, _VALUES[after.piece_type_at(move.to_square)] - (_VALUES[taken] if taken else 0))
+    sacrifice = max(sacrifice_line, offered)
 
     # Piège : % de gain adverse après sa meilleure réponse − après la prise naturelle.
-    trap, trap_reply_san = 0.0, None
-    capture = _natural_capture(after, move.to_square)
+    trap, trap_reply_san, trap_line_san = 0.0, None, []
     if capture is not None:
         captured = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=[capture])
         trap = max(0.0, _win_of(replies[0]) - _win_of(captured))
         trap_reply_san = after.san(capture)
+        trap_line_san = _san_line(after, captured["pv"][:_TRAP_LINE_PLIES])
+
+    reply_lines = [
+        {"san": after.san(info["pv"][0]), "line_san": _san_line(after, info["pv"][:_REPLY_LINE_PLIES]),
+         "win": 100 - _win_of(info)}
+        for info in replies
+    ]
 
     opponent_wins = [_win_of(info) for info in replies]
     volatility = max(opponent_wins) - min(opponent_wins)
@@ -158,7 +208,8 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
     return ExplosiveMove(
         san=board.san(move), uci=move.uci(), loss=loss, win_after=win_after, pv_san=pv_san,
         sacrifice=sacrifice, forcing=forcing, trap=trap, trap_reply_san=trap_reply_san,
-        volatility=volatility, score=score,
+        volatility=volatility, score=score, offered=offered, trap_line_san=trap_line_san,
+        replies=reply_lines,
     )
 
 
