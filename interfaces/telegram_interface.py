@@ -177,7 +177,30 @@ class TelegramInterface(BaseInterface):
             → extraction du champ "text" ou str()
         - str
             → send_message() direct
+        - dict {"type": "images_text", "images": [...], "text": ...}
+            → une send_photo() par image, puis le texte (sprint 26)
         """
+
+        # ── Résultat texte + images (coach d'échecs) ─────────────────────────
+        # Photos d'abord, puis le texte par le chemin texte ci-dessous.
+        if isinstance(message, dict) and message.get("type") == "images_text":
+            for image in message.get("images", []):
+                path = image.get("path", "")
+                caption = image.get("caption", "") or ""
+                if not (path and Path(path).exists()):
+                    log.warning("telegram images_text: image introuvable, ignorée: %s", path)
+                    continue
+
+                # Fichier rouvert à chaque tentative (cf. cas image ci-dessous).
+                async def _send_photo(path=path, caption=caption):
+                    with open(path, "rb") as photo:
+                        return await self.app.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=photo,
+                            caption=caption[:1024] if caption else None,
+                        )
+                await self._send_with_retry(chat_id, _send_photo)
+            message = message.get("text", "")
 
         # ── Résultat image ───────────────────────────────────────────────────
         if isinstance(message, dict) and message.get("type") == "image":

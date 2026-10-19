@@ -45,8 +45,8 @@ exception au calibrage faible sur ce tronçon.
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ (non commité) |
-| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ⏳ |
+| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ |
+| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ (non commité) |
 | 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ⏳ |
 | 04 | `04_run_live.md` — run live (Nico) | ⏳ |
 
@@ -67,4 +67,11 @@ tests `tests/chess_coach/` (pytest 286 verts). Message B (04) : nico=black/heade
 3 critiques (15...Ce4, 17...a5, 19...Cd8), 7,4 s [1 run VM].
 Écarts : positions terminales (mat/pat) évaluées sans appel moteur ; pas de
 `tests/chess_coach/__init__.py` (collision avec le paquet `chess_coach`).
-Suite : tronçon 02 (`02_cablage.md`), puis 03, puis run live 04 par Nico.
+Tronçon 02 fait (2026-10-19) : `CHESS_ANALYSIS` (règle 1b du classifier, avant URL),
+`execution/routers/chess_router.py`, routing + `_normalize` → `images_text`, `send()`
+Telegram (photos puis texte), règle inviolable 4 amendée dans CLAUDE.md. Tests :
+classifier, router, `_normalize`, Telegram (pytest 291 verts). Sandbox message B
+(vrai Stockfish, faux LLM) : 3 PNG (15...Ce4, 17...a5, 19...Cd8), message enrichi OK.
+Choix non tranchés par le kickoff : sans Elo dans l'en-tête, consigne « joueur
+amateur » ; étiquettes et phases traduites en français dans le message enrichi.
+Suite : tronçon 03 (`03_fiche_partie.md`), puis run live 04 par Nico.

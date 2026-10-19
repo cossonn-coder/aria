@@ -101,8 +101,9 @@ Si tu hésites, tu ne pushes pas.
    mempalace_store directement.
 3. Les agents reçoivent un AgentContext pré-assemblé — ils ne font
    AUCUNE requête mémoire eux-mêmes. Le kernel assemble tout.
-4. Les routers retournent {"text": str} ou {"path": str, "caption": str} —
-   jamais {"status": ...} (c'est le rôle du dispatcher).
+4. Les routers retournent {"text": str}, {"path": str, "caption": str} ou
+   {"text": str, "images": [{"path": str, "caption": str}, …]} — jamais
+   {"status": ...} (c'est le rôle du dispatcher).
 5. Le kernel ne décide rien, n'exécute rien, ne stocke rien.
    Il séquence : classify → dispatch → normalize.
 6. CognitiveEngine peut tenir des dépendances injectées (llm_router,
