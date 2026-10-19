@@ -1,6 +1,6 @@
 # Sprint 25 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-16), prête pour `/sprint-auto sprint 25`.
+**Phase** : CLOS (2026-10-19) — run live 02 OK.
 **Cible** : #73 Groq 413 / poids de l'historique.
 **Branche** : `feat/sprint25-groq-413`.
 
@@ -20,17 +20,25 @@ _(aucune)_
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_saut_groq_413.md` — 413 Groq saute les autres Groq de la requête + corps HTTP dans le log de fallback | ✅ (pytest 282 verts) |
-| 02 | `02_run_live.md` — run live (Nico) | ⏳ |
+| 01 | `01_saut_groq_413.md` — 413 Groq saute les autres Groq de la requête + corps HTTP dans le log de fallback | ✅ `3daaa45` (pytest 282 verts) |
+| 02 | `02_run_live.md` — run live (Nico) | ✅ 2026-10-19 |
 
 ## Dettes
 
-- Fermée par le sprint (si run live OK) : #73 (partiellement : Groq ne
-  répond toujours pas aux conversations chargées, on cesse juste de le
-  retenter 3 fois).
+- #73 partiellement résolue : Groq ne répond toujours pas aux conversations
+  chargées (413, `Limit 7000`), on cesse juste de le retenter 3 fois.
+- #31 : nouvelle quarantaine HNSW au run live (2026-10-19 08:31:46).
+
+## Run live 02 (2026-10-19, 20 messages d'historique)
+
+- Une seule ligne `[LLM FALLBACK] groq failed: … 413 …` avec le corps
+  (`ITPM): Limit 7000, Requested 7…`, tronqué). ✅
+- `groq_2` / `groq_3` : `skipped (413 sur groq)`, aucun `failed`. ✅
+- `deepseek` a répondu 3 s après le 413 [horodatage à la seconde, n=1]
+  (attendu ~1-2 s, ~4 s au run live 24-02) : l'écart restant est la
+  latence propre de DeepSeek (skips à :57, réponse à :59).
+- Réponse Telegram pertinente (progression Docker en 4 phases).
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, `docs/sprint25/audit_groq_413.md`, ce fichier.
-Tronçon 01 ✅ (`llm/llm_router.py` + `tests/llm/test_groq_413.py`, non commité).
-Prochaine étape : commit du tronçon 01, puis run live 02 par Nico.
+Sprint clos. Suite : `docs/sprint26/context_kickoff_sprint_26.md`.
