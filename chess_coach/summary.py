@@ -137,6 +137,9 @@ def summarize(analysis: GameAnalysis) -> dict:
             "loss": round(p.loss, 1), "best_san": p.best_san, "quality": p.quality,
             "phase": p.phase, "tags": p.tags, "clock": p.clock,
             "kind": kinds.get(p.ply),
+            # Sprint 28 : la clé difficulty marque une fiche de la saison 1.
+            "difficulty": None if p.difficulty is None else round(p.difficulty),
+            "second_gap": None if p.second_gap is None else round(p.second_gap, 1),
         }
         for p in plies
     ], ensure_ascii=False, separators=(",", ":"))

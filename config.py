@@ -81,6 +81,8 @@ class Config:
     stockfish_path: str = "/usr/games/stockfish"
     # Pseudo Chess.com de Nico, comparé aux en-têtes White/Black du PGN.
     chess_username: str = "staroflexeur"
+    # Poids Maia-2 (rapid_model.pt + config.yaml), hors Nextcloud : 280 Mo (sprint 28).
+    maia_models_dir: str = "/home/nico/.cache/aria-maia"
 
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")

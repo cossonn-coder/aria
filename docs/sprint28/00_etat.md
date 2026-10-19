@@ -10,7 +10,7 @@
 
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
-| 01 | Difficulté des coups par Maia-2 (install `--no-deps`, `chess_coach/difficulty.py`, champs fiche) | `01_difficulte_maia.md` | ⏳ |
+| 01 | Difficulté des coups par Maia-2 (install `--no-deps`, `chess_coach/difficulty.py`, champs fiche) | `01_difficulte_maia.md` | ✅ |
 | 02 | Modèle joueur pur (XP Elo par thème, niveaux, badges, ouvertures) + `bridge.load_chess_games` | `02_modele_joueur.md` | ⏳ |
 | 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ⏳ |
 | 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ⏳ |
@@ -65,5 +65,9 @@ y installer torch l'a rempli.
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 28` (tronçons 01 → 03), puis
-run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
+Tronçon 01 fait (pytest 314 verts) : maia2 installé `--no-deps` (chess 1.11.2 intact),
+poids dans `/home/nico/.cache/aria-maia/`, `chess_coach/difficulty.py`, `difficulty` +
+`second_gap` dans `plies_json`. Écart : `analyze()` prend un paramètre
+`maia_models_dir` (défaut None = pas de Maia, passé par le router depuis `config`).
+Position du spike b7b3 : P = 0,005 → bornée 0,01 → difficulté 2105 (spike : ≈ 1950).
+Prochaine étape : tronçon 02, puis 03, puis run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
