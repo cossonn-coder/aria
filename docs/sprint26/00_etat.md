@@ -1,6 +1,6 @@
 # Sprint 26 — état de conception
 
-**Phase** : B figée (2026-10-19) — prêt pour `/sprint-auto sprint 26`
+**Phase** : correctif 05 figé (2026-10-19) — prêt pour `/sprint-auto sprint 26` (tronçon 05), puis run live 06
 **Cible** : coach d'échecs (PGN → Stockfish → positions critiques illustrées + fiche par partie)
 **Branche** : `feat/sprint26-coach-echecs`
 **Audit** : `docs/sprint26/audit_coach_echecs.md`
@@ -45,10 +45,12 @@ exception au calibrage faible sur ce tronçon.
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ |
-| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ |
-| 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ✅ (non commité) |
-| 04 | `04_run_live.md` — run live (Nico) | ⏳ |
+| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ `7b3ad38` |
+| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ `4ee056f` |
+| 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ✅ `b3d79f0` |
+| 04 | `04_run_live.md` — run live (Nico) | ❌ partiel (voir ci-dessous) |
+| 05 | `05_correctif.md` — intent `jeux echecs` imposé (bug 1) + ancre « Partie contre … » (bug 2) | ⏳ |
+| 06 | `06_run_live.md` — run live du correctif (Nico) | ⏳ |
 
 ## Dettes
 
@@ -58,6 +60,7 @@ exception au calibrage faible sur ce tronçon.
   #82 questions d'ouverture sans PGN (LLM seul, hallucinations constatées) ;
   #83 lien de partie Chess.com → PGN via API publique.
 - Fermée : aucune.
+- Ouvertes au run live 04 : #84-#87 (voir § Correctif 05).
 
 ## §REPRISE
 
@@ -85,3 +88,44 @@ Choix non tranchés par le kickoff : perte des coups « best » ramenée à 0 po
 précision (bruit moteur) ; `opening` = segment brut d'`ECOUrl` (tirets conservés).
 Constat : ChromaDB n'enregistre pas les métadonnées None (clé absente à la relecture).
 Suite : run live 04 par Nico.
+
+## Correctif 05 (phase A, 2026-10-19)
+
+Run live 04 : A/B/C/D/E envoyés. Conformes : D (même hash), E, analyse/fiche/images
+partout, durées 2-8 s [1 run par message]. Non conformes : (1) A-D `intent SKIPPED
+reason=namer_aucun` → échange non écrit en épisodique (contredit Q4) ; (2) C répond
+sur la Position 1 de A au lieu de B. Audit : `docs/sprint26/audit_correctif_05.md`.
+
+Décisions arrêtées :
+- 2026-10-19 — Nico : tronçon correctif dans le sprint 26 (bugs 1 et 2), le reste en dettes.
+- 2026-10-19 — Nico : cible sprint 27 = coups conseillés « explosifs » (dette #87).
+- 2026-10-19 — Q11 (b) : ancre « Partie contre <adversaire> <date> <ouverture> » en tête
+  du bloc enrichi ET en tête de la réponse (consigne), pour ancrer les questions de suivi.
+  Pas de retouche du prompt AnalystAgent.
+- 2026-10-19 — Idée Nico (wing `echecs`, room par ouverture pour les fiches) : proposée
+  comme arbitrage d'entrée du sprint 27 (avec #81, #87) — à confirmer.
+
+- 2026-10-19 — Q9 (a) : le chess_router pose `metadata["forced_intent_name"]` ; le
+  llm_router saute resolve + namer et fait `apply(create, intent_name=…)`. Déterministe,
+  ne touche pas les autres sujets (le prompt du namer reste tel quel).
+- 2026-10-19 — Q10 : nom `jeux echecs` (réutilise l'intent créé par E au run 04).
+- 2026-10-19 — Fiches `chess_game` inchangées (room `chess`) ; rangement wing/room par
+  ouverture = arbitrage d'entrée du sprint 27. Nico : fiche de partie ≠ souvenir de la
+  discussion (room = intent), compris.
+
+Questions ouvertes : aucune.
+
+Dettes ouvertes par le run live :
+- #84 récit LLM inventé autour des coups corrects (matériel/menaces absents du bloc enrichi).
+- #85 meilleur coup instable entre deux analyses de la même partie (15…g5 vs 15…Fc7).
+- #86 413 Groq systématique sur requêtes échecs (bloc enrichi + historique enrichi > ITPM 7000).
+- #87 CIBLE SPRINT 27 — coups conseillés explosifs : fenêtre de tolérance sur MultiPV
+  (perte ≤ X pts de % de gain) + score pièges / coups forçants / déséquilibre /
+  volatilité ; Maia (lc0) en option v2 ; orienté gambits et compensation de
+  sacrifices. Cas de test Nico : 1.e4 e5 2.Dh5 Cf6 3.Dxe5+ Fe7 4.d3 O-O (SF d22 [1 run] :
+  2…Cf6 −0,21 vs 2…Cc6 −0,40 ; 3…Fe7 seul coup ; après 4…O-O −0,22). Nico fournira
+  d'autres cas par ouverture.
+
+§REPRISE correctif : conception figée. Exécution : `/sprint-auto sprint 26` (tronçon 05),
+puis run live 06 par Nico. Lire `CLAUDE.md`, ce fichier, `audit_correctif_05.md`, puis
+`05_correctif.md`.
