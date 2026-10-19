@@ -15,6 +15,8 @@
 #   La seule écriture propre à ce router est la fiche de partie
 #   (write_chess_game, tronçon 03), via memory/writer.py (règle 1).
 #   L'échange lui-même est écrit par LLMExecutionRouter.
+#   Les fiches de partie sont relues via le bridge (règle 2) pour le bloc
+#   « Progression » (sprint 28, tronçon 03), écrit par le router sous le texte LLM.
 
 import hashlib
 import re
@@ -24,6 +26,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze
+from chess_coach.player_model import LABELS, build_profile, opening_family
 from chess_coach.render import render_position
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -82,6 +85,19 @@ _TAG_FR = {
 FORCED_INTENT_NAME = "jeux echecs"
 
 # Clés de compteurs (qualité PlyAnalysis) → libellé français, dans l'ordre affiché.
+# Raison affichée d'un badge débloqué (conditions : chess_coach.player_model).
+_BADGE_REASON = {
+    "Main propre": "aucune gaffe sur une partie d'au moins 40 demi-coups",
+    "Justicier": "toutes les erreurs adverses punies (au moins 2)",
+    "Coup de maître": "coup trouvé 400 Elo au-dessus du classement global",
+    "Phénix": "nulle ou victoire après être tombé à 20 % de gain ou moins",
+    "Bourreau": "3 victoires écrasantes de suite",
+    "Série": "3 victoires de suite",
+    "Répertoire": "5e partie dans la même famille d'ouverture",
+}
+
+_RESULT_FR = {1.0: "victoire", 0.5: "nulle", 0.0: "défaite"}
+
 _QUALITY_FR = [
     ("best", "meilleurs"), ("correct", "corrects"), ("inaccuracy", "imprécisions"),
     ("mistake", "erreurs"), ("blunder", "gaffes"),
@@ -220,6 +236,77 @@ def _level_line(summary: dict) -> str:
     return "Niveau (données) : " + " ; ".join(parts)
 
 
+def _signed(x: float) -> str:
+    """ΔR arrondi signé, − typographique (comme _material_line)."""
+    n = round(x)
+    return f"+{n}" if n >= 0 else f"−{abs(n)}"
+
+
+def _history_line(after) -> str:
+    """Données d'historique pour la ligne « Niveau : » du LLM."""
+    g = after.ratings["global"]
+    return (f"Historique (données) : {after.n_games} parties saison 1, classement global "
+            f"{round(g.value)} (niveau {g.level}), {_signed(after.last_game['global'].delta)} "
+            "sur cette partie")
+
+
+def _trial_text(trial) -> str:
+    """Épreuve qui a le plus pesé : « 17.Qb3 trouvé (difficulté ≈1950) »."""
+    if trial.label == "résultat":
+        return f"{_RESULT_FR[trial.score]} contre {round(trial.difficulty)}"
+    if trial.label == "coups 1-10":
+        return f"coups 1-10 {'réussis' if trial.score else 'ratés'} (difficulté ≈{round(trial.difficulty)})"
+    return (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
+            f"(difficulté ≈{round(trial.difficulty, -1):.0f})")
+
+
+def _rating_line(key: str, before, after) -> str:
+    """« ⬆️ Punir les erreurs 1385 (+25) · niveau 13 atteint » (flèche si palier changé)."""
+    rating, gd = after.ratings[key], after.last_game[key]
+    line = f"{LABELS[key]} {round(rating.value)} ({_signed(gd.delta)})"
+    old = before.ratings[key].level if before.ratings else rating.level
+    if rating.level > old:
+        return f"⬆️ {line} · niveau {rating.level} atteint"
+    if rating.level < old:
+        return f"⬇️ {line} · retour au niveau {rating.level}"
+    return f"{line} · niveau {rating.level}" if key == "global" else line
+
+
+def _progression_block(before, after, summary: dict) -> str:
+    """Bloc « Progression » écrit par le router (exact par construction).
+    Chaîne vide si la partie n'entre pas dans la saison (fiche ignorée)."""
+    if after.n_games == before.n_games:
+        return ""
+    first = before.n_games == 0
+    lines = ["🎮 Progression — saison 1 lancée" if first
+             else f"🎮 Progression — saison 1, partie {after.n_games}"]
+    lines.append(_rating_line("global", before, after))
+    if not first:
+        for key in LABELS:
+            gd = after.last_game[key]
+            if key == "global" or round(gd.delta) == 0:
+                continue
+            lines.append(f"{_rating_line(key, before, after)} : {_trial_text(gd.top)}")
+    for badge in after.badges:
+        if badge in before.badges:
+            continue
+        if badge == "Tueur de géant":
+            gap = summary["elo_opponent"] - summary["elo_nico"]
+            reason = f"victoire contre un adversaire à {summary['elo_opponent']} (+{gap})"
+        else:
+            reason = _BADGE_REASON[badge]
+        lines.append(f"🏆 Badge débloqué : {badge} — {reason}")
+    if not first and summary["opening"]:
+        family = opening_family(summary["opening"])
+        stats = after.openings.get((family, summary["nico_color"]))
+        if stats:
+            lines.append(
+                f"📖 {family} ({_COLOR_FR[summary['nico_color']]}) : "
+                f"{stats.wins} V, {stats.draws} N, {stats.losses} D — {stats.win_rate * 100:.0f} %"
+            )
+    return "\n".join(lines)
+
+
 def _reply_start(p) -> tuple:
     """(numéro, couleur) du premier coup adverse après le coup de Nico en p."""
     if p.color == "white":
@@ -304,10 +391,12 @@ class ChessExecutionRouter(BaseRouter):
 
     Args:
         llm_execution_router : LLMExecutionRouter — production de l'explication
+        mempalace_bridge     : MempalaceBridge — relecture des fiches (bloc Progression)
     """
 
-    def __init__(self, llm_execution_router):
+    def __init__(self, llm_execution_router, mempalace_bridge):
         self.llm_execution_router = llm_execution_router
+        self.mempalace_bridge = mempalace_bridge
 
     def execute(self, payload: dict) -> dict:
         message  = str(payload.get("content") or "")
@@ -348,7 +437,22 @@ class ChessExecutionRouter(BaseRouter):
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
 
-        enriched = self._build_enriched(analysis, message, _anchor(summary), summary)
+        # ── Progression (non bloquante) : profil avant / après cette partie ──
+        # Recalculé depuis les fiches (la courante est en base depuis l'écriture).
+        block, history = "", None
+        try:
+            games = self.mempalace_bridge.load_chess_games()
+            before = build_profile([g for g in games if g["id"] != f"chess_game_{game_hash}"])
+            after = build_profile(games)
+            block = _progression_block(before, after, summary)
+            if block:
+                history = _history_line(after)
+                log.info("chess_progression OK games=%d global=%d",
+                         after.n_games, round(after.ratings["global"].value))
+        except Exception:
+            log.exception("chess_progression ERROR")
+
+        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, history)
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
@@ -358,9 +462,13 @@ class ChessExecutionRouter(BaseRouter):
         })
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
-        return {"text": _to_english(result["text"]), "images": images}
+        text = _to_english(result["text"])
+        if block:
+            text += "\n\n" + block
+        return {"text": text, "images": images}
 
-    def _build_enriched(self, analysis, message: str, anchor: str, summary: dict) -> str:
+    def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
+                        history: str | None = None) -> str:
         """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         opening = summary["opening"]
@@ -374,6 +482,8 @@ class ChessExecutionRouter(BaseRouter):
         lines += _header_lines(analysis.headers)
         lines.append(f"Compteurs Nico : {counts}")
         lines.append(_level_line(summary))
+        if history:
+            lines.append(history)
         for i, critical in enumerate(analysis.critical, 1):
             p = critical.ply
             tags = ", ".join(_TAG_FR.get(t, t) for t in p.tags) or "aucune"
@@ -407,7 +517,8 @@ class ChessExecutionRouter(BaseRouter):
             f"exacte « {anchor} » ; puis une entrée par position, dans l'ordre Position 1, "
             "2, 3 (Nico voit les diagrammes du même numéro), de 1 à 3 phrases : le coup, "
             "l'idée, le chiffre clé ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
-            "passif, solide ou brillant), justifiée par la ligne « Niveau (données) ». Rien "
+            "passif, solide ou brillant), justifiée par la ligne « Niveau (données) » et, si "
+            "présente, par la ligne « Historique (données) ». Rien "
             "d'autre : pas de section « ce qui se passe » ni « pourquoi ». Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "

@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 01 | Difficulté des coups par Maia-2 (install `--no-deps`, `chess_coach/difficulty.py`, champs fiche) | `01_difficulte_maia.md` | ✅ |
 | 02 | Modèle joueur pur (XP Elo par thème, niveaux, badges, ouvertures) + `bridge.load_chess_games` | `02_modele_joueur.md` | ✅ |
-| 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ⏳ |
+| 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ✅ |
 | 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ⏳ |
 
 ## Décisions arrêtées
@@ -74,4 +74,14 @@ libellés des classements dans `LABELS`). Choix non tranchés par le kickoff : l
 d'ouverture met à jour `global` + `opening` et se joue avant les coups ; badge Répertoire
 compté par famille toutes couleurs ; issue `unknown` hors inventaire ; label de partie
 = « date contre adversaire ».
-Prochaine étape : tronçon 03, puis run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
+03 : `ChessExecutionRouter(llm_execution_router, mempalace_bridge)` (kernel injecte le
+bridge) ; après `write_chess_game`, profils `before` (sans `chess_game_<hash>`) / `after`,
+`_progression_block` ajouté sous le texte LLM, ligne `Historique (données)` dans le message
+enrichi ; tout dans un `try/except` (`chess_progression ERROR` → ni bloc ni ligne).
+Choix non tranchés par le kickoff : raisons de badge = libellés fixes (`_BADGE_REASON`),
+sauf Tueur de géant (Elo adverse + écart, depuis le summary) ; ligne Global avec ⬆️/⬇️ si
+palier changé ; épreuve « résultat » affichée « victoire contre 1452 », « coups 1-10 »
+« réussis / ratés » ; difficulté des coups arrondie à la dizaine ; thème affiché si ΔR
+arrondi ≠ 0 ; pas de ligne Historique si la partie est hors saison ; 1re partie : pas de
+ligne 📖.
+Prochaine étape : run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.

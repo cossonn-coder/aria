@@ -3,11 +3,14 @@
 # Tests du ChessExecutionRouter (sprint 26, tronçon 02) — analyse et rendu
 # monkeypatchés : pas de Stockfish, pas de Pillow.
 
+import hashlib
+import json
 from unittest.mock import MagicMock
 
 import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
+from chess_coach.player_model import GameDelta, Profile, Rating, Trial
 from execution.routers.chess_router import ChessExecutionRouter
 
 
@@ -19,6 +22,15 @@ def _ply(ply, move_number, san, best_san, best_uci):
         pv_san=[best_san, "Nf3"], second_gap=None, quality="mistake",
         phase="middlegame", tags=["check"], clock=None, eval_before_cp=0, eval_after_cp=80,
     )
+
+
+def _season_game(doc_id):
+    """Fiche saison 1 minimale (clé difficulty, 20 demi-coups)."""
+    plies = [{"color": "black", "move_number": 20, "san": "Nf6", "loss": 0.0, "win_before": 50.0,
+              "second_gap": 20.0, "difficulty": 1500.0, "tags": [], "best_san": "Nf6",
+              "phase": "middlegame"}]
+    return {"id": doc_id, "n_plies": 20, "plies_json": json.dumps(plies), "nico_color": "black",
+            "elo_nico": 1307, "elo_opponent": 1300, "outcome": "win", "opening": "Scotch-Game"}
 
 
 def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tmp_path):
@@ -35,13 +47,18 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "explication"}
+    # Deux fiches saison 1 : une ancienne, puis la partie courante (même doc_id).
+    current = "chess_game_" + hashlib.sha256(b"a7a6a7a6").hexdigest()[:16]
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = [_season_game("chess_game_old"), _season_game(current)]
 
-    result = ChessExecutionRouter(llm_execution_router=llm_exec).execute(
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
         {"op_type": "chess_analysis", "content": "[White \"Ami\"] 1. e4", "metadata": {"chat_id": 42}}
     )
 
     delegated = llm_exec.execute.call_args.args[0]
-    assert result["text"] == "explication"
+    assert result["text"].startswith("explication\n\n🎮 Progression — saison 1, partie 2")
+    assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 2
     assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
     assert delegated["op_type"] == "reasoning"
@@ -82,8 +99,10 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
 
-    result = ChessExecutionRouter(llm_execution_router=llm_exec).execute(
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
         {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
     )
 
@@ -136,8 +155,10 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "2.Dh5 Cxe5 Tae1 Fe7, Cela"}
+    bridge = MagicMock()
+    bridge.load_chess_games.side_effect = RuntimeError("palace indisponible")
 
-    result = ChessExecutionRouter(llm_execution_router=llm_exec).execute(
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
         {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
     )
 
@@ -149,8 +170,30 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     assert "erreur adverse 7...h6 : perte 18 pts (meilleur 7...Be7)" in content
     assert "variante : 8.e5 d5 9.exd6 (gain matériel)" in content
     assert "montre la variante qui la punit" in content
-    # Conversion de la notation française résiduelle en sortie.
+    # Conversion de la notation française résiduelle en sortie ; bridge en échec → pas de bloc.
     assert result["text"] == "2.Qh5 Nxe5 Rae1 Be7, Cela"
+    assert "Historique (données) :" not in content
+
+
+def test_progression_block_level_up_and_new_badge():
+    before = Profile(n_games=3, ratings={k: Rating(1290.0) for k in chess_router_mod.LABELS},
+                     badges={"Série": "x"})
+    after = Profile(
+        n_games=4, ratings={**{k: Rating(1290.0) for k in chess_router_mod.LABELS},
+                            "punish": Rating(1315.0)},
+        last_game={**{k: GameDelta() for k in chess_router_mod.LABELS},
+                   "punish": GameDelta(25.0, Trial("17.Qb3", 1950.0, 1.0, 25.0))},
+        badges={"Série": "x", "Tueur de géant": "y"},
+    )
+    summary = {"elo_opponent": 1452, "elo_nico": 1345, "opening": "", "nico_color": "white"}
+
+    block = chess_router_mod._progression_block(before, after, summary)
+
+    assert block.startswith("🎮 Progression — saison 1, partie 4\nGlobal 1290 (+0) · niveau 12")
+    assert ("⬆️ Punir les erreurs 1315 (+25) · niveau 13 atteint : "
+            "17.Qb3 trouvé (difficulté ≈1950)") in block
+    assert "🏆 Badge débloqué : Tueur de géant — victoire contre un adversaire à 1452 (+107)" in block
+    assert "Série" not in block
 
 
 def test_normalize_images_result_is_images_text():

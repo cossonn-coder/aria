@@ -101,6 +101,7 @@ def _build_dispatcher(llm_router: LLMRouter, intent_engine: IntentEngine, mempal
     # Router échecs : analyse Stockfish d'un PGN, explication déléguée au pipeline texte
     registry.register("chess_router", ChessExecutionRouter(
         llm_execution_router=llm_execution_router,
+        mempalace_bridge=mempalace_bridge,
     ))
 
     return ExecutionDispatcher(
