@@ -76,6 +76,12 @@ class Config:
     # Cf. docs/sprint5/audit_negative_cache.md.
     negative_cache_ttl_seconds: int = 300
 
+    # ── Coach d'échecs (sprint 26) ────────────────────────────────────────────
+    # Chemin absolu : /usr/games n'est pas dans le PATH du service systemd.
+    stockfish_path: str = "/usr/games/stockfish"
+    # Pseudo Chess.com de Nico, comparé aux en-têtes White/Black du PGN.
+    chess_username: str = "staroflexeur"
+
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")
         self.allowed_user_id = int(os.getenv("ALLOWED_USER_ID", "0"))

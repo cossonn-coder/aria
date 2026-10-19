@@ -45,7 +45,7 @@ exception au calibrage faible sur ce tronçon.
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ⏳ |
+| 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ (non commité) |
 | 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ⏳ |
 | 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ⏳ |
 | 04 | `04_run_live.md` — run live (Nico) | ⏳ |
@@ -61,5 +61,10 @@ exception au calibrage faible sur ce tronçon.
 
 ## §REPRISE
 
-Conception figée. Exécution : `/sprint-auto sprint 26` (tronçons 01 → 03), puis
-run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, puis le kickoff du tronçon.
+Tronçon 01 fait (2026-10-19) : paquet `chess_coach/` (analysis, notation, render),
+`config.stockfish_path` / `config.chess_username`, `chess>=1.11` en requirements,
+tests `tests/chess_coach/` (pytest 286 verts). Message B (04) : nico=black/header,
+3 critiques (15...Ce4, 17...a5, 19...Cd8), 7,4 s [1 run VM].
+Écarts : positions terminales (mat/pat) évaluées sans appel moteur ; pas de
+`tests/chess_coach/__init__.py` (collision avec le paquet `chess_coach`).
+Suite : tronçon 02 (`02_cablage.md`), puis 03, puis run live 04 par Nico.
