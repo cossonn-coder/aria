@@ -52,9 +52,33 @@ suite du piège.
    (`accuracy_opening/middlegame/endgame`, phases absentes omises), erreurs adverses punies
    (`opponent_errors_punished` / `opponent_errors`), résultat. Passer `summary` à
    `_build_enriched` au lieu du seul `opening` (paramètre ajouté au tronçon 06).
-5. **Consigne d (occasion explosive)** : ajouter « donne la suite si l'adversaire tombe
-   dans le piège (coups fournis) et la meilleure réponse adverse » ; garder « ne le
-   présente jamais comme le meilleur coup ».
+5. **Occasion explosive — l'accent du message** (retour Nico 2026-10-19, prime sur le
+   tronçon 06) : Nico veut l'**idée**, la **variante si l'adversaire joue le coup logique**,
+   jusqu'au gain, et **pourquoi ce coup est difficile à éviter pour l'adversaire**. Il ne
+   veut **ni le coût, ni « quand le tenter », ni « ce qui se passe »**.
+   - Bloc `_explosive_lines` réécrit :
+     - plus de coût / % de gain du coup explosif (ni dans la ligne « explosif », ni
+       ailleurs dans le bloc d) ;
+     - `réponse logique : exd5 (prend le cavalier offert)` = la prise naturelle
+       (`trap_reply_san`) ; à défaut de prise, la 1re réponse de `replies` ;
+     - `variante jusqu'au gain : 8...exd5 9.… …` = `trap_line_san` complète (tronçon 08),
+       numérotée ; à défaut de prise, la ligne de la 1re réponse ;
+     - `fin de variante : matériel Nico ±N, % de gain Nico X %` + ligne `attaquées :` au
+       bout de la ligne, calculées depuis `trap_end_fen` / `trap_end_win` avec les mêmes
+       helpers que le point 2 (pour que le LLM explique l'avantage quand il n'est pas
+       matériel sans l'inventer) ;
+     - `difficulté pour l'adversaire : …` : la réponse logique gagne du matériel à vue
+       (pièce offerte), et combien de réponses de `replies` tiennent réellement (écart ≤ 5
+       pts de % de gain pour Nico avec la meilleure réponse), avec la meilleure réponse en
+       SAN — ex. `seule réponse qui tient : Qd6 (les 2 autres : Nico ≥ 62 %)` ;
+     - garder le matériel offert / sacrifié et les étiquettes forçantes (ce sont l'idée).
+   - Consigne d réécrite : « pour chaque occasion explosive : l'idée en une phrase ; la
+     variante complète si l'adversaire joue la réponse logique, jusqu'au gain (coups
+     fournis) ; si le gain n'est pas matériel, pourquoi la fin de variante est avantageuse,
+     d'après les lignes fin de variante ; pourquoi la bonne réponse est difficile à trouver
+     pour l'adversaire, d'après la ligne difficulté. Ne donne ni le coût, ni quand le
+     tenter, et ne le présente jamais comme le meilleur coup. » Cette entrée peut dépasser
+     les 1 à 3 phrases des autres positions (l'accent du message est là).
 6. **Conversion de notation en sortie** : sur `result["text"]` avant le retour, remplacer
    les lettres de pièce françaises non ambiguës devant une case : `C`→N, `F`→B, `T`→R,
    `D`→Q, y compris prises et désambiguïsation (`Dxe5+`→`Qxe5+`, `Cbd7`→`Nbd7`,
@@ -70,7 +94,9 @@ dépendent de la consigne) :
 - bloc enrichi : lignes `matériel :` et `attaquées :` sur une position connue ;
 - sorte e : légende « tournant après … » et ligne « erreur adverse … » ;
 - consigne : contient « Niveau » et ne contient plus « axes de travail » ;
-- conversion : `"2.Dh5 Cxe5 Tae1 Fe7, Cela"` → `"2.Qh5 Nxe5 Rae1 Be7, Cela"`.
+- conversion : `"2.Dh5 Cxe5 Tae1 Fe7, Cela"` → `"2.Qh5 Nxe5 Rae1 Be7, Cela"` ;
+- bloc d : contient « réponse logique », « variante jusqu'au gain », « fin de variante »,
+  « difficulté » ; ne contient plus « coût ».
 
 `./venv/bin/pytest tests/ -q` vert.
 

@@ -89,6 +89,12 @@
 - Scope sprint 28 — Nico (« ok ») : modèle joueur (axes RPG + style sur l'historique, #81),
   pensé comme premier usage de la consolidation mémoire (#17 `aria_semantic`, #54
   REFLECTION, `extract_every_n_turns`).
+- Occasion explosive — Nico (2026-10-19), **accent du message** : l'idée ; la variante si
+  l'adversaire joue le coup logique, **complète jusqu'au gain** (et pourquoi c'est
+  avantageux si le gain n'est pas matériel) ; pourquoi la bonne réponse est difficile pour
+  l'adversaire. **Retirés** : le coût, « quand le tenter », « ce qui se passe ».
+  → tronçon 08 point 5 (ligne du piège prolongée, borne 16, `trap_end_fen` / `trap_end_win`),
+  tronçon 09 point 5 (bloc et consigne d).
 - Plan correctif 2 : tronçons 08 (sélection), 09 (router), 10 (run live).
 
 ## Tronçons
