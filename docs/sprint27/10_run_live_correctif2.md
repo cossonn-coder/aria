@@ -1,0 +1,110 @@
+# Sprint 27 — Tronçon 10 : run live du correctif 2 (Nico)
+
+Pré-requis : tronçons 08-09 commités, `sudo systemctl restart aria.service`.
+Terminal de suivi : `sudo journalctl -u aria -f -o cat`
+
+Envoyer chaque message seul sur Telegram (PGN au format ci-dessous), attendre la réponse
+avant le suivant.
+
+## Partie 1 — Smith-Morra (Nico blancs)
+
+```
+[White "staroflexeur"]
+[Black "Test"]
+
+1. e4 c5 2. d4 cxd4 3. c3 dxc3 4. Nxc3 Nc6 5. Nf3 Nf6 6. Bc4 e6 7. O-O a6 8. e5 *
+```
+
+Attendu : `d:8.e5` (explosif 8.Nd5!?) ; le texte donne l'idée, la variante après 8...exd5
+(≤ 10 demi-coups sauf suite forcée) et l'avantage atteint, et pourquoi la bonne réponse est difficile pour les noirs ; ni coût
+ni « quand le tenter ».
+
+## Partie 2 — Dame précoce, en-têtes indentés (Nico noirs)
+
+```
+[White "Test"]
+  [Black "staroflexeur"]
+  1. e4 e5 2. Qh5 Nc6 *
+```
+
+Attendu : `nico=black source=header`. Occasion explosive 2...Nf6!? seulement si la 1re passe
+ne la donne pas comme meilleur coup ; légende jamais « explosif X (meilleur X) ».
+
+## Partie 3 — gambit letton (Nico noirs)
+
+```
+[White "MitenPandya"]
+[Black "staroflexeur"]
+[Result "0-1"]
+[ECO "C40"]
+[ECOUrl "https://www.chess.com/openings/Kings-Pawn-Opening-Latvian-Gambit-Accepted"]
+[WhiteElo "1190"]
+[BlackElo "1316"]
+
+1. e4 e5 2. Nf3 f5 3. exf5 e4 4. Ng1 Nf6 5. d3 exd3 6. Bxd3 d5 7. Bg5 Be7 8.
+Bxf6 Bxf6 9. Qh5+ Kf8 10. c3 Bd7 11. Ne2 Qe8 12. O-O Qxh5 13. Nf4 Qf7 14. Bc2
+Be5 15. Ne2 Bxf5 16. Bxf5 Qxf5 17. f4 Bd6 18. Nd4 Qf7 19. Nd2 Nd7 20. N2b3 c5
+21. Nb5 Qf6 22. Rae1 Kf7 23. g4 Rhe8 24. Rd1 Kg8 25. Rxd5 Bxf4 26. Rxd7 Be3+ 27.
+Kg2 Qc6+ 28. Kh3 Qxd7 29. Na3 Qd3 30. Rf3 Qe2 31. Rg3 Qf1+ 32. Rg2 Re6 33. Nc2
+Rh6+ 34. Kg3 Qf4# 0-1
+```
+
+Attendu : `c:12...Qxh5` ; pas de `a:2...f5` ; pas d'explosif égal au meilleur coup.
+
+## Partie 4 — Von Hennig (Nico blancs)
+
+```
+[White "staroflexeur"]
+[Black "CANNIBALISM_22"]
+[Result "*"]
+[ECO "B15"]
+[ECOUrl "https://www.chess.com/openings/Caro-Kann-Defense-von-Hennig-Gambit"]
+[WhiteElo "1337"]
+[BlackElo "1217"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Bc4 Nf6 5. f3 exf3 6. Nxf3 Bg4 7. Ne5 Be6 8.
+Bxe6 fxe6 9. O-O Nbd7 10. Nf3 g6 11. Ng5 Bg7 12. Nxe6 *
+```
+
+Attendu : pas de `a:4.Bc4` ; `c:12.Nxe6` (et/ou `c:8.Bxe6`) attendu au seuil 15 — au bord
+du bruit moteur (écarts 18-20 [n=2]) ; une partie sans aucune position est un résultat
+acceptable si l'écart tombe sous 15 (texte sans diagramme, sans erreur inventée).
+
+## Partie 5 — Écossaise / gambit Göring (Nico blancs)
+
+```
+[White "staroflexeur"]
+[Black "ghzwansl"]
+[Result "1-0"]
+[ECO "C45"]
+[ECOUrl "https://www.chess.com/openings/Scotch-Game-Goring-Double-Pawn-Sacrifice-Variation-5...cxb2-6.Bxb2"]
+[WhiteElo "1345"]
+[BlackElo "1263"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. c3 dxc3 5. Bc4 cxb2 6. Bxb2 Nf6 7. O-O h6 8.
+e5 Nxe5 9. Nxe5 d6 10. Nxf7 Qd7 11. Nxh8 Qc6 12. Bf7+ Kd7 13. Ng6 b6 14. Ne5+
+Kd8 15. Nxc6+ Kd7 16. Ne5+ Ke7 17. Bd5 dxe5 18. Bxa8 Kf7 19. Bxe5 Nd7 20. Bd5+
+Kg6 21. Qg4+ Kh7 22. Be4+ Kh8 23. Bxc7 b5 24. Qf3 a5 25. Bxa5 Nf6 26. Nc3 Bg4
+27. Qf4 Be6 28. Rad1 Bc4 29. Rfe1 Bc5 30. Rd8+ Bg8 31. Qb8 Be7 32. Rxg8+ Nxg8
+33. Bd5 Kh7 34. Qxg8+ Kg6 35. Rxe7 b4 36. Qxg7+ Kf5 37. Be4+ Kf4 38. Bc7# 1-0
+```
+
+Attendu : `e:8.e5` (tournant après 7...h6) ; le texte nomme 7...h6 et montre la variante
+de la punition ; « Niveau : » positif (partie gagnée, erreurs adverses punies).
+
+## Critère de succès (toutes parties)
+
+- Format court : 1 à 3 phrases par position, une ligne « Niveau : », **pas d'axes de
+  travail**, pas de sections « ce qui se passe ».
+- Notation anglaise partout (aucun `D`, `C`, `F`, `T` devant une case).
+- Aucune attaque / défense / bilan matériel contredit par l'échiquier.
+- Légende jamais « explosif X (meilleur X) » ; aucune erreur d'ouverture < 20 pts.
+- Occasions explosives : idée + variante logique + avantage atteint + difficulté pour
+  l'adversaire ; aucun coût, aucun « quand le tenter ».
+- Toute variante affichée (explosif, coup unique, tournant) : ≤ 10 demi-coups, sauf suite
+  forcée (échecs / prises / mat) ; l'avantage nommé est visible au bout.
+- Moins de positions qu'avant sur une partie tactique : attendu (positions sans avantage
+  clair écartées).
+- `duration` ≤ 40 s.
+
+Tout écart : noter partie, horodatage, extrait journalctl et phrase fautive du texte.

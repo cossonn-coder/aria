@@ -3,7 +3,8 @@
 # Rendu d'une position en PNG avec Pillow seul (pas de cairosvg : libcairo2
 # absent). Glyphes Unicode U+265A-265F de DejaVu Sans, pleins pour les deux
 # camps : remplis de blanc + contour noir pour les blancs, noirs pour les noirs.
-# Une seule flèche verte : le meilleur coup.
+# Flèche verte : le meilleur coup ; flèche orange optionnelle : le coup
+# explosif d'une position de sorte d (sprint 27).
 
 import math
 
@@ -21,6 +22,7 @@ DARK = (181, 136, 99)
 BORDER = (60, 60, 60)
 COORD = (230, 230, 230)
 ARROW = (21, 120, 27, 190)
+ALT_ARROW = (230, 120, 20, 190)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
@@ -42,7 +44,7 @@ def _square_center(square: int, flipped: bool) -> tuple[float, float]:
     return x + SQUARE / 2, y + SQUARE / 2
 
 
-def _draw_arrow(overlay: Image.Image, move: chess.Move, flipped: bool) -> None:
+def _draw_arrow(overlay: Image.Image, move: chess.Move, flipped: bool, color=ARROW) -> None:
     """Flèche (trait + pointe triangulaire) du centre de la case de départ à l'arrivée."""
     draw = ImageDraw.Draw(overlay)
     x1, y1 = _square_center(move.from_square, flipped)
@@ -51,17 +53,19 @@ def _draw_arrow(overlay: Image.Image, move: chess.Move, flipped: bool) -> None:
     head = SQUARE * 0.45
     # Le trait s'arrête à la base de la pointe pour ne pas la déborder.
     bx, by = x2 - head * math.cos(angle), y2 - head * math.sin(angle)
-    draw.line([(x1, y1), (bx, by)], fill=ARROW, width=int(SQUARE * 0.16))
+    draw.line([(x1, y1), (bx, by)], fill=color, width=int(SQUARE * 0.16))
     spread = head * 0.6
     left = (bx + spread * math.sin(angle), by - spread * math.cos(angle))
     right = (bx - spread * math.sin(angle), by + spread * math.cos(angle))
-    draw.polygon([(x2, y2), left, right], fill=ARROW)
+    draw.polygon([(x2, y2), left, right], fill=color)
 
 
-def render_position(fen: str, orientation: str, best_uci: str, out_path: str) -> str:
+def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
+                    alt_uci: str | None = None) -> str:
     """Dessine la position `fen` en PNG (480 px) et retourne `out_path`.
 
-    orientation == "black" retourne l'échiquier ; best_uci est tracé en flèche.
+    orientation == "black" retourne l'échiquier ; best_uci est tracé en flèche
+    verte, alt_uci (coup explosif, facultatif) en flèche orange.
     """
     board = chess.Board(fen)
     flipped = orientation == "black"
@@ -87,6 +91,8 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str) ->
     # Flèche sous les pièces, en surimpression semi-transparente.
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     _draw_arrow(overlay, chess.Move.from_uci(best_uci), flipped)
+    if alt_uci:
+        _draw_arrow(overlay, chess.Move.from_uci(alt_uci), flipped, ALT_ARROW)
     image = Image.alpha_composite(image, overlay)
     draw = ImageDraw.Draw(image)
 
