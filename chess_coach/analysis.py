@@ -80,11 +80,13 @@ class GameAnalysis:
 def parse_pgn(text: str) -> chess.pgn.Game | None:
     """Lit la partie à partir de la première ligne commençant par « [ ».
 
-    Le message peut contenir du texte libre avant le PGN. Retourne None si
+    Le message peut contenir du texte libre avant le PGN. Les lignes sont
+    dépouillées de leurs blancs : un collage Telegram indente souvent les
+    lignes 2+, et read_game ignore un en-tête indenté. Retourne None si
     aucune partie, aucun coup, ou un coup illégal (game.errors non vide).
     """
-    lines = text.splitlines()
-    start = next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), None)
+    lines = [line.strip() for line in text.splitlines()]
+    start = next((i for i, line in enumerate(lines) if line.startswith("[")), None)
     if start is None:
         return None
     game = chess.pgn.read_game(io.StringIO("\n".join(lines[start:])))
@@ -238,20 +240,24 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
 
 
 def select_critical(plies: list, nico_color: str, explosive=()) -> list:
-    """Sélectionne ≤ 3 positions critiques (avant un coup de Nico), ordre chronologique.
+    """Sélectionne ≤ 3 positions critiques + 1 occasion explosive en bonus, ordre chronologique.
 
-    (a) erreur de Nico (perte ≥ 10) ; (b) idem juste après une erreur adverse
-    (perte adverse ≥ 20) ; (c) coup unique trouvé (meilleur coup, écart au
-    2e ≥ 20) ; (d) occasion explosive manquée, fournie par chess_coach.explosive
-    (perte du coup joué < 10, donc jamais a/b). Ordre : a/b par score
-    décroissant, puis d, puis c pour compléter.
+    (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
+    assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
+    (c) coup unique trouvé (meilleur coup, écart au 2e ≥ 20). Les a/b par score
+    décroissant, puis les c, remplissent le budget de 3. (d) occasion explosive,
+    fournie par chess_coach.explosive (perte du coup joué < 10, donc jamais a/b) :
+    la meilleure s'ajoute en 4e sans rien évincer, sauf si sa position est déjà
+    retenue comme c (on garde la c).
     """
     errors, uniques = [], []
     for p in plies:
         if p.color != nico_color:
             continue
         prev = plies[p.ply - 1] if p.ply > 0 else None
-        if p.loss >= 10:
+        # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
+        threshold = 20 if p.move_number <= 10 else 10
+        if p.loss >= threshold:
             kind = "b" if prev is not None and prev.loss >= 20 else "a"
             errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
         elif p.quality == "best" and p.second_gap is not None and p.second_gap >= 20:
@@ -267,8 +273,11 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
 
     errors.sort(key=lambda c: c.score, reverse=True)
     uniques.sort(key=lambda c: c.score, reverse=True)
-    explosives = sorted(explosive, key=lambda c: c.score, reverse=True)
-    selected = (errors + explosives + uniques)[:3]
+    selected = (errors + uniques)[:3]
+    if explosive:
+        best_d = max(explosive, key=lambda c: c.score)
+        if all(c.ply.ply != best_d.ply.ply for c in selected):
+            selected.append(best_d)
     if not selected:
         nico_plies = [p for p in plies if p.color == nico_color]
         if nico_plies:

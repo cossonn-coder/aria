@@ -68,7 +68,7 @@
 | 01 | `01_moteur_explosif.md` — `chess_coach/explosive.py`, sorte d, Threads=8, tests Morra / Dh5 | ✅ |
 | 02 | `02_router_rendu.md` — flèche orange, légende, bloc enrichi, consigne | ✅ |
 | 03 | `03_run_live.md` — run live (Nico) : Morra ✅ (8.Cd5, bruit 6.b4), Dame précoce ✗ (en-têtes indentés), letton ✗ (tout en ouverture) | ❌ |
-| 04 | `04_selection_pgn.md` — en-têtes indentés, occasion explosive en bonus, ouverture assumée | ⏳ |
+| 04 | `04_selection_pgn.md` — en-têtes indentés, occasion explosive en bonus, ouverture assumée | ✅ |
 | 05 | `05_moteur_sacrifice_suites.md` — sacrifice réel (ligne stabilisée + matériel offert), suites piège / réponses | ⏳ |
 | 06 | `06_router_notation_faits.md` — notation anglaise, pièces par camp, suites, idées d'ouverture | ⏳ |
 | 07 | `07_run_live_correctif.md` — run live (Nico) : Morra, Dame précoce indentée, letton, Von Hennig | ⏳ |
@@ -93,6 +93,8 @@ Aucune.
 
 ## §REPRISE
 
-Correctif figé. Exécution : `/sprint-auto sprint 27` → tronçons 04, 05, 06 (01-02 déjà
-commités `ed7d4de`, `e2d267c` ; 03 = run live KO, remplacé par 07). Puis run live 07 par Nico.
+Correctif en cours. Tronçon 04 ✅ (parse_pgn dépouille chaque ligne ; d en bonus 4e
+position, garde la c si même ply ; seuil a/b ≥ 20 jusqu'au coup 10 ; 303 tests verts).
+Suite : `/sprint-auto sprint 27` → tronçons 05, 06 (01-02 commités `ed7d4de`, `e2d267c` ;
+03 = run live KO, remplacé par 07). Puis run live 07 par Nico.
 Lire `CLAUDE.md`, ce fichier, `audit_correctif.md`, puis le kickoff du tronçon.

@@ -8,7 +8,7 @@ import chess
 import pytest
 from PIL import Image
 
-from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, select_critical
+from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
 from chess_coach.notation import to_french
 from chess_coach.render import SIZE, render_position
 
@@ -72,9 +72,9 @@ def test_explosive_early_queen_nf6():
     assert d.explosive.sacrifice >= 1
 
 
-def _ply(ply, loss, second_gap=None):
+def _ply(ply, loss, second_gap=None, move_number=None):
     return PlyAnalysis(
-        ply=ply, move_number=ply // 2 + 1, color="white" if ply % 2 == 0 else "black", san="e4", uci="e2e4",
+        ply=ply, move_number=move_number or ply // 2 + 1, color="white" if ply % 2 == 0 else "black", san="e4", uci="e2e4",
         fen_before=chess.STARTING_FEN, win_before=50.0, win_after=50.0 - loss, loss=loss,
         best_san="e4", best_uci="e2e4", pv_san=["e4"], second_gap=second_gap,
         quality="best" if loss == 0 else "inaccuracy", phase="opening", tags=[],
@@ -82,14 +82,30 @@ def _ply(ply, loss, second_gap=None):
     )
 
 
-def test_select_critical_order_ab_then_d_then_c():
-    # a/b d'abord, puis d (score décroissant), puis c ; re-tri chronologique.
-    plies = [_ply(i, 0) for i in range(7)]
-    plies[0], plies[2], plies[4], plies[6] = _ply(0, 0, second_gap=30), _ply(2, 12), _ply(4, 2), _ply(6, 1)
-    explosive = [CriticalPosition(kind="d", ply=plies[4], score=3.0),
-                 CriticalPosition(kind="d", ply=plies[6], score=5.0)]
+def test_parse_pgn_indented_headers():
+    # Collage Telegram : lignes 2+ indentées (run live 03, partie Dame précoce).
+    game = parse_pgn('[White "Test"]\n  [Black "staroflexeur"]\n  1. e4 e5 2. Nf3 *\n')
+    assert game.headers["Black"] == "staroflexeur"
+
+
+def test_select_critical_explosive_is_bonus():
+    # 3 a/c remplissent le budget ; la meilleure d s'ajoute en 4e sans rien évincer.
+    plies = [_ply(i, 0) for i in range(41)]
+    plies[22], plies[26], plies[30] = _ply(22, 12), _ply(26, 0, second_gap=40), _ply(30, 15)
+    plies[34], plies[38] = _ply(34, 2), _ply(38, 1)
+    explosive = [CriticalPosition(kind="d", ply=plies[34], score=3.0),
+                 CriticalPosition(kind="d", ply=plies[38], score=5.0)]
     selected = select_critical(plies, "white", explosive)
-    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 2), ("d", 4), ("d", 6)]
+    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 22), ("c", 26), ("a", 30), ("d", 38)]
+
+
+@pytest.mark.parametrize("loss, move_number, retained", [(12, 5, False), (12, 15, True), (25, 5, True)])
+def test_select_critical_opening_threshold(loss, move_number, retained):
+    # Ouverture assumée : perte ≥ 20 exigée jusqu'au coup 10, ≥ 10 ensuite.
+    # Une 2e erreur nette (ply 2) évite le repli « pire coup ».
+    plies = [_ply(0, loss, move_number=move_number), _ply(1, 0), _ply(2, 30, move_number=20)]
+    selected = select_critical(plies, "white")
+    assert [(c.kind, c.ply.ply) for c in selected] == ([("a", 0)] if retained else []) + [("a", 2)]
 
 
 def test_render_position(tmp_path):
