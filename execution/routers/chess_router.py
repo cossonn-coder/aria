@@ -44,7 +44,10 @@ _KIND_FR = {
     "a": "erreur de Nico",
     "b": "occasion manquée après erreur adverse",
     "c": "coup unique trouvé",
+    "d": "occasion explosive",
 }
+
+_FORCING_FR = {"check": "échec", "capture": "prise", "threat": "menace"}
 
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu de partie", "endgame": "finale"}
 
@@ -116,11 +119,38 @@ def _anchor(summary: dict) -> str:
     return " ".join(parts)
 
 
+def _explosive_lines(p, e) -> list:
+    """Faits moteur du coup explosif d'une position de sorte d (éléments nuls omis)."""
+    lines = [
+        f"  explosif {_move_label(p.move_number, p.color, e.san)}!? : coût {e.loss:.0f} pts "
+        f"de % de gain ({e.win_after + e.loss:.0f} % → {e.win_after:.0f} %), "
+        f"ligne : {_format_line(e.pv_san, p.move_number, p.color)}"
+    ]
+    facts = []
+    if e.sacrifice:
+        facts.append(f"sacrifice : {e.sacrifice} pion(s)")
+    if e.forcing:
+        facts.append("forçant : " + "/".join(_FORCING_FR[f] for f in e.forcing))
+    if e.trap_reply_san and round(e.trap):
+        facts.append(f"piège : si l'adversaire joue {to_french(e.trap_reply_san)}, "
+                     f"il perd {e.trap:.0f} pts")
+    if round(e.volatility):
+        facts.append(f"volatilité {e.volatility:.0f} pts")
+    if facts:
+        lines.append("  " + " ; ".join(facts))
+    return lines
+
+
 def _caption(index: int, critical) -> str:
     p = critical.ply
     if critical.kind == "c":
         return (f"Position {index} — coup {p.move_number} : "
                 f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué")
+    if critical.kind == "d":
+        return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
+                f"joué {_move_label(p.move_number, p.color, p.san)}, "
+                f"explosif {_move_label(p.move_number, p.color, critical.explosive.san)}!? "
+                f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
             f"joué {_move_label(p.move_number, p.color, p.san)}, "
             f"meilleur {_move_label(p.move_number, p.color, p.best_san)}")
@@ -156,8 +186,10 @@ class ChessExecutionRouter(BaseRouter):
         images = []
         for i, critical in enumerate(analysis.critical, 1):
             out_path = out_dir / f"{uuid4().hex[:8]}_{i}.png"
+            # Sorte d : 2e flèche (orange) pour le coup explosif.
+            alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
-                            critical.ply.best_uci, str(out_path))
+                            critical.ply.best_uci, str(out_path), alt_uci=alt_uci)
             images.append({"path": str(out_path), "caption": _caption(i, critical)})
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
@@ -208,6 +240,8 @@ class ChessExecutionRouter(BaseRouter):
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
                 f"  étiquettes : {tags}, phase : {_PHASE_FR[p.phase]}",
             ]
+            if critical.kind == "d":
+                lines += _explosive_lines(p, critical.explosive)
         block = "\n".join(lines) + "]"
 
         elo = analysis.headers.get("WhiteElo" if color == "white" else "BlackElo", "")
@@ -222,6 +256,13 @@ class ChessExecutionRouter(BaseRouter):
             f"« {anchor} ».]"
         )
         parts = [block, consigne]
+        if any(c.kind == "d" for c in analysis.critical):
+            parts.append(
+                "[Consigne : pour chaque position « occasion explosive », explique "
+                "l'idée du coup explosif (initiative, attaque, piège), son coût objectif "
+                "en % de gain, et dans quel contexte pratique le tenter (pari pratique) ; "
+                "ne le présente jamais comme le meilleur coup.]"
+            )
         if analysis.color_source == "default":
             parts.append(
                 "[Consigne : signale que tu as supposé que Nico joue les blancs faute "

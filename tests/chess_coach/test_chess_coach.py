@@ -98,3 +98,11 @@ def test_render_position(tmp_path):
     assert render_position(fen, "black", "g8f6", str(out)) == str(out)
     with Image.open(out) as image:
         assert image.size == (SIZE, SIZE)
+
+
+def test_render_position_with_explosive_arrow(tmp_path):
+    out = tmp_path / "pos.png"
+    fen = "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3"
+    render_position(fen, "black", "g8f6", str(out), alt_uci="g7g6")
+    with Image.open(out) as image:
+        assert image.size == (SIZE, SIZE)

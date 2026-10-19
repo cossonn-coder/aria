@@ -37,7 +37,7 @@
 | # | Kickoff | Statut |
 |---|---|---|
 | 01 | `01_moteur_explosif.md` — `chess_coach/explosive.py`, sorte d, Threads=8, tests Morra / Dh5 | ✅ |
-| 02 | `02_router_rendu.md` — flèche orange, légende, bloc enrichi, consigne | ⏳ |
+| 02 | `02_router_rendu.md` — flèche orange, légende, bloc enrichi, consigne | ✅ |
 | 03 | `03_run_live.md` — run live (Nico) : M1 Morra, M2 Dh5, M3 partie réelle | ⏳ |
 
 ## Dettes
@@ -52,20 +52,22 @@ Aucune.
 
 ## §REPRISE
 
-Tronçon 01 fait (non commité) : `chess_coach/explosive.py` (`ExplosiveMove`, `find_explosive`),
-`analysis.py` (`ENGINE_OPTIONS` Threads=8 Hash=256, champ `CriticalPosition.explosive`,
-`select_critical(..., explosive=())` ordre a/b → d → c), 3 tests. pytest 297 verts.
-Tests Morra / Dh5 verts sur 4 lancements [n=4] ; `analyze` Morra ≈ 21-24 s [n=2].
+Tronçons 01 (commité `ed7d4de`) et 02 faits. Tronçon 02 non commité :
+`render.py` (`alt_uci` → flèche orange `ALT_ARROW`, `_draw_arrow(..., color)`),
+`chess_router.py` (`_KIND_FR["d"]`, `_FORCING_FR`, `_explosive_lines`, légende d, `alt_uci`
+transmis, consigne « occasion explosive » ajoutée seulement si une sorte d est présente),
+2 tests + monkeypatch adapté. pytest 299 verts. Prompt AnalystAgent non touché.
 
-Écarts au kickoff (tronçon 01) :
-- Import circulaire : `explosive.py` importe `analysis` ; `analyze()` importe
-  `find_explosive` localement (commenté). `CriticalPosition.explosive` typé `object | None`.
-- Q6 précisée : la prise sur la case d'arrivée n'est « naturelle » que si elle gagne du
-  matériel à vue (pièce prise > preneuse, ou case non défendue). Sans ce filtre, a3/a6
-  (pion défendu attaqué par un fou) sortaient avec un « piège » de 30-40 pts.
-- Priorité d'approfondissement (≤ 3) : échec, prise ou matériel offert d'abord, puis
-  perte croissante (au lieu de « pièce sur case attaquée »).
-- Marge fragile : piège de 8.Cd5 mesuré 10,5 [n=1] pour un seuil de 10.
-- Router : `_KIND_FR["d"]` absent → KeyError si une sorte d sort avant le tronçon 02.
+Vérifié VM (script hors repo, Stockfish réel, `MORRA_PGN` des tests = 8.e5 joué) :
+Position 3 « joué 8.e5, explosif 8.Cd5!? (meilleur 8.e5) », PNG flèches verte e5 + orange Cd5,
+piège exd5 12 pts [n=1].
 
-Suite : tronçon 02 (`02_router_rendu.md`), puis run live 03 par Nico.
+Constats pour le run live (hors scope 02, à arbitrer) :
+- Sur ce PGN, les 3 positions sont des sortes d (5.b4, 6.b4, 8.Cd5) [n=1] : 5.b4 / 6.b4
+  passent la fenêtre, risque de bruit.
+- Quand Nico a joué le meilleur coup, la légende lit « joué 8.e5 … (meilleur 8.e5) » (format
+  du kickoff conservé).
+- « W % → W2 % » du coût explosif = `win_after + loss` → `win_after` (référence MultiPV de
+  la passe explosive), peut différer de 1 pt du `win_before` de la 1re passe.
+
+Suite : run live 03 par Nico (`03_run_live.md`).
