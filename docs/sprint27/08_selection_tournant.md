@@ -37,19 +37,44 @@ meilleur coup de la 1re passe (2...Nf6). Sur la partie Écossaise / Göring, le 
 `summary.py` : `plies_json` reçoit la nouvelle valeur `kind="e"` sans changement de code
 (structure inchangée, palace non touché).
 
-5. **Variante du piège complète, jusqu'au gain** (retour Nico 2026-10-19 : « le piège doit
-   être toute la variante jusqu'au gain ») — dans `_deepen`, branche `capture is not None` :
-   - la ligne du piège (`trap_line_san`, aujourd'hui coupée à `_TRAP_LINE_PLIES = 8`) va
-     jusqu'au gain : on la prolonge tant que l'échange continue, sur le principe de
-     `_line_sacrifice` (au moins 8 demi-coups, puis arrêt au premier coup suivant qui n'est
-     pas une prise ; jusqu'au mat si la PV mate), borne dure 16 demi-coups ;
-   - si la PV de l'analyse `captured` (0,3 s) est trop courte pour cela, l'allonger (temps
-     d'analyse de cette seule ligne augmenté, ex. 0,6 s) en restant dans le budget global
-     `_BUDGET` (inchangé) ;
-   - nouveaux champs de `ExplosiveMove` (avec valeurs par défaut) : `trap_end_fen` (FEN
-     au bout de la ligne du piège) et `trap_end_win` (% de gain de Nico au bout de la ligne,
-     = 100 − % adverse de l'analyse `captured`). Le bilan matériel et les pièces attaquées
-     au bout de la ligne seront calculés par le router (tronçon 09) depuis `trap_end_fen`.
+5. **Règle « avantage clair, visible pour un humain »** (décision Nico 2026-10-19, remplace
+   la « variante jusqu'au gain, 16 demi-coups » ; détail dans `00_etat.md` § Correctif 2).
+   Un humain calcule 2 coups, 4-5 s'il est fort : la variante montrée doit rendre
+   l'avantage clair vite, sinon la position n'est pas montrée.
+   - **Helper partagé** dans `chess_coach/analysis.py` (importé par `explosive.py`, qui
+     importe déjà ce module) : à partir d'une position `board` (avant le coup de Nico
+     évalué), d'une ligne de coups (le coup de Nico en tête), du % de gain de Nico pour
+     cette ligne et du fait que le moteur annonce un mat pour Nico, rend `(n, critère)`
+     — `n` = nombre de demi-coups montrés — ou `None` si aucun avantage clair.
+   - **Point d'arrêt** : le premier demi-coup `n ≥ 2` (au moins la réponse adverse) où un
+     critère est vrai. Plafond normal `n ≤ 10` (5 coups de chaque côté). Au-delà de 10, on
+     continue **seulement tant que les coups sont forcés** (échec, prise, ou mat annoncé par
+     le moteur pour la ligne), borne dure 16. Ligne épuisée avant : critère évalué à sa fin.
+   - **Critères** (point de vue de Nico, au point d'arrêt) :
+     | critère | mesure |
+     |---|---|
+     | `material` gain matériel | matériel net ≥ +1 par rapport à `board` (valeurs 1/3/3/5/9) |
+     | `crushing` position écrasante | % de gain de la ligne ≥ 80 — point d'arrêt : 1er `n ≥ 2` dont le coup suivant n'est ni échec ni prise (ou fin de ligne) |
+     | `mate` attaque de mat | mat annoncé pour Nico — la ligne va jusqu'au mat dans la borne 16, sinon jusqu'à la borne |
+     | `development` avance de développement | (pièces mineures hors de la rangée de départ + 1 si roqué) Nico − adversaire ≥ 2 |
+     | `activity` avance d'activité | coups légaux de Nico − coups légaux adverses ≥ 10 (compter le camp qui n'a pas le trait sur une copie au trait inversé ; ignorer ce critère si un roi est en échec) |
+     Mesures sur l'échiquier, **aucune analyse moteur en plus**.
+   - **Lignes plus longues en 1re passe** : `analyze_game` coupe aujourd'hui la PV à 6
+     demi-coups (`best_pv[:6]`). Garder la PV jusqu'à 16 demi-coups pour ce helper ; la
+     ligne affichée pour les sortes a / b reste à 6 (champ séparé ou troncature au rendu,
+     au choix, sans changer l'affichage a/b).
+   - **Application** :
+     - c (coup unique) et e (tournant) : ligne = PV du meilleur coup depuis `fen_before`,
+       % = `win_before` ; retenue seulement si le helper rend un critère ;
+     - d (occasion explosive), dans `_deepen` : ligne = coup explosif + réponse logique
+       (prise naturelle si elle existe, sinon 1re réponse de `replies`) + suite moteur ;
+       % et mat = analyse de la réponse logique (analyse `captured` existante, temps porté à
+       0,6 s si la PV est trop courte, budget global `_BUDGET` inchangé). Pas de critère →
+       candidat **non admissible**. `trap_line_san` = la ligne coupée au point d'arrêt (sans
+       le coup explosif, commence par la réponse logique) ; nouveaux champs (valeurs par
+       défaut) `trap_end_fen` (FEN au point d'arrêt), `trap_end_win`, `evidence` (critère).
+     - `CriticalPosition` gagne `evidence` (critère) et la ligne coupée (pour c / e), au
+       choix du nom — le router (tronçon 09) les affiche.
 
 ## Tests (cas nominal)
 
@@ -62,8 +87,11 @@ pour `win_before` / `color`) :
 - exclusion du meilleur coup de la 1re passe : `find_explosive` sur la position Morra du
   test existant (coup 8, Nd5 attendu) avec `best_uci` du ply = `c3d5` → pas de d à ce ply
   (Stockfish requis, comme les tests explosifs existants) ;
-- Morra 8.Nd5 (test existant) : `trap_line_san[0] == "exd5"`, ligne de plus de 8 demi-coups
-  ou terminée sur un coup qui n'est pas suivi d'une prise, `trap_end_fen` renseigné.
+- helper d'évidence, sans Stockfish : une ligne qui gagne une pièce en 3 demi-coups →
+  `(n ≤ 4, "material")` ; une ligne calme sans aucun critère → `None` ; une ligne où le
+  critère n'arrive qu'après le 10e demi-coup sur des coups non forcés → `None` ;
+- Morra 8.Nd5 (test existant) : `trap_line_san[0] == "exd5"`, `len(trap_line_san) ≤ 15`,
+  `evidence` renseigné, `trap_end_fen` renseigné.
 
 Point de vigilance : `test_explosive_early_queen_nf6` (Dame précoce, d attendue 2...Nf6) —
 au run live 07 la 1re passe donnait 2...Nc6 meilleur, mais si elle donne 2...Nf6, l'exclusion

@@ -15,8 +15,8 @@ avant le suivant.
 1. e4 c5 2. d4 cxd4 3. c3 dxc3 4. Nxc3 Nc6 5. Nf3 Nf6 6. Bc4 e6 7. O-O a6 8. e5 *
 ```
 
-Attendu : `d:8.e5` (explosif 8.Nd5!?) ; le texte donne l'idée, la variante complète après
-8...exd5 jusqu'au gain, et pourquoi la bonne réponse est difficile pour les noirs ; ni coût
+Attendu : `d:8.e5` (explosif 8.Nd5!?) ; le texte donne l'idée, la variante après 8...exd5
+(≤ 10 demi-coups sauf suite forcée) et l'avantage atteint, et pourquoi la bonne réponse est difficile pour les noirs ; ni coût
 ni « quand le tenter ».
 
 ## Partie 2 — Dame précoce, en-têtes indentés (Nico noirs)
@@ -99,8 +99,12 @@ de la punition ; « Niveau : » positif (partie gagnée, erreurs adverses punies
 - Notation anglaise partout (aucun `D`, `C`, `F`, `T` devant une case).
 - Aucune attaque / défense / bilan matériel contredit par l'échiquier.
 - Légende jamais « explosif X (meilleur X) » ; aucune erreur d'ouverture < 20 pts.
-- Occasions explosives : idée + variante logique jusqu'au gain + difficulté pour
+- Occasions explosives : idée + variante logique + avantage atteint + difficulté pour
   l'adversaire ; aucun coût, aucun « quand le tenter ».
+- Toute variante affichée (explosif, coup unique, tournant) : ≤ 10 demi-coups, sauf suite
+  forcée (échecs / prises / mat) ; l'avantage nommé est visible au bout.
+- Moins de positions qu'avant sur une partie tactique : attendu (positions sans avantage
+  clair écartées).
 - `duration` ≤ 40 s.
 
 Tout écart : noter partie, horodatage, extrait journalctl et phrase fautive du texte.

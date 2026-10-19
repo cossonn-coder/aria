@@ -93,8 +93,17 @@
   l'adversaire joue le coup logique, **complète jusqu'au gain** (et pourquoi c'est
   avantageux si le gain n'est pas matériel) ; pourquoi la bonne réponse est difficile pour
   l'adversaire. **Retirés** : le coût, « quand le tenter », « ce qui se passe ».
-  → tronçon 08 point 5 (ligne du piège prolongée, borne 16, `trap_end_fen` / `trap_end_win`),
-  tronçon 09 point 5 (bloc et consigne d).
+  → tronçon 08 point 5 (règle d'avantage clair ci-dessous, `trap_end_fen` / `evidence`),
+  tronçon 09 point 5 (bloc et consigne d). « Complète jusqu'au gain » révisé par la règle
+  « visibles pour un humain ».
+- Variantes « visibles pour un humain » — Nico (« oui ok », 2026-10-19), remplace « jusqu'au
+  gain, 16 demi-coups » : pour d, c et e, la variante s'arrête au 1er demi-coup (≥ 2) où
+  l'avantage est clair ; plafond 10 demi-coups (5 par camp) ; au-delà seulement tant que
+  c'est forcé (échec, prise, mat annoncé), borne 16 ; pas d'avantage clair → position non
+  montrée. Avantage clair = matériel net ≥ +1, ou ligne ≥ 80 % (écrasante), ou mat annoncé,
+  ou développement (mineures sorties + roque) écart ≥ 2, ou activité (coups légaux) écart
+  ≥ 10 — seuils choix Claude, révisables au run live. Mesures statiques, pas de moteur en
+  plus. Le texte explique l'avantage par les pièces protégées / vulnérables.
 - Plan correctif 2 : tronçons 08 (sélection), 09 (router), 10 (run live).
 
 ## Tronçons
