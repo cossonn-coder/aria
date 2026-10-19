@@ -13,7 +13,8 @@
 | 01 | Difficulté des coups par Maia-2 (install `--no-deps`, `chess_coach/difficulty.py`, champs fiche) | `01_difficulte_maia.md` | ✅ |
 | 02 | Modèle joueur pur (XP Elo par thème, niveaux, badges, ouvertures) + `bridge.load_chess_games` | `02_modele_joueur.md` | ✅ |
 | 03 | Bloc « Progression » écrit par le router + ligne historique pour le LLM + injection du bridge | `03_router_progression.md` | ✅ |
-| 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ⏳ |
+| 04 | Run live (Nico) — PGN dans `run_live_parties.txt` | `04_run_live.md` | ✅ partiel (2026-10-19) |
+| 05 | Correctif post-live : Global = moyenne des thèmes + « Résultats », lignes fusionnées, Groq hors REASONING | `05_correctif_global.md` | ⏳ |
 
 ## Décisions arrêtées
 
@@ -84,4 +85,10 @@ palier changé ; épreuve « résultat » affichée « victoire contre 1452 », 
 « réussis / ratés » ; difficulté des coups arrondie à la dizaine ; thème affiché si ΔR
 arrondi ≠ 0 ; pas de ligne Historique si la partie est hors saison ; 1re partie : pas de
 ligne 📖.
-Prochaine étape : run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
+Run live 04 (2026-10-19, 5 parties dont une défaite contre plus faible) : Maia 0,4-3,0 s,
+`chess_progression OK` ×5, 0 ERROR ; Global −29 sur la défaite contre plus faible.
+Arbitrages Nico : 1re partie sans 📖 ni thème = gardé ; Global = moyenne des thèmes +
+thème « Résultats » ; lignes au même coup fusionnées ; Groq retiré de REASONING → tronçon 05.
+Thèmes par motif tactique (fourchette, sacrifice…) → sprint 29. Arrêt du service tué
+après 90 s (SIGKILL) : antérieur au sprint (14:41, 19:00) → dette.
+Prochaine étape : tronçon 05, puis clôture. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon courant.
