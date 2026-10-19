@@ -30,6 +30,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
     monkeypatch.setattr(chess_router_mod, "render_position", lambda fen, o, b, out: out)
     monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    write_game = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "explication"}
 
@@ -44,6 +46,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert delegated["op_type"] == "reasoning"
     assert "skip_intent" not in delegated["metadata"]
     assert "Position 1" in delegated["content"]
+    write_game.assert_called_once()
+    assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"
 
 
 def test_normalize_images_result_is_images_text():

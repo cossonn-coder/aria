@@ -1,0 +1,174 @@
+# aria/chess_coach/summary.py
+#
+# Fiche structurée d'une partie analysée (sprint 26, tronçon 03).
+#
+# summarize() produit les métadonnées de la fiche `chess_game` écrite en
+# mémoire épisodique par le router : valeurs scalaires uniquement
+# (str, int, float, bool, None — contrainte ChromaDB). Les faits bruts par
+# demi-coup sont sérialisés en JSON (`plies_json`) pour permettre un
+# recalcul futur sans Stockfish (bilan joueur, sprint 27).
+#
+# summary_text() produit le document indexé : 2-3 phrases françaises.
+# Module pur : aucun import mémoire / LLM / exécution.
+
+import json
+import math
+
+from chess_coach.analysis import GameAnalysis
+
+_OPENING_PLIES = 12
+_ERROR_QUALITIES = ("mistake", "blunder")
+_QUALITIES = ("best", "correct", "inaccuracy", "mistake", "blunder")
+_PHASES = ("opening", "middlegame", "endgame")
+
+_COLOR_FR = {"white": "blancs", "black": "noirs"}
+_OUTCOME_FR = {"win": "victoire", "loss": "défaite", "draw": "nulle", "unknown": "issue inconnue"}
+_PHASE_FR = {"opening": "ouverture", "middlegame": "milieu", "endgame": "finale"}
+
+
+def _header(headers: dict, key: str) -> str:
+    """Valeur d'en-tête, "" si absente ou inconnue (« ? », « ????.??.?? »)."""
+    value = headers.get(key, "")
+    return "" if value in ("?", "????.??.??") else value
+
+
+def _elo(headers: dict, key: str) -> int | None:
+    value = _header(headers, key)
+    return int(value) if value.isdigit() else None
+
+
+def _outcome(result: str, nico_color: str) -> str:
+    if result == "1/2-1/2":
+        return "draw"
+    if result in ("1-0", "0-1"):
+        nico_won = (result == "1-0") == (nico_color == "white")
+        return "win" if nico_won else "loss"
+    return "unknown"
+
+
+def _accuracy(loss: float) -> float:
+    """Précision d'un coup (formule Lichess), bornée à [0, 100]."""
+    return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * loss) - 3.1669))
+
+
+def _effective_loss(p) -> float:
+    # Bruit moteur (écart tronçon 01) : le meilleur coup peut afficher une
+    # perte légèrement positive d'une position à l'autre. On la ramène à 0
+    # pour ne pas pénaliser la précision d'un coup jugé « meilleur ».
+    return 0.0 if p.quality == "best" else p.loss
+
+
+def summarize(analysis: GameAnalysis) -> dict:
+    """GameAnalysis → métadonnées scalaires de la fiche `chess_game`."""
+    headers = analysis.headers
+    color = analysis.nico_color
+    plies = analysis.plies
+    nico = [p for p in plies if p.color == color]
+    opponent = [p for p in plies if p.color != color]
+    kinds = {c.ply.ply: c.kind for c in analysis.critical}
+
+    result = _header(headers, "Result")
+    outcome = _outcome(result, color)
+    opponent_key = "Black" if color == "white" else "White"
+    nico_key = "White" if color == "white" else "Black"
+    eco_url = _header(headers, "ECOUrl")
+    opening = _header(headers, "Opening") or (eco_url.rstrip("/").rsplit("/", 1)[-1] if eco_url else "")
+
+    summary = {
+        "date": _header(headers, "Date") or _header(headers, "UTCDate"),
+        "nico_color": color,
+        "color_source": analysis.color_source,
+        "opponent": _header(headers, opponent_key),
+        "elo_nico": _elo(headers, nico_key + "Elo"),
+        "elo_opponent": _elo(headers, opponent_key + "Elo"),
+        "result": result,
+        "outcome": outcome,
+        "termination": _header(headers, "Termination"),
+        "time_control": _header(headers, "TimeControl"),
+        "eco": _header(headers, "ECO"),
+        "opening": opening,
+        "opening_line": " ".join(p.san for p in plies[:_OPENING_PLIES]),
+        "n_plies": len(plies),
+    }
+
+    for quality in _QUALITIES:
+        summary[f"nico_{quality}"] = sum(1 for p in nico if p.quality == quality)
+
+    def first_error(side):
+        return next((p.move_number for p in side if p.quality in _ERROR_QUALITIES), None)
+
+    summary["first_error_nico"] = first_error(nico)
+    summary["first_error_opponent"] = first_error(opponent)
+
+    for phase in _PHASES:
+        losses = [_effective_loss(p) for p in nico if p.phase == phase]
+        summary[f"accuracy_{phase}"] = (
+            round(sum(_accuracy(loss) for loss in losses) / len(losses), 1) if losses else None
+        )
+
+    # % de gain de Nico avant chacun de ses coups.
+    wins = [p.win_before for p in nico]
+    summary["max_win_nico"] = round(max(wins), 1) if wins else None
+    summary["min_win_nico"] = round(min(wins), 1) if wins else None
+    summary["unconverted"] = bool(wins) and max(wins) >= 80 and outcome != "win"
+    summary["saved"] = bool(wins) and min(wins) <= 20 and outcome != "loss"
+
+    # Erreurs adverses (perte ≥ 20) et réponse de Nico au demi-coup suivant.
+    punished = 0
+    errors = [p for p in opponent if p.loss >= 20]
+    for p in errors:
+        reply = plies[p.ply + 1] if p.ply + 1 < len(plies) else None
+        if reply is not None and reply.loss < 10:
+            punished += 1
+    summary["opponent_errors"] = len(errors)
+    summary["opponent_errors_punished"] = punished
+
+    has_clock = any(p.clock is not None for p in nico)
+    summary["errors_low_clock"] = (
+        sum(1 for p in nico if p.quality in _ERROR_QUALITIES and p.clock is not None and p.clock < 60)
+        if has_clock else None
+    )
+
+    summary["plies_json"] = json.dumps([
+        {
+            "ply": p.ply, "move_number": p.move_number, "color": p.color,
+            "san": p.san, "uci": p.uci,
+            "win_before": round(p.win_before, 1), "win_after": round(p.win_after, 1),
+            "loss": round(p.loss, 1), "best_san": p.best_san, "quality": p.quality,
+            "phase": p.phase, "tags": p.tags, "clock": p.clock,
+            "kind": kinds.get(p.ply),
+        }
+        for p in plies
+    ], ensure_ascii=False, separators=(",", ":"))
+    return summary
+
+
+def summary_text(analysis: GameAnalysis, summary: dict) -> str:
+    """Document indexé de la fiche : 2-3 phrases françaises."""
+    def player(name, elo):
+        return f"{name}, {elo}" if elo is not None else name
+
+    nico = player(_COLOR_FR[summary["nico_color"]], summary["elo_nico"])
+    opponent = summary["opponent"] or "adversaire inconnu"
+    if summary["elo_opponent"] is not None:
+        opponent += f" ({summary['elo_opponent']})"
+    date = f" du {summary['date']}" if summary["date"] else ""
+    opening = " ".join(v for v in (summary["eco"], summary["opening"]) if v) or "inconnue"
+    result = summary["result"] or "?"
+
+    sentences = [
+        f"Partie d'échecs{date} : Nico ({nico}) contre {opponent}, ouverture {opening}, "
+        f"résultat {result} ({_OUTCOME_FR[summary['outcome']]})."
+    ]
+    accuracies = [
+        f"{_PHASE_FR[phase]} {summary[f'accuracy_{phase}']:.0f} %"
+        for phase in _PHASES if summary[f"accuracy_{phase}"] is not None
+    ]
+    if accuracies:
+        sentences.append("Précision " + ", ".join(accuracies) + ".")
+    errors = (f"{summary['nico_inaccuracy']} imprécision(s), {summary['nico_mistake']} erreur(s), "
+              f"{summary['nico_blunder']} gaffe(s)")
+    if summary["first_error_nico"] is not None:
+        errors += f" ; 1re erreur au coup {summary['first_error_nico']}"
+    sentences.append(errors + ".")
+    return " ".join(sentences)

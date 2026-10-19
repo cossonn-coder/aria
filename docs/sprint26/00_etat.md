@@ -46,8 +46,8 @@ exception au calibrage faible sur ce tronçon.
 | # | Kickoff | Statut |
 |---|---|---|
 | 01 | `01_moteur_rendu.md` — paquet `chess_coach/` : analyse moteur, qualité, positions critiques, notation FR, rendu PNG | ✅ |
-| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ (non commité) |
-| 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ⏳ |
+| 02 | `02_cablage.md` — CHESS_ANALYSIS : classifier, router, délégation LLM, contrat `images`, `_normalize`, envoi Telegram, règle 4 | ✅ |
+| 03 | `03_fiche_partie.md` — synthèse de partie + `write_chess_game` (palace prod) | ✅ (non commité) |
 | 04 | `04_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -74,4 +74,14 @@ classifier, router, `_normalize`, Telegram (pytest 291 verts). Sandbox message B
 (vrai Stockfish, faux LLM) : 3 PNG (15...Ce4, 17...a5, 19...Cd8), message enrichi OK.
 Choix non tranchés par le kickoff : sans Elo dans l'en-tête, consigne « joueur
 amateur » ; étiquettes et phases traduites en français dans le message enrichi.
-Suite : tronçon 03 (`03_fiche_partie.md`), puis run live 04 par Nico.
+Tronçon 03 fait (2026-10-19) : `chess_coach/summary.py` (`summarize`, `summary_text`),
+`memory/writer.write_chess_game` (id `chess_game_<sha256 UCI[:16]>`, room `chess`,
+W4), appel non bloquant dans `chess_router` avant la délégation LLM, CLAUDE.md
+(règle 1 + couches mémoire). Tests : summary, writer (W4 + dédoublonnage), router
+(pytest 293 verts). Sandbox message B (vrai Stockfish, palace temporaire, 2 envois) :
+1 seule fiche, nico_color=black, outcome=unknown (Result « * »), opening_line OK,
+plies_json 8 020 car. [1 run VM].
+Choix non tranchés par le kickoff : perte des coups « best » ramenée à 0 pour la
+précision (bruit moteur) ; `opening` = segment brut d'`ECOUrl` (tirets conservés).
+Constat : ChromaDB n'enregistre pas les métadonnées None (clé absente à la relecture).
+Suite : run live 04 par Nico.

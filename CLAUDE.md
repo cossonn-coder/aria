@@ -92,7 +92,8 @@ Si tu hésites, tu ne pushes pas.
 
 1. Une opération = un handler = un seul point d'écriture mémoire.
    Toute écriture passe par memory/writer.py (write_interaction,
-   write_image_artifact, write_semantic_fact, write_classifier_cache).
+   write_image_artifact, write_semantic_fact, write_classifier_cache,
+   write_chess_game).
    Wing/room/type sont structurels, posés APRÈS le spread de `extra`,
    jamais surchargeables via metadata. C'est l'anti-régression du
    bug W4 (sprint 3.1 / dette #11).
@@ -116,7 +117,8 @@ Si tu hésites, tu ne pushes pas.
 État post-sprint-4 (détail, compteurs et dettes :
 voir `docs/architecture/memory_layers.md`) :
 
-- `aria_episodic` : interactions et images. Actif.
+- `aria_episodic` : interactions, images et fiches de parties d'échecs
+  (`type=chess_game`, room `chess`). Actif.
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).

@@ -263,3 +263,16 @@ def test_write_conversation_turn_extra_cannot_override_wing(fake_col):
     assert fake_col.last_meta["room"] == "conv-1"
     assert fake_col.last_meta["type"] == "conversation_turn"
     assert fake_col.last_meta["role"] == "user"
+
+
+# ── write_chess_game — fiche de partie (sprint 26, tronçon 03) ───────────────
+
+def test_write_chess_game_structural_fields_and_dedup(fake_col):
+    extra = {"wing": "aria", "room": "wrong", "type": "wrong", "nico_color": "black"}
+    w.write_chess_game("fiche", "abc123", extra=extra)
+    w.write_chess_game("fiche bis", "abc123", extra=extra)
+
+    assert fake_col.calls[0]["ids"] == fake_col.calls[1]["ids"] == ["chess_game_abc123"]
+    meta = fake_col.last_meta
+    assert (meta["wing"], meta["room"], meta["type"]) == ("aria_episodic", "chess", "chess_game")
+    assert meta["nico_color"] == "black"

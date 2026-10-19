@@ -12,19 +12,23 @@
 # Contrat de retour : {"text": str, "images": [{"path", "caption"}, …]}.
 #
 # Règle d'architecture :
-#   Ce router n'écrit RIEN en mémoire. L'écriture est faite par
-#   LLMExecutionRouter (règle 1) ; la fiche de partie arrive au tronçon 03.
+#   La seule écriture propre à ce router est la fiche de partie
+#   (write_chess_game, tronçon 03), via memory/writer.py (règle 1).
+#   L'échange lui-même est écrit par LLMExecutionRouter.
 
+import hashlib
 from pathlib import Path
 from uuid import uuid4
 
 from chess_coach.analysis import analyze
 from chess_coach.notation import to_french
 from chess_coach.render import render_position
+from chess_coach.summary import summarize, summary_text
 from config import config
 from cognition.cognitive_context import CognitiveOperation
 from execution.routers.execution_base import BaseRouter
 from logger import get_logger
+from memory.writer import write_chess_game
 
 log = get_logger(__name__)
 
@@ -140,6 +144,19 @@ class ChessExecutionRouter(BaseRouter):
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path))
             images.append({"path": str(out_path), "caption": _caption(i, critical)})
+
+        # ── Fiche de partie (non bloquante) ──────────────────────────────────
+        # Hash des coups seuls (pas des en-têtes) : le même PGN recopié sans
+        # en-têtes reste la même partie → même doc_id → la fiche est remplacée.
+        game_hash = hashlib.sha256(
+            "".join(p.uci for p in analysis.plies).encode()
+        ).hexdigest()[:16]
+        try:
+            summary = summarize(analysis)
+            write_chess_game(summary_text(analysis, summary), game_hash, extra=summary)
+            log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
+        except Exception:
+            log.exception("chess_game_write ERROR hash=%s", game_hash)
 
         enriched = self._build_enriched(analysis, message)
         result = self.llm_execution_router.execute({
