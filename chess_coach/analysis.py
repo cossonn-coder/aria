@@ -28,6 +28,9 @@ _MATE_SCORE = 100000
 # Valeurs des pièces non-pions pour la détection de finale.
 _PIECE_VALUES = {chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
 
+# Options Stockfish de toute l'analyse (sprint 27) : la machine a 16 cœurs.
+ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
+
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
 
 
@@ -61,6 +64,8 @@ class CriticalPosition:
     kind: str
     ply: PlyAnalysis
     score: float
+    # Sorte d uniquement : coup explosif manqué (chess_coach.explosive.ExplosiveMove).
+    explosive: object | None = None
 
 
 @dataclass
@@ -176,6 +181,7 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
     # Une analyse par position : (cp point de vue du trait, infos multipv).
     evaluations = []
     with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+        engine.configure(ENGINE_OPTIONS)
         for board in boards:
             if board.is_game_over():
                 evaluations.append((_terminal_cp(board), []))
@@ -231,12 +237,14 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
     return plies
 
 
-def select_critical(plies: list, nico_color: str) -> list:
+def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     """Sélectionne ≤ 3 positions critiques (avant un coup de Nico), ordre chronologique.
 
     (a) erreur de Nico (perte ≥ 10) ; (b) idem juste après une erreur adverse
     (perte adverse ≥ 20) ; (c) coup unique trouvé (meilleur coup, écart au
-    2e ≥ 20). a/b d'abord par score décroissant, puis c pour compléter.
+    2e ≥ 20) ; (d) occasion explosive manquée, fournie par chess_coach.explosive
+    (perte du coup joué < 10, donc jamais a/b). Ordre : a/b par score
+    décroissant, puis d, puis c pour compléter.
     """
     errors, uniques = [], []
     for p in plies:
@@ -259,7 +267,8 @@ def select_critical(plies: list, nico_color: str) -> list:
 
     errors.sort(key=lambda c: c.score, reverse=True)
     uniques.sort(key=lambda c: c.score, reverse=True)
-    selected = (errors + uniques)[:3]
+    explosives = sorted(explosive, key=lambda c: c.score, reverse=True)
+    selected = (errors + explosives + uniques)[:3]
     if not selected:
         nico_plies = [p for p in plies if p.color == nico_color]
         if nico_plies:
@@ -277,7 +286,10 @@ def analyze(text: str, message: str, username: str, engine_path: str) -> GameAna
     headers = dict(game.headers)
     nico_color, source = detect_color(headers, message, username)
     plies = analyze_game(game, nico_color, engine_path)
-    critical = select_critical(plies, nico_color)
+    # Import local : explosive.py importe ce module (CriticalPosition, _win).
+    from chess_coach.explosive import find_explosive
+    explosive = find_explosive(plies, nico_color, engine_path)
+    critical = select_critical(plies, nico_color, explosive)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s critical=%s duration=%.1fs",
         len(plies), nico_color, source,

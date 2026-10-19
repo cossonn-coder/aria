@@ -36,7 +36,7 @@
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_moteur_explosif.md` — `chess_coach/explosive.py`, sorte d, Threads=8, tests Morra / Dh5 | ⏳ |
+| 01 | `01_moteur_explosif.md` — `chess_coach/explosive.py`, sorte d, Threads=8, tests Morra / Dh5 | ✅ |
 | 02 | `02_router_rendu.md` — flèche orange, légende, bloc enrichi, consigne | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico) : M1 Morra, M2 Dh5, M3 partie réelle | ⏳ |
 
@@ -52,5 +52,20 @@ Aucune.
 
 ## §REPRISE
 
-Conception figée. Exécution : `/sprint-auto sprint 27` (tronçons 01, 02), puis run live 03
-par Nico. Lire `CLAUDE.md`, ce fichier, l'audit, puis le kickoff du tronçon.
+Tronçon 01 fait (non commité) : `chess_coach/explosive.py` (`ExplosiveMove`, `find_explosive`),
+`analysis.py` (`ENGINE_OPTIONS` Threads=8 Hash=256, champ `CriticalPosition.explosive`,
+`select_critical(..., explosive=())` ordre a/b → d → c), 3 tests. pytest 297 verts.
+Tests Morra / Dh5 verts sur 4 lancements [n=4] ; `analyze` Morra ≈ 21-24 s [n=2].
+
+Écarts au kickoff (tronçon 01) :
+- Import circulaire : `explosive.py` importe `analysis` ; `analyze()` importe
+  `find_explosive` localement (commenté). `CriticalPosition.explosive` typé `object | None`.
+- Q6 précisée : la prise sur la case d'arrivée n'est « naturelle » que si elle gagne du
+  matériel à vue (pièce prise > preneuse, ou case non défendue). Sans ce filtre, a3/a6
+  (pion défendu attaqué par un fou) sortaient avec un « piège » de 30-40 pts.
+- Priorité d'approfondissement (≤ 3) : échec, prise ou matériel offert d'abord, puis
+  perte croissante (au lieu de « pièce sur case attaquée »).
+- Marge fragile : piège de 8.Cd5 mesuré 10,5 [n=1] pour un seuil de 10.
+- Router : `_KIND_FR["d"]` absent → KeyError si une sorte d sort avant le tronçon 02.
+
+Suite : tronçon 02 (`02_router_rendu.md`), puis run live 03 par Nico.
