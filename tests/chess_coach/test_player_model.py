@@ -18,7 +18,7 @@ def _ply(ply, color, *, loss=0.0, win_before=50.0, difficulty=None, second_gap=N
 def _game(trial=None, *, outcome="unknown", elo_nico=1300, elo_opponent=None,
           opening="", n_plies=30, with_difficulty=True, opponent="X"):
     """Partie de 30 demi-coups calmes ; `trial` = (difficulty, loss) au demi-coup 24 (blancs,
-    thème « Pièces en prise »)."""
+    thème « Gain de matériel » par la règle des fiches sans clé motifs)."""
     plies = [_ply(i, "white" if i % 2 == 0 else "black") for i in range(n_plies)]
     if trial is not None:
         difficulty, loss = trial
@@ -40,8 +40,8 @@ def _global(**kwargs):
 
 
 def _move_delta(trial):
-    # Effet isolé de l'épreuve : écart avec la même partie sans elle.
-    return _global(trial=trial) - _global()
+    # Effet de l'épreuve sur son classement (départ 1300).
+    return build_profile([_game(trial=trial)]).ratings["hanging"].value - 1300
 
 
 def test_trial_gain_scales_with_difficulty():
@@ -92,9 +92,26 @@ def test_loss_only_lowers_result_and_global():
 
 
 def test_found_move_raises_theme_and_global_is_mean():
+    # Fiche sans clé motifs : règle historique (tag hanging) ; Global = moyenne
+    # des seuls thèmes joués (gain de matériel + ouverture).
     profile = build_profile([_game((1500, 0.0))])
     r = profile.ratings
     assert r["hanging"].value > 1300
-    assert r["result"].value == r["punish"].value == 1300
-    themes = ["hanging", "punish", "opening", "convert", "endgame", "result"]
-    assert r["global"].value == sum(r[k].value for k in themes) / 6
+    assert r["result"].value == r["punish"].value == r["fork"].value == 1300
+    assert r["global"].value == (r["hanging"].value + r["opening"].value) / 2
+
+
+def test_motif_fork_found_raises_fork():
+    # Fiche sprint 29 : la clé motifs remplace la règle du tag hanging.
+    game = _game((1500, 0.0))
+    plies = json.loads(game["plies_json"])
+    for p in plies:
+        p["motifs"] = []
+    plies[24]["motifs"] = ["fork", "anastasiaMate"]
+    game["plies_json"] = json.dumps(plies)
+    profile = build_profile([game])
+    r = profile.ratings
+    assert r["fork"].value > 1300 and r["mates"].value > 1300
+    assert r["hanging"].trials == 0
+    assert profile.last_game["mates"].top.mate == "mat d'Anastasia"
+    assert r["global"].value == (r["fork"].value + r["mates"].value + r["opening"].value) / 3

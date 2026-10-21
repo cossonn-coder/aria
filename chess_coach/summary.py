@@ -140,6 +140,8 @@ def summarize(analysis: GameAnalysis) -> dict:
             # Sprint 28 : la clé difficulty marque une fiche de la saison 1.
             "difficulty": None if p.difficulty is None else round(p.difficulty),
             "second_gap": None if p.second_gap is None else round(p.second_gap, 1),
+            # Sprint 29 : motifs du meilleur coup (absents des fiches antérieures).
+            "motifs": p.motifs,
         }
         for p in plies
     ], ensure_ascii=False, separators=(",", ":"))

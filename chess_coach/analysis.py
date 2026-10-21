@@ -17,6 +17,7 @@ import chess
 import chess.engine
 import chess.pgn
 
+from chess_coach.motifs import tag_motifs
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -73,6 +74,8 @@ class PlyAnalysis:
     pv_mate: bool = False
     # Difficulté du coup en Elo (Maia-2, sprint 28) : coups de Nico après le coup 10.
     difficulty: float | None = None
+    # Motifs tactiques du meilleur coup (sprint 29, clés de chess_coach.motifs).
+    motifs: list = field(default_factory=list)
 
 
 @dataclass
@@ -353,6 +356,23 @@ def _evidence(p: PlyAnalysis) -> tuple | None:
     return n, criterion, san
 
 
+def assign_motifs(plies: list, nico_color: str) -> None:
+    """Pose sur chaque coup de Nico (ply > 0) les motifs de la PV de son meilleur coup.
+
+    La PV est coupée au point d'avantage clair (comme _evidence) ; pas
+    d'avantage clair → aucun motif. Le coup adverse précédent ouvre la ligne
+    (format des puzzles Lichess). Fonction pure : aucune analyse moteur.
+    """
+    for p in plies:
+        if p.color != nico_color or p.ply == 0:
+            continue
+        line = [chess.Move.from_uci(uci) for uci in p.pv_uci]
+        result = clear_advantage(chess.Board(p.fen_before), line, p.win_before, p.pv_mate)
+        if result is not None:
+            prev = plies[p.ply - 1]
+            p.motifs = tag_motifs(prev.fen_before, prev.uci, p.pv_uci[:result[0]])
+
+
 def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     """Sélectionne ≤ 3 positions critiques + 1 occasion explosive en bonus, ordre chronologique.
 
@@ -428,6 +448,7 @@ def analyze(text: str, message: str, username: str, engine_path: str,
             assign_difficulty(plies, nico_color, int(elo) if elo.isdigit() else None, maia_models_dir)
         except Exception:
             log.exception("maia_difficulty FAILED")
+    assign_motifs(plies, nico_color)
     # Import local : explosive.py importe ce module (CriticalPosition, _win).
     from chess_coach.explosive import find_explosive
     explosive = find_explosive(plies, nico_color, engine_path)

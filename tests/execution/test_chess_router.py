@@ -210,9 +210,23 @@ def test_progression_block_merges_themes_on_same_move():
 
     block = chess_router_mod._progression_block(before, after, summary)
 
-    assert ("\nPièces en prise 1325 (−10) · Convertir l'avantage 1348 (−11) : "
+    assert ("\nGain de matériel 1325 (−10) · Convertir l'avantage 1348 (−11) : "
             "19.Bg5 raté (difficulté ≈1240)") in block
     assert block.count("19.Bg5") == 1
+
+
+def test_progression_block_mate_with_name():
+    keys = chess_router_mod.LABELS
+    before = Profile(n_games=3, ratings={k: Rating(1335.0) for k in keys})
+    after = Profile(
+        n_games=4, ratings={**{k: Rating(1335.0) for k in keys}, "mates": Rating(1355.0)},
+        last_game={**{k: GameDelta() for k in keys},
+                   "mates": GameDelta(20.0, Trial("31.Qh7#", 1650.0, 1.0, 20.0, "mat d'Anastasia"))},
+    )
+
+    block = chess_router_mod._progression_block(before, after, {"opening": "", "nico_color": "white"})
+
+    assert "\nMats 1355 (+20) : 31.Qh7# trouvé (difficulté ≈1650), mat d'Anastasia" in block
 
 
 def test_normalize_images_result_is_images_text():

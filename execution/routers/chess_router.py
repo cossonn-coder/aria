@@ -26,7 +26,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze
-from chess_coach.player_model import LABELS, build_profile, opening_family
+from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
 from chess_coach.render import render_position
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -256,8 +256,17 @@ def _trial_text(trial) -> str:
         return f"{_RESULT_FR[trial.score]} contre {round(trial.difficulty)}"
     if trial.label == "coups 1-10":
         return f"coups 1-10 {'réussis' if trial.score else 'ratés'} (difficulté ≈{round(trial.difficulty)})"
-    return (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
+    text = (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
             f"(difficulté ≈{round(trial.difficulty, -1):.0f})")
+    return f"{text}, {trial.mate}" if trial.mate else text
+
+
+def _motif_fr(motif: str) -> str:
+    """Libellé français d'un motif (« fork » → « fourchette ») pour le bloc enrichi."""
+    if motif in MATE_LABELS:
+        return MATE_LABELS[motif]
+    label = LABELS["hanging" if motif == "hangingPiece" else motif]
+    return label[0].lower() + label[1:]
 
 
 def _rating_line(key: str, before, after) -> str:
@@ -504,6 +513,8 @@ class ChessExecutionRouter(BaseRouter):
                 f"  {_material_line(p.fen_before, color)}",
                 f"  {_attacked_line(p.fen_before)}",
             ]
+            if p.motifs:
+                lines.append(f"  motifs : {', '.join(_motif_fr(m) for m in p.motifs)}")
             if critical.kind == "e":
                 prev = analysis.plies[p.ply - 1]
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
