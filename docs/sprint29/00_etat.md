@@ -58,7 +58,7 @@
 | # | Kickoff | Statut |
 |---|---------|--------|
 | 01 | `01_fiabilite.md` — trace dispatcher, logger kernel, réponse perdue livrée au message suivant | ✅ (non commité, 327 verts) |
-| 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ⏳ |
+| 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ✅ (non commité, 334 verts) |
 | 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ⏳ |
 | 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ⏳ |
 | 05 | `05_legende.md` — explication en légende sous chaque image | ⏳ |
@@ -81,4 +81,7 @@
 Lire `CLAUDE.md`, `context_kickoff_sprint_29.md`, ce fichier.
 Tronçon 01 fait (dispatcher `log.exception` + type dans `error`, logger kernel, `send` → `_deliver` + attente par chat_id).
 Note : si la livraison de l'attente échoue à son tour, c'est la réponse courante qui est gardée (la plus récente écrase).
-Prochaine étape : tronçon 02 (`02_tagueur_motifs.md`), puis run live 06 par Nico.
+Tronçon 02 fait : `chess_coach/motifs.py` (`tag_motifs`, portage cook.py/util.py filtré + 11 mats ajoutés, ordre `_EXTRA_MATES`), 7 tests `tests/chess_coach/test_motifs.py`. Non branché.
+Adaptation : `is_mate` exige que le camp mat soit l'adversaire (une PV pourrait finir sur un mat contre Nico).
+Mats ajoutés : heuristiques « zone du roi contrôlée uniquement par les pièces du motif » ; seul `triangleMate` est testé.
+Prochaine étape : tronçon 03 (`03_motifs_profil.md`), puis run live 06 par Nico.
