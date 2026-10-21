@@ -46,3 +46,25 @@ async def test_send_images_text_sends_photos_then_text(tmp_path):
     })
 
     assert calls == ["photo", "photo", "text"]
+
+
+@pytest.mark.asyncio
+async def test_send_failure_is_kept_and_delivered_before_next_reply():
+    # Sprint 29 : réessais épuisés → pas d'exception, réponse mise en attente,
+    # puis livrée (après avertissement) avant la réponse suivante.
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock(side_effect=[TimedOut()] * 3)
+
+    with patch("interfaces.telegram_interface.asyncio.sleep", new=AsyncMock()):
+        await iface.send(42, "perdue")
+
+    sent = []
+    iface.app.bot.send_message = AsyncMock(side_effect=lambda **kw: sent.append(kw["text"]))
+    await iface.send(42, "courante")
+
+    assert sent == [
+        "⚠️ Ma réponse précédente n'avait pas pu partir :",
+        "perdue",
+        "courante",
+    ]

@@ -38,6 +38,9 @@ log = get_logger(__name__)
 SEND_ATTEMPTS = 3
 SEND_BACKOFF_SECONDS = (2, 4)
 
+# Préfixe de la réponse non livrée, renvoyée avant la réponse suivante (sprint 29).
+UNDELIVERED_NOTICE = "⚠️ Ma réponse précédente n'avait pas pu partir :"
+
 
 class TelegramInterface(BaseInterface):
 
@@ -46,6 +49,9 @@ class TelegramInterface(BaseInterface):
         self.token = token
         # Un lock par user_id — sérialise les messages d'un même utilisateur
         self.user_locks = defaultdict(asyncio.Lock)
+        # Dernière réponse non livrée par chat_id, en RAM (perdue au
+        # redémarrage, accepté). Livrée avant la réponse suivante.
+        self.undelivered = {}
 
     def start(self):
         self.app = ApplicationBuilder().token(self.token).build()
@@ -168,7 +174,30 @@ class TelegramInterface(BaseInterface):
 
     async def send(self, chat_id: int, message):
         """
-        Envoie la réponse du kernel à l'utilisateur Telegram.
+        Envoie la réponse du kernel, précédée de la réponse en attente.
+
+        Si une réponse précédente n'avait pas pu partir, elle est livrée
+        d'abord, après un avertissement. Si l'envoi échoue définitivement
+        (réessais épuisés), la réponse courante est mémorisée pour le
+        prochain envoi au lieu de remonter jusqu'à l'error handler.
+        """
+        pending = self.undelivered.pop(chat_id, None)
+        try:
+            if pending is not None:
+                await self._deliver(chat_id, UNDELIVERED_NOTICE)
+                await self._deliver(chat_id, pending)
+            await self._deliver(chat_id, message)
+        except NetworkError as e:
+            log.error(
+                "telegram send gave up after %d attempts: %s, chat_id=%s — réponse mise en attente",
+                SEND_ATTEMPTS, type(e).__name__, chat_id,
+            )
+            # Une seule réponse en attente par chat : la plus récente écrase.
+            self.undelivered[chat_id] = message
+
+    async def _deliver(self, chat_id: int, message):
+        """
+        Envoie une réponse du kernel à l'utilisateur Telegram.
 
         Gère trois cas :
         - dict {"type": "image", "path": ..., "caption": ...}

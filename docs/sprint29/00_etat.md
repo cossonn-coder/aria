@@ -57,7 +57,7 @@
 
 | # | Kickoff | Statut |
 |---|---------|--------|
-| 01 | `01_fiabilite.md` — trace dispatcher, logger kernel, réponse perdue livrée au message suivant | ⏳ |
+| 01 | `01_fiabilite.md` — trace dispatcher, logger kernel, réponse perdue livrée au message suivant | ✅ (non commité, 327 verts) |
 | 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ⏳ |
 | 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ⏳ |
 | 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ⏳ |
@@ -79,4 +79,6 @@
 ## §REPRISE
 
 Lire `CLAUDE.md`, `context_kickoff_sprint_29.md`, ce fichier.
-Prochaine étape : `/sprint-auto sprint 29` (tronçon 01 en premier), puis run live 06 par Nico.
+Tronçon 01 fait (dispatcher `log.exception` + type dans `error`, logger kernel, `send` → `_deliver` + attente par chat_id).
+Note : si la livraison de l'attente échoue à son tour, c'est la réponse courante qui est gardée (la plus récente écrase).
+Prochaine étape : tronçon 02 (`02_tagueur_motifs.md`), puis run live 06 par Nico.

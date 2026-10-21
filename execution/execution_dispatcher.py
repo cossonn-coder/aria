@@ -2,6 +2,9 @@
 
 from execution.operation import ExecutionOperation
 from execution.routing_table import RoutingTable
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 class ExecutionDispatcher:
@@ -38,8 +41,11 @@ class ExecutionDispatcher:
             }
 
         except Exception as e:
+            # Trace complète dans le journal ; le type reste visible dans
+            # l'erreur même quand str(e) est vide (ex. TimeoutError()).
+            log.exception("router %s failed", router_name)
             return {
                 "status": "failed",
                 "router": router_name,
-                "error": str(e),
+                "error": f"{type(e).__name__}: {e}",
             }
