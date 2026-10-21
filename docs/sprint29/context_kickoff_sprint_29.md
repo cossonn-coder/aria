@@ -32,6 +32,38 @@ reste la moyenne des thèmes + Résultats. Nécessite une détection de motifs (
 sacrifice déjà calculé par `explosive`). Arbitrage d'entrée : remplacer ou compléter les
 thèmes actuels. Touche le calcul du profil, pas l'écriture du palace.
 
+### Candidates ajoutées (Nico, 2026-10-22) — ordre à arbitrer en `/conception`
+
+Coach d'échecs (notes de Nico après les parties des 20-21/10) :
+
+1. **Explication sous chaque image** — l'explication d'une position critique part en
+   légende de sa photo (visuel de la ligne + texte au même endroit) ; le texte final ne
+   garde que bilan et Progression. Petit : router + prompt. Limite légende Telegram 1024 car.
+2. **Échiquier calque sur chess.com** — flèches vertes/orange en transparence par-dessus
+   l'échiquier chess.com, variante affichée au survol de la flèche (usage : analyse et
+   enseignement, pas de triche). Gros : extension navigateur + lecture de position + lien
+   ARIA. Sprint dédié, probablement plusieurs.
+3. **Coup humain le plus piégeant plutôt que meilleur coup machine** — viser la position
+   sharp où la défense est difficile et où les coups logiques perdent, quitte à être moins
+   bien sur jeu parfait adverse. Existe en partie (`explosive`, sprint 27) ; le frein actuel
+   est la fenêtre de tolérance (`_WINDOW = 5`, `_TRAP_WINDOW = 15`, `explosive.py:36-38`).
+   Réglage de risque + classement par difficulté de défense, pas une refonte.
+
+Fiabilité (constatée aux runs des 20-21/10) :
+
+4. **Réponse perdue en silence** — 3 `TimedOut` Telegram consécutifs (20/10 14:28-14:42) →
+   réponse abandonnée, seul un WARNING au log, Nico n'en sait rien. Cause : coupure
+   passagère (rétablie le 21/10 09:57 sans redémarrage).
+5. **Erreur kernel vide** — 21/10 10:14 : `[KERNEL] execution error:` sans message, ~75 s
+   après réception, aucun log chess. Le dispatcher ne garde que `str(e)` (vide, typique
+   `TimeoutError`) sans traceback, et `core/kernel.py:234` utilise `print()` (violation
+   style). Cause inconnue tant que la trace n'est pas loguée.
+6. **#74 récidive** [n=2] — 20/10 13:10, « D6 avant bc4 alors » → « Prochaine action :
+   Répondre à Nico… » (`agents/executor_agent.py:71`).
+7. **Groq 413 sur les questions de suivi** — limite ITPM 7000 (tier `on_demand`) dépassée
+   par l'historique de 20 messages chargé d'analyses → repli `deepseek-flash`, réponses
+   moins fiables (hallucination de lignes sur « Ne5 explosif ? »).
+
 ─────────────────────────────────────────────────────────────────────────
 
 ## Dettes ouvertes au 2026-10-20 (post sprint 28)
@@ -70,7 +102,7 @@ thèmes actuels. Touche le calcul du profil, pas l'écriture du palace.
 | 71 | `print()` dans `core/kernel.py` `_normalize` | ouvert, polish |
 | 72 | Code sans caller apparent : `cognition/cognitive_dispatcher.py`, `execution/execution_plan_builder.py`, `cognition/dispatcher_types.py` | ouvert |
 | 73 | Groq 413 sur conversation chargée (ITPM `Limit 7000`) : depuis sprint 25, un 413 saute les autres Groq → DeepSeek répond 3 s après le 413 [run live 25-02, n=1, horodatage à la seconde] ; Groq reste inutilisable en REASONING dès que l'historique pèse (piste B « budget historique » écartée sprint 25) | partiellement résolue sprint 25 ; sprint 28 : Groq retiré du rôle REASONING (CHAT / PLANNING / REFLECTION le gardent : 121 réponses Groq en 7 jours) |
-| 74 | Réponse hors sujet « Prochaine action : Résumer l'état actuel du projet potager… » à un message conversationnel (« lol non… ») [n=1, 2026-10-16] | ouvert, à diagnostiquer |
+| 74 | Réponse hors sujet « Prochaine action : Résumer l'état actuel du projet potager… » à un message conversationnel (« lol non… ») [n=2, 2026-10-16 et 2026-10-20 « D6 avant bc4 alors »] | ouvert, à diagnostiquer |
 | 75 | Intent parasite `vacances normandie train` créé sur une question de suivi de lecture d'URL (« et la gastronomie normande… ») [n=1] | ouvert |
 | 76 | Suite de lecture : la réponse refusionne la tranche 1 et parle de « trois parties » au lieu de deux [n=1] | ouvert, polish prompt |
 | 77 | Image-to-image (photo + légende de génération) : Pollinations accepte `image=`, il faut une URL publique de la photo | ouvert |
