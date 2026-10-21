@@ -81,12 +81,12 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     ply = _ply(7, 4, "Nf6", "Nc6", "b8c6")
     explosive = ExplosiveMove(
         san="Qh4", uci="d8h4", loss=4.0, win_after=46.0, pv_san=["Qh4", "Nxh4"],
-        sacrifice=9, forcing=["threat"], trap=12.0, trap_reply_san="Nxh4",
-        volatility=0.0, score=12.0, offered=9, trap_line_san=["Nxh4", "e5"],
-        replies=[{"san": "d3", "line_san": ["d3", "Nc6"], "win": 47.0},
-                 {"san": "Nxh4", "line_san": ["Nxh4"], "win": 62.0}],
+        sacrifice=9, forcing=["threat"], trap_reply_san="Nxh4",
+        score=12.0, offered=9, trap_line_san=["Nxh4", "e5"],
+        replies=[{"san": "Nxh4", "p": 0.62, "line_san": ["Nxh4"], "win": 62.0},
+                 {"san": "d3", "p": 0.2, "line_san": ["d3", "Nc6"], "win": 47.0}],
         trap_end_fen="rnb1kbnr/pppp1ppp/8/4p3/4P2N/8/PPPP1PPP/RNBQKB1R w KQkq - 0 6",
-        trap_end_win=75.0, evidence="development",
+        trap_end_win=75.0, evidence="development", expected=58.0, best_expected=46.0,
     )
     analysis = GameAnalysis(
         headers={"Opening": "Scotch Gambit"}, nico_color="black", color_source="header", plies=[ply],
@@ -113,13 +113,13 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
     assert "Position 1 (occasion explosive)" in content
     assert "offre la dame (9) ; forçant : menace" in content
-    assert "réponse logique : Nxh4 (prend la dame offerte)" in content
+    assert "réponse humaine la plus probable : Nxh4 (62 %)" in content
+    assert "espérance face à un humain : Nico 58 % (meilleur coup : 46 %)" in content
     assert "variante : 5.Nxh4 e5 (avance de développement)" in content
     assert "fin de variante : matériel : Nico −9, % de gain Nico 75 %" in content
-    assert "difficulté pour l'adversaire : la réponse logique gagne du matériel à vue" in content
-    assert "seule réponse qui tient : d3 (l'autre : Nico ≥ 62 %)" in content
     assert "coût" not in content.split("[Consigne")[0]
-    assert "si d3 : 5.d3 Nc6, 47 % pour Nico" in content
+    assert "si Nxh4 (62 %) : 5.Nxh4, 62 % pour Nico" in content
+    assert "si d3 (20 %) : 5.d3 Nc6, 47 % pour Nico" in content
     assert ("pièces : blancs Ke1 Qd1 Ra1 Rh1 Bc1 Bf1 Nb1 Ng1, pions a2 b2 c2 d2 f2 g2 h2 e4 ; "
             "noirs Ke8 Qd8") in content
     assert "Notation anglaise : N, B, R, Q, K" in content

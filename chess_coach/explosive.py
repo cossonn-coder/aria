@@ -1,12 +1,13 @@
 # aria/chess_coach/explosive.py
 #
-# Recherche des « occasions explosives » (sprint 27, tronçon 01, dette #87).
+# Recherche des « occasions explosives » (sprint 27, tronçon 01, dette #87 ;
+# coup piégeant face à un humain : sprint 29, tronçon 04).
 #
-# Sorte d de position critique : avant un coup de Nico, un coup explosif
-# (sacrifice, coup forçant, piège) tenait la fenêtre de tolérance alors que
-# Nico a joué autre chose. Seconde passe moteur, plus profonde que la
-# première, limitée aux positions non décidées des 20 premiers coups et
-# bornée par un budget de temps global.
+# Sorte d de position critique : avant un coup de Nico, un coup tenait la
+# fenêtre de tolérance (perte ≤ 15 sur jeu parfait) et rapportait nettement
+# plus que le meilleur coup face à un humain de l'Elo adverse. Espérance
+# humaine E(coup) = Σ P_maia(réponse) × % de gain de Nico après la réponse.
+# Seconde passe moteur sur toute la partie, sans budget de temps.
 # Module pur : aucun import mémoire / LLM / exécution.
 
 import time
@@ -16,42 +17,40 @@ import chess
 import chess.engine
 
 from chess_coach.analysis import _CLEAR_MAX, ENGINE_OPTIONS, _MATE_SCORE, CriticalPosition, _win, clear_advantage
+from chess_coach.difficulty import DEFAULT_ELO, _load, reply_distribution
 from logger import get_logger
 
 log = get_logger(__name__)
 
-# Budget global de la recherche (secondes), vérifié avant chaque position.
 # Threads=8 + limites en temps : deux rejeux du même PGN peuvent différer (accepté).
-_BUDGET = 30.0
 # Durées d'analyse : référence MultiPV / candidats par forme, puis approfondissement.
 _ROOT_TIME = 0.5
 _DEEP_TIME = 0.3
-# Réanalyse de la réponse logique quand sa PV est trop courte pour la règle d'avantage clair.
+# Réanalyse de la réponse humaine la plus probable quand sa PV est trop courte
+# pour la règle d'avantage clair.
 _EVIDENCE_TIME = 0.6
 _MULTIPV = 5
-# Positions éligibles : coups de Nico non décidés des 20 premiers coups.
-_MAX_MOVE_NUMBER = 20
+# Positions éligibles : coups de Nico non décidés, joués sans erreur nette.
 _WIN_MIN, _WIN_MAX = 35, 75
-# Fenêtre de tolérance (Q5) : 5 pts, ou 15 si le coup tend un piège ≥ 10.
-_WINDOW = 5
+# Perte maximale sur jeu parfait (pts de % de gain) et gain minimal d'espérance
+# humaine sur le meilleur coup.
 _TRAP_WINDOW = 15
-_TRAP_MIN = 10
+_GAIN_MIN = 10
 # Nombre maximal de candidats approfondis par position.
 _MAX_DEEP = 3
 # Ligne mesurée (candidat compris) : au moins 6 demi-coups, prolongée tant
 # que l'échange continue, borne dure 10.
 _LINE_PLIES = 6
 _LINE_MAX = 10
-# Longueur affichée des lignes des réponses (la suite du piège est coupée
-# par la règle d'avantage clair, chess_coach.analysis.clear_advantage).
+# Longueur affichée des lignes des réponses (la suite de la réponse la plus
+# probable est coupée par la règle d'avantage clair, chess_coach.analysis.clear_advantage).
 _REPLY_LINE_PLIES = 6
-_SACRIFICE_CAP = 5
 _VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
 
 @dataclass
 class ExplosiveMove:
-    """Coup explosif retenu pour une position (tous les % de gain côté Nico, sauf trap)."""
+    """Coup explosif retenu pour une position (tous les % de gain côté Nico)."""
     san: str
     uci: str
     loss: float
@@ -59,21 +58,25 @@ class ExplosiveMove:
     pv_san: list
     sacrifice: int
     forcing: list
-    trap: float
+    # Réponse humaine la plus probable (Maia, Elo adverse), en SAN.
     trap_reply_san: str | None
-    volatility: float
+    # Gain = expected − best_expected (classement entre candidats et positions).
     score: float
     # Matériel offert par le candidat lui-même (pièce posée en prise), en pions.
     offered: int = 0
-    # Suite si l'adversaire prend le matériel offert (SAN depuis la position après le candidat).
+    # Suite de la réponse humaine la plus probable (SAN depuis la position après le candidat).
     trap_line_san: list = field(default_factory=list)
-    # Réponses MultiPV adverses : {"san", "line_san", "win"} (win = % de gain côté Nico).
+    # Réponses humaines : {"san", "p", "line_san", "win"} par probabilité Maia
+    # décroissante (p brute, win = % de gain côté Nico après la réponse).
     replies: list = field(default_factory=list)
     # Règle d'avantage clair (tronçon 08) : position au point d'arrêt de la suite
     # logique, % de gain de Nico pour cette suite, critère (None = non admissible).
     trap_end_fen: str | None = None
     trap_end_win: float | None = None
     evidence: str | None = None
+    # Espérance humaine du candidat et du meilleur coup (% de gain de Nico).
+    expected: float = 0.0
+    best_expected: float = 0.0
 
 
 def _material(board: chess.Board, color: chess.Color) -> int:
@@ -173,14 +176,38 @@ def _priority(board: chess.Board, move: chess.Move) -> bool:
     return _natural_capture(after, move.to_square) is not None
 
 
-def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after: float) -> ExplosiveMove:
-    """Approfondit un candidat : ligne, sacrifice, forçant, piège, volatilité."""
+def _expectation(replies: list) -> float:
+    """Espérance humaine : Σ p × win, probabilités renormalisées sur les réponses gardées."""
+    total = sum(r["p"] for r in replies)
+    return sum(r["p"] * r["win"] for r in replies) / total
+
+
+def _human_replies(engine, after: chess.Board, distribution: list) -> tuple:
+    """Évalue les réponses humaines (Maia) dans after : (réponses affichables, infos moteur).
+
+    Une analyse MultiPV restreinte à ces réponses (root_moves) ; infos moteur
+    indexées par coup, dans l'ordre de probabilité.
+    """
+    moves = [chess.Move.from_uci(uci) for uci, _ in distribution]
+    infos = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=moves, multipv=len(moves))
+    by_move = {info["pv"][0]: info for info in infos}
+    replies = [
+        {"san": after.san(move), "p": p, "win": 100 - _win_of(by_move[move]),
+         "line_san": _san_line(after, by_move[move]["pv"][:_REPLY_LINE_PLIES])}
+        for move, (_, p) in zip(moves, distribution)
+    ]
+    return replies, [by_move[move] for move in moves]
+
+
+def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after: float,
+            distribution: list) -> ExplosiveMove:
+    """Approfondit un candidat : ligne, sacrifice, forçant, réponses humaines, avantage clair."""
     after = board.copy(stack=False)
     after.push(move)
-    replies = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), multipv=3)
 
-    # Ligne : candidat + PV adverse, mesurée une fois l'échange terminé.
-    line = [move] + replies[0]["pv"]
+    # Ligne : candidat + PV moteur adverse, mesurée une fois l'échange terminé.
+    principal = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME))
+    line = [move] + principal["pv"]
     sacrifice_line, plies = _line_sacrifice(board, line)
     pv_san = _san_line(board, line[:plies])
 
@@ -193,16 +220,11 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
         offered = max(0, _VALUES[after.piece_type_at(move.to_square)] - (_VALUES[taken] if taken else 0))
     sacrifice = max(sacrifice_line, offered)
 
-    # Piège : % de gain adverse après sa meilleure réponse − après la prise naturelle.
-    trap, trap_reply_san = 0.0, None
-    logical = replies[0]
-    if capture is not None:
-        logical = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=[capture])
-        trap = max(0.0, _win_of(replies[0]) - _win_of(logical))
-        trap_reply_san = after.san(capture)
+    replies, infos = _human_replies(engine, after, distribution)
 
-    # Suite logique (prise naturelle, sinon 1re réponse) coupée au point où
-    # l'avantage devient clair pour un humain ; PV trop courte → réanalyse plus longue.
+    # Suite de la réponse humaine la plus probable, coupée au point où l'avantage
+    # devient clair pour un humain ; PV trop courte → réanalyse plus longue.
+    logical = infos[0]
     if len(logical["pv"]) + 1 < _CLEAR_MAX:
         logical = engine.analyse(after, chess.engine.Limit(time=_EVIDENCE_TIME), root_moves=[logical["pv"][0]])
     score_logical = logical["score"].relative
@@ -218,38 +240,28 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
             end.push(reply_move)
         trap_end_fen = end.fen()
 
-    reply_lines = [
-        {"san": after.san(info["pv"][0]), "line_san": _san_line(after, info["pv"][:_REPLY_LINE_PLIES]),
-         "win": 100 - _win_of(info)}
-        for info in replies
-    ]
-
-    opponent_wins = [_win_of(info) for info in replies]
-    volatility = max(opponent_wins) - min(opponent_wins)
-    forcing = _forcing(board, move)
-    forcing_points = sum({"check": 1, "capture": 0.5, "threat": 0.5}[label] for label in forcing)
-    score = min(sacrifice, _SACRIFICE_CAP) + forcing_points + trap / 5 + volatility / 10
     return ExplosiveMove(
         san=board.san(move), uci=move.uci(), loss=loss, win_after=win_after, pv_san=pv_san,
-        sacrifice=sacrifice, forcing=forcing, trap=trap, trap_reply_san=trap_reply_san,
-        volatility=volatility, score=score, offered=offered, trap_line_san=trap_line_san,
-        replies=reply_lines, trap_end_fen=trap_end_fen, trap_end_win=trap_win, evidence=evidence,
+        sacrifice=sacrifice, forcing=_forcing(board, move), trap_reply_san=replies[0]["san"],
+        score=0.0, offered=offered, trap_line_san=trap_line_san, replies=replies,
+        trap_end_fen=trap_end_fen, trap_end_win=trap_win, evidence=evidence,
+        expected=_expectation(replies),
     )
 
 
-def _admissible(candidate: ExplosiveMove) -> bool:
-    """Fenêtre (Q5), explosivité réelle (sacrifice ou piège) et avantage clair."""
-    if candidate.evidence is None:
-        return False
-    in_window = candidate.loss <= _WINDOW or (candidate.loss <= _TRAP_WINDOW and candidate.trap >= _TRAP_MIN)
-    return in_window and (candidate.sacrifice >= 1 or candidate.trap >= _TRAP_MIN)
+def _admissible(candidate: ExplosiveMove, best_expected: float) -> bool:
+    """Perte ≤ 15 sur jeu parfait, espérance humaine ≥ meilleur coup + 10, avantage clair."""
+    return (candidate.evidence is not None and candidate.loss <= _TRAP_WINDOW
+            and candidate.expected >= best_expected + _GAIN_MIN)
 
 
-def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci: str) -> ExplosiveMove | None:
-    """Meilleur coup explosif admissible d'une position, ou None.
+def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci: str,
+                     elo: int, models_dir: str) -> ExplosiveMove | None:
+    """Coup admissible au plus fort gain d'espérance humaine d'une position, ou None.
 
     Exclus : le coup joué, le meilleur coup de cette analyse et celui de la
-    1re passe (first_best_uci, celui que la légende affiche comme meilleur).
+    1re passe (first_best_uci, celui que la légende affiche comme meilleur),
+    et les coups qui terminent la partie (Maia n'a aucune réponse à évaluer).
     """
     reference = engine.analyse(board, chess.engine.Limit(time=_ROOT_TIME), multipv=_MULTIPV)
     win_best = _win_of(reference[0])
@@ -262,41 +274,69 @@ def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci
         for info in infos:
             wins.setdefault(info["pv"][0], _win_of(info))
 
+    def after(move):
+        position = board.copy(stack=False)
+        position.push(move)
+        return position
+
+    if after(best).is_game_over():
+        return None
     candidates = [
         (move, max(0.0, win_best - win)) for move, win in wins.items()
-        if move != best and move.uci() not in (played_uci, first_best_uci) and win_best - win <= _TRAP_WINDOW
+        if move != best and move.uci() not in (played_uci, first_best_uci)
+        and win_best - win <= _TRAP_WINDOW and not after(move).is_game_over()
     ]
+    if not candidates:
+        return None
     # Sacrifices, échecs et prises passent d'abord, puis la perte croissante.
     candidates.sort(key=lambda c: (not _priority(board, c[0]), c[1]))
+    candidates = candidates[:_MAX_DEEP]
+
+    # Une passe Maia batchée : meilleur coup + candidats approfondis.
+    distributions = reply_distribution(
+        [after(best).fen()] + [after(move).fen() for move, _ in candidates], elo, models_dir)
+    best_expected = _expectation(_human_replies(engine, after(best), distributions[0])[0])
 
     kept = None
-    for move, loss in candidates[:_MAX_DEEP]:
-        candidate = _deepen(engine, board, move, loss, win_best - loss)
-        if _admissible(candidate) and (kept is None or candidate.score > kept.score):
+    for (move, loss), distribution in zip(candidates, distributions[1:]):
+        candidate = _deepen(engine, board, move, loss, win_best - loss, distribution)
+        candidate.best_expected = best_expected
+        candidate.score = candidate.expected - best_expected
+        if _admissible(candidate, best_expected) and (kept is None or candidate.score > kept.score):
             kept = candidate
     return kept
 
 
-def find_explosive(plies: list, nico_color: str, engine_path: str) -> list:
-    """Positions critiques de sorte d (une par coup de Nico au plus), budget _BUDGET."""
+def find_explosive(plies: list, nico_color: str, engine_path: str,
+                   opponent_elo: int | None, models_dir: str | None) -> list:
+    """Positions critiques de sorte d (une par coup de Nico au plus), toute la partie.
+
+    Maia indisponible (models_dir None ou échec de chargement) → aucune
+    occasion, l'analyse continue.
+    """
     started = time.monotonic()
+    if models_dir is None:
+        log.warning("chess_explosive skipped: Maia models_dir absent")
+        return []
+    try:
+        _load(models_dir)
+    except Exception as e:
+        log.warning("chess_explosive skipped: Maia unavailable (%s: %s)", type(e).__name__, e)
+        return []
+    elo = opponent_elo or DEFAULT_ELO
     eligible = [
         p for p in plies
-        if p.color == nico_color and p.move_number <= _MAX_MOVE_NUMBER
-        and _WIN_MIN <= p.win_before <= _WIN_MAX and p.loss < 10
+        if p.color == nico_color and _WIN_MIN <= p.win_before <= _WIN_MAX and p.loss < 10
     ]
-    found, examined = [], 0
+    found = []
     with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
         engine.configure(ENGINE_OPTIONS)
         for p in eligible:
-            if time.monotonic() - started >= _BUDGET:
-                break
-            examined += 1
-            explosive = _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci)
+            explosive = _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci, elo, models_dir)
             if explosive is not None:
                 found.append(CriticalPosition(kind="d", ply=p, score=explosive.score, explosive=explosive))
     log.info(
         "chess_explosive positions=%d/%d found=%d duration=%.1fs",
-        examined, len(eligible), len(found), time.monotonic() - started,
+        len(eligible), len(eligible), len(found), time.monotonic() - started,
     )
     return found

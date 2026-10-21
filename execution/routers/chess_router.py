@@ -330,8 +330,9 @@ def _reply_start(p) -> tuple:
 
 
 def _explosive_lines(p, e, nico_color: str) -> list:
-    """Faits moteur du coup explosif d'une position de sorte d : l'idée, la variante
-    si l'adversaire joue la réponse logique, la difficulté de la bonne réponse."""
+    """Faits moteur du coup explosif d'une position de sorte d : l'idée, les réponses
+    humaines probables (Maia, Elo adverse), l'espérance face à un humain, la variante
+    si l'adversaire joue la réponse la plus probable."""
     lines = [f"  explosif {_move_label(p.move_number, p.color, e.san)}!?"]
     facts = []
     # Matériel : pièce offerte (posée en prise) prioritaire sur le sacrifice de ligne.
@@ -343,39 +344,19 @@ def _explosive_lines(p, e, nico_color: str) -> list:
         facts.append("forçant : " + "/".join(_FORCING_FR[f] for f in e.forcing))
     if facts:
         lines.append("  " + " ; ".join(facts))
-    # Réponse logique : prise naturelle du matériel offert, à défaut la 1re réponse moteur.
-    if e.trap_reply_san:
-        piece = _PIECE_FR.get(e.san[0], "le pion")
-        offered = "offerte" if piece.startswith("la ") else "offert"
-        lines.append(f"  réponse logique : {e.trap_reply_san} (prend {piece} {offered})")
-    elif e.replies:
-        lines.append(f"  réponse logique : {e.replies[0]['san']}")
+    top = e.replies[0]
+    lines.append(f"  réponse humaine la plus probable : {top['san']} ({top['p'] * 100:.0f} %)")
+    lines.append(f"  espérance face à un humain : Nico {e.expected:.0f} % "
+                 f"(meilleur coup : {e.best_expected:.0f} %)")
     number, color = _reply_start(p)
     lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
                  f"({_EVIDENCE_FR[e.evidence]})")
     lines.append(f"  fin de variante : {_material_line(e.trap_end_fen, nico_color)}, "
                  f"% de gain Nico {e.trap_end_win:.0f} %")
     lines.append(f"  fin de variante, {_attacked_line(e.trap_end_fen)}")
-    # Difficulté : réponses qui tiennent = écart ≤ 5 pts avec la meilleure réponse.
-    difficulty = []
-    if e.trap_reply_san:
-        trap = f", elle lui fait perdre {e.trap:.0f} pts" if round(e.trap) else ""
-        difficulty.append(f"la réponse logique gagne du matériel à vue{trap}")
-    if e.replies:
-        best = min(r["win"] for r in e.replies)
-        holding = [r["san"] for r in e.replies if r["win"] - best <= 5]
-        others = [r["win"] for r in e.replies if r["win"] - best > 5]
-        label = "seule réponse qui tient" if len(holding) == 1 else "réponses qui tiennent"
-        text = f"{label} : {', '.join(holding)}"
-        if others:
-            rest = "l'autre" if len(others) == 1 else f"les {len(others)} autres"
-            text += f" ({rest} : Nico ≥ {min(others):.0f} %)"
-        difficulty.append(text)
-    if difficulty:
-        lines.append("  difficulté pour l'adversaire : " + " ; ".join(difficulty))
     for reply in e.replies:
-        lines.append(f"  si {reply['san']} : {_format_line(reply['line_san'], number, color)}, "
-                     f"{reply['win']:.0f} % pour Nico")
+        lines.append(f"  si {reply['san']} ({reply['p'] * 100:.0f} %) : "
+                     f"{_format_line(reply['line_san'], number, color)}, {reply['win']:.0f} % pour Nico")
     return lines
 
 
@@ -558,12 +539,12 @@ class ChessExecutionRouter(BaseRouter):
         if any(c.kind == "d" for c in analysis.critical):
             parts.append(
                 "[Consigne : pour chaque occasion explosive : l'idée en une phrase ; la "
-                "variante si l'adversaire joue la réponse logique (coups fournis, rien "
+                "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "
                 "au-delà) et l'avantage atteint (critère fourni), expliqué par les pièces "
-                "protégées / vulnérables de la fin de variante ; pourquoi la bonne réponse "
-                "est difficile à trouver pour l'adversaire, d'après la ligne difficulté. Ne "
-                "donne ni le coût, ni quand le tenter, et ne le présente jamais comme le "
-                "meilleur coup. Cette entrée peut dépasser 3 phrases.]"
+                "protégées / vulnérables de la fin de variante ; quelles réponses humaines "
+                "probables perdent et ce qu'elles coûtent à l'adversaire, d'après les lignes "
+                "« si … ». Ne donne ni le coût, ni quand le tenter, et ne le présente jamais "
+                "comme le meilleur coup. Cette entrée peut dépasser 3 phrases.]"
             )
         if analysis.color_source == "default":
             parts.append(

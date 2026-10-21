@@ -47,3 +47,16 @@ def test_assign_difficulty_real_maia():
     plies = [_ply(32, 17, "white")]
     difficulty.assign_difficulty(plies, "white", 1307, config.maia_models_dir)
     assert plies[0].difficulty > 1700
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(config.maia_models_dir, "rapid_model.pt")),
+                    reason="poids Maia-2 absents")
+def test_reply_distribution_real_maia():
+    # Sprint 29 : position aux noirs (démiroir) et aux blancs, en un seul lot.
+    import chess
+    black_fen = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 3 3"
+    fens = [black_fen, SPIKE_FEN]
+    for fen, replies in zip(fens, difficulty.reply_distribution(fens, 1300, config.maia_models_dir)):
+        legal = {m.uci() for m in chess.Board(fen).legal_moves}
+        assert replies and all(uci in legal and 0 < p <= 1 for uci, p in replies)
+        assert sum(p for _, p in replies) <= 1

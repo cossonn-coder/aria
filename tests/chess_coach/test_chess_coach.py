@@ -10,7 +10,7 @@ from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
 from chess_coach.analysis import clear_advantage
-from chess_coach.explosive import _line_sacrifice, find_explosive
+from chess_coach.explosive import ExplosiveMove, _admissible, _expectation, _line_sacrifice
 from chess_coach.render import SIZE, render_position
 
 STOCKFISH = "/usr/games/stockfish"
@@ -38,55 +38,20 @@ def test_analyze_detects_blunder():
     assert any(c.kind == "a" and c.ply.ply == 5 for c in game.critical)
 
 
-MORRA_PGN = """[White "staroflexeur"]
-[Black "Test"]
-1. e4 c5 2. d4 cxd4 3. c3 dxc3 4. Nxc3 Nc6 5. Nf3 Nf6 6. Bc4 e6 7. O-O a6 8. e5 *
-"""
-
-QH5_PGN = """[White "Test"]
-[Black "staroflexeur"]
-1. e4 e5 2. Qh5 Nc6 *
-"""
-
-
-@pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
-def test_explosive_smith_morra_nd5():
-    # Sprint 27 : 8.Cd5!? tend un piège (8…exd5 fait perdre ≥ 10 pts aux noirs).
-    game = analyze(MORRA_PGN, MORRA_PGN, "staroflexeur", STOCKFISH)
-    d = next(c for c in game.critical if c.kind == "d" and c.ply.move_number == 8)
-    assert d.explosive.san == "Nd5"
-    assert d.explosive.trap >= 10
-    # Tronçon 05 : le cavalier offert (attaqué par e6) compte même refusé dans la PV.
-    assert d.explosive.offered == 3
-    assert d.explosive.sacrifice >= 3
-    assert d.explosive.trap_line_san[0] == "exd5"
-    assert d.explosive.replies
-    # Tronçon 08 : suite coupée au point où l'avantage devient clair.
-    assert len(d.explosive.trap_line_san) <= 15
-    assert d.explosive.evidence
-    assert d.explosive.trap_end_fen
+@pytest.mark.parametrize("gain, retained", [(15.0, True), (5.0, False)])
+def test_explosive_admissible_human_expectation(gain, retained):
+    # Sprint 29 : perte 12 sur jeu parfait, admissible si l'espérance humaine
+    # dépasse celle du meilleur coup d'au moins 10 pts.
+    candidate = ExplosiveMove(
+        san="Nd5", uci="c3d5", loss=12.0, win_after=43.0, pv_san=[], sacrifice=3, forcing=[],
+        trap_reply_san="exd5", score=0.0, evidence="material", expected=50.0 + gain,
+    )
+    assert _admissible(candidate, 50.0) is retained
 
 
-@pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
-def test_explosive_excludes_first_pass_best():
-    # Tronçon 08 : si la 1re passe donne 8.Nd5 meilleur, ce n'est pas une occasion explosive.
-    board = chess.Board()
-    for san in ["e4", "c5", "d4", "cxd4", "c3", "dxc3", "Nxc3", "Nc6", "Nf3", "Nf6",
-                "Bc4", "e6", "O-O", "a6"]:
-        board.push_san(san)
-    ply = _ply(14, 0, move_number=8, fen_before=board.fen(), win_before=55.0)
-    ply.uci, ply.best_uci = "e4e5", "c3d5"
-    found = find_explosive([ply], "white", STOCKFISH)
-    assert found == []
-
-
-@pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
-def test_explosive_early_queen_nf6():
-    # Sprint 27 : 2…Cf6 sacrifie e5 (3.Dxe5+ Fe7).
-    game = analyze(QH5_PGN, QH5_PGN, "staroflexeur", STOCKFISH)
-    d = next(c for c in game.critical if c.kind == "d" and c.ply.move_number == 2)
-    assert d.explosive.san == "Nf6"
-    assert d.explosive.sacrifice >= 1
+def test_expectation_renormalized():
+    # Probabilités gardées (somme 0,8) renormalisées : (0,6 × 70 + 0,2 × 30) / 0,8 = 60.
+    assert _expectation([{"p": 0.6, "win": 70.0}, {"p": 0.2, "win": 30.0}]) == pytest.approx(60.0)
 
 
 def test_line_sacrifice_waits_end_of_exchange():
@@ -144,15 +109,20 @@ def test_parse_pgn_indented_headers():
 
 
 def test_select_critical_explosive_is_bonus():
-    # 3 a/c remplissent le budget ; la meilleure d s'ajoute en 4e sans rien évincer.
+    # 3 a/c remplissent le budget ; jusqu'à 3 d s'ajoutent sans rien évincer,
+    # meilleur score d'abord : la plus faible des 4 est écartée.
     plies = [_ply(i, 0) for i in range(41)]
     plies[22], plies[26], plies[30] = _ply(22, 12), _ply(26, 0, second_gap=40), _ply(30, 15)
-    plies[34], plies[38] = _ply(34, 2), _ply(38, 1)
-    explosive = [CriticalPosition(kind="d", ply=plies[34], score=3.0),
-                 CriticalPosition(kind="d", ply=plies[38], score=5.0)]
+    for i in (32, 34, 36, 38):
+        plies[i] = _ply(i, 2)
+    explosive = [CriticalPosition(kind="d", ply=plies[32], score=12.0),
+                 CriticalPosition(kind="d", ply=plies[34], score=11.0),
+                 CriticalPosition(kind="d", ply=plies[36], score=20.0),
+                 CriticalPosition(kind="d", ply=plies[38], score=15.0)]
     plies[26] = _ply(26, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
     selected = select_critical(plies, "white", explosive)
-    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 22), ("c", 26), ("a", 30), ("d", 38)]
+    assert [(c.kind, c.ply.ply) for c in selected] == [
+        ("a", 22), ("c", 26), ("a", 30), ("d", 32), ("d", 36), ("d", 38)]
 
 
 def test_select_critical_empty_without_fallback():

@@ -60,7 +60,7 @@
 | 01 | `01_fiabilite.md` — trace dispatcher, logger kernel, réponse perdue livrée au message suivant | ✅ (non commité, 327 verts) |
 | 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ✅ (non commité, 334 verts) |
 | 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ✅ (non commité, 336 verts) |
-| 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ⏳ |
+| 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ✅ (non commité, 337 verts) |
 | 05 | `05_legende.md` — explication en légende sous chaque image | ⏳ |
 | 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ⏳ |
 
@@ -86,4 +86,9 @@ Adaptation : `is_mate` exige que le camp mat soit l'adversaire (une PV pourrait 
 Mats ajoutés : heuristiques « zone du roi contrôlée uniquement par les pièces du motif » ; seul `triangleMate` est testé.
 Tronçon 03 fait : `analysis.assign_motifs` (PV coupée par `clear_advantage`, appelée dans `analyze` avant `find_explosive`), clé `motifs` dans `plies_json`, `LABELS` motifs + « Mats », `hanging` = « Gain de matériel », `MATE_LABELS` (noms des mats, hors classements), `Trial.mate`, `_mean` = thèmes à ≥ 1 épreuve, ligne `motifs :` du bloc enrichi.
 Vérifié sur 2 parties réelles (run live sprint 28) : motifs non vides (fork, pin, sacrifice, mate…).
-Prochaine étape : tronçon 04 (`04_coup_piegeant.md`), puis 05, puis run live 06 par Nico.
+Tronçon 04 fait : `difficulty.reply_distribution` (top Maia jusqu'à 90 % cumulés, 6 max, p brutes), `explosive` réécrit (E = Σ p renormalisée × win Nico, admissible perte ≤ 15 + E ≥ E(meilleur) + 10 + avantage clair sur la réponse la plus probable, score = gain, toute la partie, sans budget, Maia absent → WARNING + aucune occasion), `select_critical` ≤ 3 d en bonus, router (réponse humaine la plus probable, espérance, lignes « si X (p %) »), consigne d mise à jour.
+Champs `trap` / `volatility` supprimés de `ExplosiveMove` ; ajout `expected`, `best_expected`, `p` dans `replies`. Probabilité affichée = p brute Maia.
+Écart : `difficulty._load` n'appelait pas `net.eval()` (dropout actif → probabilités Maia aléatoires d'un appel à l'autre, difficulté du sprint 28 comprise) ; corrigé.
+Tests supprimés : `test_explosive_smith_morra_nd5`, `test_explosive_early_queen_nf6`, `test_explosive_excludes_first_pass_best` (Nd5 / Nf6 ne sont plus des occasions selon Maia ; l'exclusion ne se teste plus sans occasion réelle).
+Mesure : 0 occasion sur les 2 premières parties de `run_live_parties.txt` [n=2] (gains tous < 10) ; passe explosive 57 s et 37 s [n=2].
+Prochaine étape : tronçon 05 (`05_legende.md`), puis run live 06 par Nico.
