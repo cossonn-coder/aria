@@ -238,3 +238,57 @@ def test_normalize_images_result_is_images_text():
     out = kernel._normalize({"status": "success", "data": {"text": "t", "images": images}})
 
     assert out == {"type": "images_text", "images": images, "text": "t"}
+
+
+def _run_with_llm_text(monkeypatch, tmp_path, llm_text):
+    """Deux positions critiques, LLM factice rendant llm_text ; deux fiches → bloc Progression."""
+    plies = [_ply(1, 17, "Ng4+", "Bd7", "c8d7"), _ply(3, 19, "a6", "Nf6", "g8f6")]
+    analysis = GameAnalysis(
+        headers={"White": "Ami", "Black": "staroflexeur", "BlackElo": "1307"},
+        nico_color="black", color_source="header", plies=plies,
+        critical=[CriticalPosition(kind="a", ply=p, score=p.loss) for p in plies],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": llm_text}
+    bridge = MagicMock()
+    current = "chess_game_" + hashlib.sha256(b"a7a6a7a6").hexdigest()[:16]
+    bridge.load_chess_games.return_value = [_season_game("chess_game_old"), _season_game(current)]
+    return ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "[White \"Ami\"] 1. e4", "metadata": {}}
+    )
+
+
+def test_entries_move_to_captions(monkeypatch, tmp_path):
+    llm = ("Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\n"
+           "Position 2 — Nf6 développait avec tempo.\n\nNiveau : solide. Peu d'erreurs.")
+    result = _run_with_llm_text(monkeypatch, tmp_path, llm)
+
+    caps = [img["caption"] for img in result["images"]]
+    assert caps[0].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
+    assert caps[0].endswith("\nLe fou devait parer l'échec.")
+    assert caps[1].endswith("\nNf6 développait avec tempo.")
+    assert "Position 1 —" not in result["text"] and "Position 2 —" not in result["text"]
+    assert result["text"].startswith("Partie contre Ami\n\nNiveau : solide. Peu d'erreurs.\n\n🎮 Progression")
+
+
+def test_missing_entry_keeps_current_behavior(monkeypatch, tmp_path):
+    llm = "Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\nNiveau : solide."
+    result = _run_with_llm_text(monkeypatch, tmp_path, llm)
+
+    assert result["text"].startswith(llm + "\n\n🎮 Progression")
+    assert "\n" not in result["images"][0]["caption"]
+    assert "\n" not in result["images"][1]["caption"]
+
+
+def test_long_entry_cut_at_last_sentence(monkeypatch, tmp_path):
+    long_entry = "Une phrase d'explication assez longue pour remplir. " * 30  # ~1500 car.
+    llm = f"Partie contre Ami\nPosition 1 — {long_entry}\nPosition 2 — Court.\nNiveau : solide."
+    result = _run_with_llm_text(monkeypatch, tmp_path, llm)
+
+    caption = result["images"][0]["caption"]
+    assert len(caption) <= 1024
+    assert caption.endswith("remplir. …")

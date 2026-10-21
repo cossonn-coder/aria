@@ -381,6 +381,62 @@ def _caption(index: int, critical, plies: list) -> str:
             f"meilleur {_move_label(p.move_number, p.color, p.best_san)}")
 
 
+# Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
+# une ligne « Niveau : » clôt la dernière entrée.
+_ENTRY_RE = re.compile(r"^\**Position (\d+)\**\s*[—–-]\**\s*", re.MULTILINE)
+_LEVEL_RE = re.compile(r"^\**Niveau\b", re.MULTILINE)
+_SENTENCE_END_RE = re.compile(r"[.!?…](?=\s|$)")
+
+# Limite Telegram d'une légende de photo.
+_CAPTION_MAX = 1024
+
+
+def _fit_entry(entry: str, budget: int) -> str:
+    """Entrée ≤ budget : coupée à la dernière phrase complète qui tient, puis « … »."""
+    if len(entry) <= budget:
+        return entry
+    head = entry[:budget - 2]
+    ends = [m.end() for m in _SENTENCE_END_RE.finditer(head)]
+    return (head[:ends[-1]] if ends else head).rstrip() + " …"
+
+
+def _split_entries(text: str, images: list) -> tuple:
+    """
+    Déplace l'entrée « Position N » du LLM dans la légende de l'image N.
+
+    Retourne (texte restant, images). Si une entrée 1…len(images) manque,
+    texte et images sont rendus tels quels (pas de découpage partiel).
+    """
+    marks = list(_ENTRY_RE.finditer(text))
+    found = {int(m.group(1)): m for m in marks}
+    if not images or any(i not in found for i in range(1, len(images) + 1)):
+        log.info("chess_caption_split FALLBACK images=%d entries=%s",
+                 len(images), sorted(found))
+        return text, images
+
+    # Fin d'une entrée : début de l'entrée suivante, ligne « Niveau », ou fin du texte.
+    bounds = [m.start() for m in marks] + [m.start() for m in _LEVEL_RE.finditer(text)]
+    rest, cursor, captioned = [], 0, []
+    for m in marks:
+        n = int(m.group(1))
+        if n > len(images):
+            continue
+        end = min([b for b in bounds if b > m.start()] + [len(text)])
+        rest.append(text[cursor:m.start()])
+        cursor = end
+        entry = text[m.end():end].strip()
+        factual = images[n - 1]["caption"]
+        captioned.append((n, factual + "\n" + _fit_entry(entry, _CAPTION_MAX - len(factual) - 1)))
+    rest.append(text[cursor:])
+
+    new_images = [dict(img) for img in images]
+    for n, caption in captioned:
+        new_images[n - 1]["caption"] = caption
+    remaining = re.sub(r"\n{3,}", "\n\n", "".join(rest)).strip()
+    log.info("chess_caption_split OK images=%d", len(images))
+    return remaining, new_images
+
+
 class ChessExecutionRouter(BaseRouter):
     """
     Effecteur « coach d'échecs » du pipeline d'exécution.
@@ -458,7 +514,8 @@ class ChessExecutionRouter(BaseRouter):
         })
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
-        text = _to_english(result["text"])
+        # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
+        text, images = _split_entries(_to_english(result["text"]), images)
         if block:
             text += "\n\n" + block
         return {"text": text, "images": images}
@@ -514,7 +571,9 @@ class ChessExecutionRouter(BaseRouter):
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
             f"exacte « {anchor} » ; puis une entrée par position, dans l'ordre Position 1, "
             "2, 3 (Nico voit les diagrammes du même numéro), de 1 à 3 phrases : le coup, "
-            "l'idée, le chiffre clé ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
+            "l'idée, le chiffre clé ; chaque entrée commence en début de ligne par "
+            "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
+            "(elle est déjà sous le diagramme) ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
             "passif, solide ou brillant), justifiée par la ligne « Niveau (données) » et, si "
             "présente, par la ligne « Historique (données) ». Rien "
             "d'autre : pas de section « ce qui se passe » ni « pourquoi ». Utilise "

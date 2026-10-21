@@ -61,7 +61,7 @@
 | 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ✅ (non commité, 334 verts) |
 | 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ✅ (non commité, 336 verts) |
 | 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ✅ (non commité, 337 verts) |
-| 05 | `05_legende.md` — explication en légende sous chaque image | ⏳ |
+| 05 | `05_legende.md` — explication en légende sous chaque image | ✅ (non commité, 340 verts) |
 | 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ⏳ |
 
 ## Dettes
@@ -91,4 +91,6 @@ Champs `trap` / `volatility` supprimés de `ExplosiveMove` ; ajout `expected`, `
 Écart : `difficulty._load` n'appelait pas `net.eval()` (dropout actif → probabilités Maia aléatoires d'un appel à l'autre, difficulté du sprint 28 comprise) ; corrigé.
 Tests supprimés : `test_explosive_smith_morra_nd5`, `test_explosive_early_queen_nf6`, `test_explosive_excludes_first_pass_best` (Nd5 / Nf6 ne sont plus des occasions selon Maia ; l'exclusion ne se teste plus sans occasion réelle).
 Mesure : 0 occasion sur les 2 premières parties de `run_live_parties.txt` [n=2] (gains tous < 10) ; passe explosive 57 s et 37 s [n=2].
-Prochaine étape : tronçon 05 (`05_legende.md`), puis run live 06 par Nico.
+Tronçon 05 fait : `chess_router._split_entries` (après `_to_english`) : entrée « Position N — » (gras Markdown et tirets –/- tolérés) → légende = ligne factuelle + saut de ligne + entrée sans son marqueur ; fin d'entrée = entrée suivante ou ligne « Niveau » ; > 1024 → `_fit_entry` (dernière phrase + « … ») ; une entrée 1…len(images) manquante → repli complet ; `log.info` `chess_caption_split OK/FALLBACK`. Consigne : marqueur en début de ligne, ne pas recopier la ligne factuelle. 3 tests.
+Choix : le marqueur « Position N — » est retiré de l'entrée (la ligne factuelle le porte déjà) ; une entrée « Position K » avec K > nombre d'images reste dans le texte.
+Prochaine étape : run live 06 par Nico.
