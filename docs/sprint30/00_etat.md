@@ -24,7 +24,7 @@
 | # | Kickoff | État |
 |---|---|---|
 | 01 | `01_attente_visible.md` — thread + « écrit… » + message unique (#103), photo en échec sautée (#104) | ✅ |
-| 02 | `02_seuil_hnsw.md` — script ponctuel seuil HNSW + ménage `.drift-*` (#105) | ⏳ |
+| 02 | `02_seuil_hnsw.md` — script ponctuel seuil HNSW + ménage `.drift-*` (#105) | ✅ |
 | 03 | `03_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -37,4 +37,10 @@ Lire `CLAUDE.md`, ce fichier, `audit_fiabilite_analyse.md`, puis le kickoff du p
 Tronçon 01 fait (2026-10-22) : `core/kernel.py` (`asyncio.to_thread` sur classify/dispatch),
 `interfaces/telegram_interface.py` (`_handle_with_waiting` : « écrit… » toutes les 4 s +
 message d'attente unique à 10 s ; photo `images_text` en échec sautée). Tests : 351 verts.
-Prochaine étape : tronçon 02 (`02_seuil_hnsw.md`), via `/sprint-auto sprint 30`.
+Tronçon 02 fait (2026-10-22) : `scripts/mempalace_sync_threshold.py` (garde `aria.service` actif
+si pas de chemin explicite, sauvegarde `chroma.sqlite3.bak-<horodatage>`, `modify` seuil/batch 100,
+réouverture + requête dans un sous-process, contrôle du pickle, suppression des `.drift-*`) +
+`tests/test_mempalace_sync_threshold.py` (palace tmp, 150 entrées : sans le script, pas de pickle
+même après réouverture). **Non lancé sur le palace prod.** Tests : 352 verts.
+Prochaine étape : tronçon 03 (run live Nico) : `sudo systemctl stop aria.service &&
+./venv/bin/python scripts/mempalace_sync_threshold.py && sudo systemctl start aria.service`.
