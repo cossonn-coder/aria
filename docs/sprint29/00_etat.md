@@ -71,7 +71,7 @@
 | 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
 | 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
 | 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : meilleur coup ✅, légende ❌ → phase A''' |
-| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ⏳ |
+| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ✅ (non commité, 347 verts) |
 | 16 | `16_run_live_13.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
 
 ## Dettes
@@ -209,3 +209,7 @@ Prochaine étape : tronçon 14 (run live 12 par Nico).
 Tronçon 14 fait (run live 12) : légende ❌. Prochaine étape : `/conception` sur la légende (audit avant fix).
 Phase A''' : audit `audit_run_live_12.md` écrit ; prochaine étape : arbitrages Q1-Q3 A''' (§Questions ouvertes) puis kickoffs 15+.
 Phase A''' close (OK Nico), kickoffs 15-16 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçon 15), puis run live 13 par Nico (tronçon 16).
+Tronçon 15 fait : `llm_router` étape 1b — `skip_history` → historique non lu (`conversation_history SKIPPED reason=skip_history`), échange toujours écrit ; `chess_router` pose `skip_history: True` sur l'appel REASONING. `_move_fact_items` (calcul par coup partagé) → `_move_facts` (ligne `faits :`) et `_variant_line` (ligne « Variante : » ajoutée sous la ligne factuelle à la création de la légende, survit au FALLBACK). Consigne : idée générale seule, 1 à 3 phrases / 400 car., « de Position 1 à Position N, aucune omise ». Tests : `test_skip_history_skips_load_but_writes_turn`, `test_variant_line_capture_and_check`, 4 tests router ajustés.
+Choix : sorte b (occasion manquée après erreur adverse, absente du tableau du kickoff) traitée comme a (`p.pv_san`).
+Note : consignes e (« montre la variante qui la punit ») et d (variante + « peut dépasser 3 phrases ») inchangées comme prescrit, en tension avec « n'énumère pas les coups » / 3 phrases.
+Prochaine étape : tronçon 16 (run live 13 par Nico).

@@ -124,13 +124,20 @@ class LLMExecutionRouter(BaseRouter):
         # load_conversation_history compte des messages → n = tours × 2.
         # C'est le router qui lit, jamais l'agent (règle inviolable 3).
         conversation_key = str(metadata.get("chat_id", "default"))
-        conversation_history = self.mempalace_bridge.load_conversation_history(
-            conversation_key, n=config.max_history_turns * 2,
-        )
-        log.info(
-            "conversation_history loaded key=%s messages=%d",
-            conversation_key, len(conversation_history),
-        )
+        # Drapeau skip_history (analyse de partie, sprint 29) : les réponses
+        # passées servaient de moule au LLM. L'échange reste écrit en fin de
+        # pipeline pour les questions de suivi.
+        if metadata.get("skip_history"):
+            conversation_history = []
+            log.info("conversation_history SKIPPED reason=skip_history")
+        else:
+            conversation_history = self.mempalace_bridge.load_conversation_history(
+                conversation_key, n=config.max_history_turns * 2,
+            )
+            log.info(
+                "conversation_history loaded key=%s messages=%d",
+                conversation_key, len(conversation_history),
+            )
 
         # ── 2-3. Drapeau skip_intent (photo interrogative, #51) ─────────────
         # Le message enrichi d'une photo ne doit ni résoudre, ni créer, ni

@@ -13,7 +13,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
-from execution.routers.chess_router import ChessExecutionRouter, _move_facts
+from execution.routers.chess_router import ChessExecutionRouter, _move_facts, _variant_line
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -74,17 +74,18 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
     assert "1re ligne exacte « Partie contre Ami »" in delegated["content"]
     assert "Niveau" in delegated["content"]
-    # Tronçon 09 : entrée = idée générale + variante expliquée coup par coup.
+    # Tronçon 15 : entrée = idée générale seule, nombre exact d'entrées, sans historique.
     assert "idée générale de la position" in delegated["content"]
-    assert "variante du meilleur coup" in delegated["content"]
-    assert "1 à 3 phrases" not in delegated["content"]
+    assert "1 à 3 phrases" in delegated["content"]
+    assert "de Position 1 à Position 2, aucune omise" in delegated["content"]
+    assert delegated["metadata"]["skip_history"] is True
+    assert result["images"][0]["caption"].endswith("\nVariante : 17...d6 ; 18.Nf3.")
     assert "axes de travail" not in delegated["content"]
     # Faits calculés depuis le FEN (après 1.e4) : matériel égal, rien d'attaqué.
     assert "  matériel : égal\n  attaquées : aucune" in delegated["content"]
     # Tronçon 13 : faits coup par coup du meilleur coup et état de la position.
     assert "  faits : 17...d6 18.Nf3" in delegated["content"]
     assert "  évaluation : équilibre (50 %)" in delegated["content"]
-    assert "racontée coup par coup avec les faits fournis" in delegated["content"]
     assert "matériel / attaquées / faits. Ne recopie ni ne paraphrase" in delegated["content"]
     assert "idées classiques de cette ouverture" not in delegated["content"]
     write_game.assert_called_once()
@@ -126,7 +127,8 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)"
+        "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)\n"
+        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
     assert "Position 1 (occasion explosive)" in content
@@ -183,7 +185,8 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 8 (blancs) : tournant après 7...h6?, joué 8.e5 (meilleur 8.e5)"
+        "Position 1 — coup 8 (blancs) : tournant après 7...h6?, joué 8.e5 (meilleur 8.e5)\n"
+        "Variante : 8.e5 ; 8...d5 ; 9.exd6 prend pion d5."
     )
     assert "Position 1 (tournant (erreur adverse punie))" in content
     assert "erreur adverse 7...h6 : perte 18 pts (meilleur 7...Be7)" in content
@@ -300,8 +303,9 @@ def test_missing_entry_keeps_current_behavior(monkeypatch, tmp_path):
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
     assert result["text"].startswith(llm + "\n\n🎯 ")
-    assert "\n" not in result["images"][0]["caption"]
-    assert "\n" not in result["images"][1]["caption"]
+    # Repli : légende = ligne factuelle + ligne « Variante : » du code, rien d'autre.
+    assert result["images"][0]["caption"].count("\n") == 1
+    assert result["images"][1]["caption"].endswith("\nVariante : 19...Nf6 attaque pion e4 ; 20.Nf3.")
 
 
 def test_long_entry_cut_at_last_sentence(monkeypatch, tmp_path):
@@ -319,3 +323,15 @@ def test_move_facts_capture_and_numbering():
 
     assert text.startswith("1.e4")
     assert "4.Bxc6 (prend Nc6)" in text
+
+
+def test_variant_line_capture_and_check():
+    """Tronçon 15 : ligne « Variante : » racontée par le code (sorte a, pv_san)."""
+    ply = _ply(7, 4, "Bg4", "Bxf7+", "c4f7")
+    ply.color = "white"
+    ply.fen_before = "rn1qkbnr/ppp2ppp/3p4/4p3/2B1P1b1/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 4"
+    ply.pv_san = ["Bxf7+", "Kxf7", "Ng5+"]
+
+    line = _variant_line(CriticalPosition(kind="a", ply=ply, score=20.0))
+
+    assert line == "Variante : 4.Bxf7+ prend pion f7, échec ; 4...Kxf7 reprend ; 5.Ng5+ échec."

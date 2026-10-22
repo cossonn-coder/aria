@@ -217,11 +217,11 @@ def _attacked_line(fen: str) -> str:
     return "attaquées : " + (" ; ".join(sides) or "aucune")
 
 
-def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
-    """Ligne rejouée depuis `fen`, chaque coup suivi de ses faits observables :
+def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) -> list:
+    """Ligne rejouée depuis `fen` : liste de (libellé du coup, faits observables) —
     prise, échec, mat, roque, promotion, et pièces adverses nouvellement attaquées
-    par la pièce jouée (non défendues ou de valeur supérieure). Le LLM raconte la
-    variante avec ces faits au lieu de les deviner."""
+    par la pièce jouée (non défendues ou de valeur supérieure). Calcul unique partagé
+    par la ligne « faits : » du message enrichi et la ligne « Variante : » des légendes."""
     board = chess.Board(fen)
     parts = []
     recapture_square = None
@@ -262,12 +262,38 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
             ]
             if targets:
                 facts.append("attaque " + ", ".join(targets))
-        label = _move_label(move_number, color, san)
-        parts.append(f"{label} ({', '.join(facts)})" if facts else label)
+        parts.append((_move_label(move_number, color, san), facts))
         if color == "black":
             move_number += 1
         color = "black" if color == "white" else "white"
-    return " ".join(parts)
+    return parts
+
+
+def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
+    """Ligne « faits : » du message enrichi : chaque coup suivi de ses faits entre
+    parenthèses. Le LLM s'appuie sur ces faits au lieu de les deviner."""
+    return " ".join(
+        f"{label} ({', '.join(facts)})" if facts else label
+        for label, facts in _move_fact_items(fen, moves_san, move_number, color)
+    )
+
+
+def _variant_line(critical) -> str:
+    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15) : coups
+    séparés par « ; », chacun suivi de ses faits. Vide si la ligne n'a aucun coup."""
+    p = critical.ply
+    if critical.kind in ("c", "e"):
+        moves = critical.line_san
+    elif critical.kind == "d":
+        moves = [critical.explosive.san] + critical.explosive.trap_line_san
+    else:
+        moves = p.pv_san
+    if not moves:
+        return ""
+    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
+    return "Variante : " + " ; ".join(
+        f"{label} {', '.join(facts)}" if facts else label for label, facts in items
+    ) + "."
 
 
 def _evaluation(win: float) -> str:
@@ -553,7 +579,13 @@ class ChessExecutionRouter(BaseRouter):
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci)
-            images.append({"path": str(out_path), "caption": _caption(i, critical, analysis.plies)})
+            # La variante est écrite sous la ligne factuelle dès la création de la
+            # légende : elle survit au repli chess_caption_split FALLBACK.
+            caption = _caption(i, critical, analysis.plies)
+            variant = _variant_line(critical)
+            if variant:
+                caption += "\n" + variant
+            images.append({"path": str(out_path), "caption": caption})
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
         # Hash des coups seuls (pas des en-têtes) : le même PGN recopié sans
@@ -589,7 +621,10 @@ class ChessExecutionRouter(BaseRouter):
             "content" : enriched,
             # Pas de skip_intent (Q4) : la partie doit aller en mémoire épisodique,
             # sous un intent imposé (le namer répondait « aucun », audit 05).
-            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME},
+            # skip_history (tronçon 15) : les analyses passées en historique servaient
+            # de moule au LLM ; l'échange reste écrit pour les questions de suivi.
+            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME,
+                         "skip_history": True},
         })
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
@@ -652,15 +687,15 @@ class ChessExecutionRouter(BaseRouter):
 
         elo = analysis.headers.get("WhiteElo" if color == "white" else "BlackElo", "")
         player = f"joueur d'environ {elo} Elo" if elo and elo != "?" else "joueur amateur"
+        n = len(analysis.critical)
         consigne = (
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
-            f"exacte « {anchor} » ; puis une entrée par position, dans l'ordre Position 1, "
-            "2, 3 (Nico voit les diagrammes du même numéro), jusqu'à 5 phrases et 900 "
-            "caractères : d'abord l'idée générale de la position en une phrase (plan, pièce "
-            "faible, roi exposé…) d'après la ligne « évaluation », les motifs et le but du "
-            "meilleur coup (d'après ses faits) ; puis la variante du meilleur coup (ligne "
-            "« ligne : », ou la variante indiquée par les consignes ci-dessous) racontée coup "
-            "par coup avec les faits fournis (lignes « faits : ») ; au plus un chiffre "
+            f"exacte « {anchor} » ; puis une entrée pour chacune des {n} positions, de "
+            f"Position 1 à Position {n}, aucune omise (Nico voit les diagrammes du même "
+            "numéro), 1 à 3 phrases et 400 caractères : l'idée générale de la position "
+            "seulement (plan, pièce faible, roi exposé…) d'après la ligne « évaluation », les "
+            "motifs et le but du meilleur coup (d'après ses faits) ; n'énumère pas les coups "
+            "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
             "(elle est déjà sous le diagramme) ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
