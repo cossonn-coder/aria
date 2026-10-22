@@ -150,12 +150,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 29 clos (tag `sprint-29`, coach échecs : motifs tactiques Lichess + classements par motif,
-occasions explosives Maia, ligne 🎯 précision / meilleur / pire coup, légende sous chaque image
-avec variante écrite par le code ; fiabilité : trace dispatcher, réponse perdue livrée, arrêt rapide).
-Prochain : **sprint 30**, cible à arbitrer.
-Kickoff : `docs/sprint30/context_kickoff_sprint_30.md`.
-Prochaine étape : `/conception sprint 30`.
+Sprint 30 clos (tag `sprint-30`, fiabilité de l'analyse : traitement dans un thread,
+« écrit… » + un seul message ⏳, photo en échec sautée ; le script seuil HNSW #105 a dégradé
+le palace prod au live → annulé, palace reconstruit en mpnet, voir `docs/sprint30/00_etat.md`).
+Prochain : **sprint 31**, cible à arbitrer.
+Kickoff : `docs/sprint31/context_kickoff_sprint_31.md`.
+Prochaine étape : `/conception sprint 31`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
