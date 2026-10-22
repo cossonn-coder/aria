@@ -42,7 +42,7 @@ def _load(models_dir: str):
 
 
 def _probabilities(positions: list, elo: int, models_dir: str) -> list:
-    """P(meilleur coup) pour chaque (fen, best_uci), en une passe batchée."""
+    """P(coup) pour chaque couple (fen, uci), en une passe batchée."""
     import chess
     import torch
     from maia2 import inference
@@ -72,15 +72,21 @@ def difficulty_from_p(p: float, elo: int) -> int:
 
 
 def assign_difficulty(plies: list, nico_color: str, nico_elo: int | None, models_dir: str) -> None:
-    """Remplit p.difficulty des coups de Nico après le coup 10 (les autres restent None)."""
+    """Remplit p.difficulty et p.played_p des coups de Nico après le coup 10 (les autres restent None).
+
+    played_p = P(coup joué) (sprint 29, tronçon 12), calculée dans la même passe batchée.
+    """
     started = time.monotonic()
     elo = nico_elo or DEFAULT_ELO
     targets = [p for p in plies if p.color == nico_color and p.move_number > _OPENING_MOVES]
     if not targets:
         return
-    probs = _probabilities([(p.fen_before, p.best_uci) for p in targets], elo, models_dir)
-    for p, prob in zip(targets, probs):
+    # Une passe : n couples (fen, meilleur coup) puis n couples (fen, coup joué).
+    probs = _probabilities([(p.fen_before, p.best_uci) for p in targets]
+                           + [(p.fen_before, p.uci) for p in targets], elo, models_dir)
+    for p, prob, played in zip(targets, probs, probs[len(targets):]):
         p.difficulty = difficulty_from_p(prob, elo)
+        p.played_p = played
     log.info("maia_difficulty OK n=%d duration=%.1fs", len(targets), time.monotonic() - started)
 
 

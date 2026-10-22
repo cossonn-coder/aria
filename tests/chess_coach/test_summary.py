@@ -78,4 +78,19 @@ def test_accuracy_lichess_and_worst_move():
     assert s["accuracy"] < arithmetic - 15
     assert s["worst_move"] == "9.Bb2"
     assert (s["worst_win_before"], s["worst_win_after"]) == (90.0, 10.0)
-    assert s["best_move"] is None and s["best_defense"] is None
+    assert s["best_move"] is None and s["best_move_p"] is None
+
+
+def test_best_move_is_rarest_played_move():
+    # Trois coups de Nico : banal (p 0,6), rare et bon (p 0,1, perte 1), plus rare mais perdant (p 0,05, perte 8).
+    plies = []
+    for i, (played_p, loss) in enumerate([(0.6, 0.0), (0.1, 1.0), (0.05, 8.0)]):
+        nico = _ply(2 * i, 11 + i, "white", f"N{'abc'[i]}3", "b1c3", "correct", loss, 50.0, None)
+        nico.played_p = played_p
+        plies += [nico, _ply(2 * i + 1, 11 + i, "black", "a6", "a7a6", "correct", 0.0, 50.0, None)]
+    analysis = GameAnalysis(headers={}, nico_color="white", color_source="header", plies=plies)
+
+    s = summarize(analysis)
+
+    assert s["best_move"] == "12.Nb3"
+    assert s["best_move_p"] == 0.1

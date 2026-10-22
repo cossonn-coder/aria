@@ -239,10 +239,8 @@ def _moves_line(summary: dict) -> str:
     if summary["accuracy"] is not None:
         parts.append(f"Précision {summary['accuracy']:.0f} %")
     if summary["best_move"]:
-        detail = f"défense {summary['best_defense']} : {summary['best_defense_p'] * 100:.0f} % de chances"
-        if summary["best_reply_played"]:
-            detail += f", joué {summary['best_reply_played']}"
-        parts.append(f"meilleur coup {summary['best_move']} ({detail})")
+        parts.append(f"meilleur coup {summary['best_move']} "
+                     f"(trouvé par {summary['best_move_p'] * 100:.0f} % des joueurs de ton niveau)")
     if summary["worst_move"]:
         parts.append(f"pire coup {summary['worst_move']} "
                      f"({summary['worst_win_before']:.0f} % → {summary['worst_win_after']:.0f} %)")

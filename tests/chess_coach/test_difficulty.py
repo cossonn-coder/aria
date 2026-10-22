@@ -36,9 +36,11 @@ def test_assign_difficulty_formula_and_filter(monkeypatch):
 
     difficulty.assign_difficulty(plies, "white", 1307, "unused")
 
-    assert len(seen) == 1
-    assert plies[1].difficulty == 1307
+    # Une seule passe : (fen, meilleur coup) puis (fen, coup joué) (sprint 29, tronçon 12).
+    assert len(seen) == 2
+    assert plies[1].difficulty == 1307 and plies[1].played_p == 0.5
     assert plies[0].difficulty is None and plies[2].difficulty is None
+    assert plies[0].played_p is None and plies[2].played_p is None
 
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(config.maia_models_dir, "rapid_model.pt")),

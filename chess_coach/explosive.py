@@ -2,7 +2,7 @@
 #
 # Recherche des « occasions explosives » (sprint 27, tronçon 01, dette #87 ;
 # coup piégeant face à un humain : sprint 29, tronçon 04 ; règle hybride :
-# sprint 29, tronçon 07 ; coup qui pose problème : sprint 29, tronçon 08).
+# sprint 29, tronçon 07).
 #
 # Sorte d de position critique : avant un coup de Nico, un coup tenait la
 # fenêtre de tolérance et, soit était une idée risquée au sens du sprint 28
@@ -361,102 +361,3 @@ def find_explosive(plies: list, nico_color: str, engine_path: str,
         len(eligible), len(eligible), len(found), time.monotonic() - started,
     )
     return found
-
-
-# ── Coup qui pose problème (sprint 29, tronçon 08) ──────────────────────────
-# Le « meilleur coup » de Nico : celui qui provoque des fautes humaines et donne
-# le plus de potentiel de conversion. Maia (réponses probables) ET Stockfish
-# (meilleure défense, valeur de chaque réponse), jamais Maia seule.
-# Coup de Nico éligible : perte ≤ 5, coup adverse précédent sans erreur (< 15).
-_BEST_LOSS_MAX = 5
-_PREV_ERROR = 15
-# Faute : réponse qui donne à Nico au moins 5 pts de plus que la meilleure défense.
-_FAULT_MIN = 5
-# Maia hésitante : aucune réponse à 15 % ou plus → on mesure sur le top 5 Stockfish.
-_HESITANT_P = 0.15
-# Bonus si l'adversaire a réellement fauté (perte ≥ 10) au coup suivant.
-_BONUS_LOSS = 10
-_BONUS = 1.5
-
-
-@dataclass
-class BestMove:
-    """Coup qui pose problème : coup de Nico, meilleure défense et réponse jouée."""
-    ply: object
-    defense_san: str
-    # Probabilité Maia (brute) de la meilleure défense, 0 hors des réponses Maia gardées.
-    defense_p: float
-    reply_played: str | None
-    score: float
-
-
-def _problem_score(maia: list, stockfish: list, best_win: float) -> float:
-    """Score d'un coup à partir des réponses évaluées (% de gain de Nico).
-
-    maia = [(p brute, win)] réponses Maia ; stockfish = [win] top Stockfish ;
-    best_win = win après la meilleure défense. Seules les fautes comptent.
-    Maia hésitante : part des réponses Stockfish fautives × leur écart moyen.
-    """
-    if max(p for p, _ in maia) < _HESITANT_P:
-        gaps = [win - best_win for win in stockfish if win - best_win >= _FAULT_MIN]
-        return len(gaps) / len(stockfish) * sum(gaps) / len(gaps) if gaps else 0.0
-    return sum(p * (win - best_win) for p, win in maia if win - best_win >= _FAULT_MIN)
-
-
-def find_best_move(plies: list, nico_color: str, engine_path: str,
-                   opponent_elo: int | None, models_dir: str | None) -> BestMove | None:
-    """Coup de Nico au plus fort score de fautes provoquées, ou None.
-
-    Maia indisponible → None (le WARNING est déjà émis par find_explosive).
-    Une seule passe Maia batchée sur toutes les positions éligibles.
-    """
-    started = time.monotonic()
-    if models_dir is None:
-        return None
-    try:
-        _load(models_dir)
-    except Exception:
-        return None
-    elo = opponent_elo or DEFAULT_ELO
-
-    eligible = []
-    for p in plies:
-        if p.color != nico_color or p.loss > _BEST_LOSS_MAX:
-            continue
-        if p.ply > 0 and plies[p.ply - 1].loss >= _PREV_ERROR:
-            continue
-        after = chess.Board(p.fen_before)
-        after.push(chess.Move.from_uci(p.uci))
-        if not after.is_game_over():
-            eligible.append((p, after))
-    if not eligible:
-        return None
-    distributions = reply_distribution([after.fen() for _, after in eligible], elo, models_dir)
-
-    kept = None
-    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
-        engine.configure(ENGINE_OPTIONS)
-        for (p, after), distribution in zip(eligible, distributions):
-            hesitant = max(prob for _, prob in distribution) < _HESITANT_P
-            top = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), multipv=5 if hesitant else 3)
-            stockfish = [100 - _win_of(info) for info in top]
-            best_win = stockfish[0]
-            replies, _ = _human_replies(engine, after, distribution)
-            score = _problem_score([(r["p"], r["win"]) for r in replies], stockfish, best_win)
-            following = plies[p.ply + 1] if p.ply + 1 < len(plies) else None
-            if following is not None and following.loss >= _BONUS_LOSS:
-                score *= _BONUS
-            if score > 0 and (kept is None or score > kept.score):
-                defense = top[0]["pv"][0]
-                kept = BestMove(
-                    ply=p, defense_san=after.san(defense),
-                    defense_p=dict(distribution).get(defense.uci(), 0.0),
-                    reply_played=following.san if following else None, score=score,
-                )
-    if kept is not None:
-        log.info("chess_best_move OK move=%d%s%s score=%.1f duration=%.1fs",
-                 kept.ply.move_number, "." if kept.ply.color == "white" else "...", kept.ply.san,
-                 kept.score, time.monotonic() - started)
-    else:
-        log.info("chess_best_move OK move=none duration=%.1fs", time.monotonic() - started)
-    return kept

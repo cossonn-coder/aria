@@ -158,12 +158,12 @@ def summarize(analysis: GameAnalysis) -> dict:
     summary["worst_win_before"] = round(worst.win_before, 1) if worst else None
     summary["worst_win_after"] = round(worst.win_after, 1) if worst else None
 
-    # Meilleur coup (« coup qui pose problème », chess_coach.explosive.find_best_move).
-    best = analysis.best_move
-    summary["best_move"] = _label(best.ply) if best else None
-    summary["best_defense"] = best.defense_san if best else None
-    summary["best_defense_p"] = round(best.defense_p, 3) if best else None
-    summary["best_reply_played"] = best.reply_played if best else None
+    # Meilleur coup = coup le plus rare (sprint 29, tronçon 12) : parmi les coups
+    # de Nico de perte ≤ 2 dotés d'une probabilité Maia, le moins probable.
+    rare = [p for p in nico if p.played_p is not None and p.loss <= 2]
+    best = min(rare, key=lambda p: p.played_p, default=None)
+    summary["best_move"] = _label(best) if best else None
+    summary["best_move_p"] = round(best.played_p, 3) if best else None
 
     # % de gain de Nico avant chacun de ses coups.
     wins = [p.win_before for p in nico]

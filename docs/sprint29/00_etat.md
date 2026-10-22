@@ -68,7 +68,7 @@
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
-| 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ⏳ |
+| 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
 | 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ⏳ |
 | 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
 
@@ -171,3 +171,5 @@ Note : la consigne d garde « Cette entrée peut dépasser 3 phrases » (laissé
 Tronçon 10 fait : `bot.main` après `telegram.start()` (retour de `run_polling`) → `log.info("ARIA arrêt")`, `logging.shutdown()`, `os._exit(0)` ; test `tests/test_bot.py` (kernel / interface simulés, `configure_root` neutralisé à l'import, `logging.shutdown` et `os._exit` monkeypatchés).
 Prochaine étape : tronçon 11 (run live Nico), dont `systemctl restart` < 10 s.
 Phase A'' close (OK Nico), kickoffs 12-14 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 12 → 13), puis run live 12 par Nico (tronçon 14).
+Tronçon 12 fait : `PlyAnalysis.played_p` rempli par `assign_difficulty` (même passe batchée : n couples (fen, meilleur coup) + n couples (fen, coup joué)) ; `summary` : `best_move` = coup de Nico de perte ≤ 2 au plus faible `played_p`, clé `best_move_p` (3 décimales) ; router : « meilleur coup X (trouvé par N % des joueurs de ton niveau) ». Supprimés : `find_best_move`, `_problem_score`, `BestMove`, `GameAnalysis.best_move`, clés `best_defense` / `best_defense_p` / `best_reply_played`, test `test_problem_score_counts_human_faults`. Test ajouté `test_best_move_is_rarest_played_move` ; `test_assign_difficulty_formula_and_filter` adapté (2 couples par coup, `played_p`).
+Prochaine étape : tronçon 13 (légende par faits).
