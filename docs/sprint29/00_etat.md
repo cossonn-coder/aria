@@ -69,7 +69,7 @@
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
 | 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
-| 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ⏳ |
+| 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
 | 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
 
 ## Dettes
@@ -173,3 +173,7 @@ Prochaine étape : tronçon 11 (run live Nico), dont `systemctl restart` < 10 s.
 Phase A'' close (OK Nico), kickoffs 12-14 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 12 → 13), puis run live 12 par Nico (tronçon 14).
 Tronçon 12 fait : `PlyAnalysis.played_p` rempli par `assign_difficulty` (même passe batchée : n couples (fen, meilleur coup) + n couples (fen, coup joué)) ; `summary` : `best_move` = coup de Nico de perte ≤ 2 au plus faible `played_p`, clé `best_move_p` (3 décimales) ; router : « meilleur coup X (trouvé par N % des joueurs de ton niveau) ». Supprimés : `find_best_move`, `_problem_score`, `BestMove`, `GameAnalysis.best_move`, clés `best_defense` / `best_defense_p` / `best_reply_played`, test `test_problem_score_counts_human_faults`. Test ajouté `test_best_move_is_rarest_played_move` ; `test_assign_difficulty_formula_and_filter` adapté (2 couples par coup, `played_p`).
 Prochaine étape : tronçon 13 (légende par faits).
+Tronçon 13 fait : `chess_router._move_facts(fen, moves_san, move_number, color)` (rejoue la ligne : roque, prend X / reprend, promotion, échec / mat, attaque des pièces adverses nouvellement attaquées non défendues ou de valeur supérieure) ; lignes `  faits :` sous `ligne :` (toutes sortes), sous la variante c / e et sous la variante d (depuis la position après le coup explosif) ; `_evaluation` → `  évaluation : avantage Nico / équilibre / avantage adverse (N %)` depuis `p.win_before` ; consigne : idée générale d'après évaluation + motifs + but du meilleur coup, variante racontée avec les faits, interdit étendu aux faits, interdit de paraphraser « matériel égal » / « aucune attaquée ». Test `test_move_facts_capture_and_numbering`.
+Choix : roi attaquant compté valeur 100 (n'attaque utilement qu'une pièce non défendue) ; « reprend » = prise sur la case de la prise précédente de la ligne ; coup noir numéroté « 14...O-O » comme l'exemple du kickoff (≠ `_format_line`).
+Écart : fixtures de `test_chess_router.py` illégales (Bd7 / Qh4 après 1.e4) → `d6` et FEN propre au test explosif (assertion « pièces : » adaptée).
+Prochaine étape : tronçon 14 (run live 12 par Nico).

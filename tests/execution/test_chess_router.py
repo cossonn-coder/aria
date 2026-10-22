@@ -7,11 +7,13 @@ import hashlib
 import json
 from unittest.mock import MagicMock
 
+import chess
+
 import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
-from execution.routers.chess_router import ChessExecutionRouter
+from execution.routers.chess_router import ChessExecutionRouter, _move_facts
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -34,7 +36,7 @@ def _season_game(doc_id):
 
 
 def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tmp_path):
-    plies = [_ply(1, 17, "Ng4+", "Bd7", "c8d7"), _ply(3, 19, "a6", "Nf6", "g8f6")]
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6"), _ply(3, 19, "a6", "Nf6", "g8f6")]
     analysis = GameAnalysis(
         headers={"White": "Ami", "Black": "staroflexeur", "BlackElo": "1307"},
         nico_color="black", color_source="header", plies=plies,
@@ -79,6 +81,11 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert "axes de travail" not in delegated["content"]
     # Faits calculés depuis le FEN (après 1.e4) : matériel égal, rien d'attaqué.
     assert "  matériel : égal\n  attaquées : aucune" in delegated["content"]
+    # Tronçon 13 : faits coup par coup du meilleur coup et état de la position.
+    assert "  faits : 17...d6 18.Nf3" in delegated["content"]
+    assert "  évaluation : équilibre (50 %)" in delegated["content"]
+    assert "racontée coup par coup avec les faits fournis" in delegated["content"]
+    assert "matériel / attaquées / faits. Ne recopie ni ne paraphrase" in delegated["content"]
     assert "idées classiques de cette ouverture" not in delegated["content"]
     write_game.assert_called_once()
     assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"
@@ -87,6 +94,9 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
 def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     # Sorte d construite à la main : 4...Nf6 joué, 4...Qh4!? explosif.
     ply = _ply(7, 4, "Nf6", "Nc6", "b8c6")
+    # Position où 4...Qh4 et 5.Nxh4 sont légaux (les faits rejouent la ligne).
+    ply.fen_before = "rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    ply.pv_san = ["Nc6", "Bb5"]
     explosive = ExplosiveMove(
         san="Qh4", uci="d8h4", loss=4.0, win_after=46.0, pv_san=["Qh4", "Nxh4"],
         sacrifice=9, forcing=["threat"], trap_reply_san="Nxh4",
@@ -124,11 +134,12 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     assert "réponse humaine la plus probable : Nxh4 (62 %)" in content
     assert "espérance face à un humain : Nico 58 % (meilleur coup : 46 %)" in content
     assert "variante : 5.Nxh4 e5 (avance de développement)" in content
+    assert "faits : 5.Nxh4 (prend Qh4) 5...e5" in content
     assert "fin de variante : matériel : Nico −9, % de gain Nico 75 %" in content
     assert "coût" not in content.split("[Consigne")[0]
     assert "si Nxh4 (62 %) : 5.Nxh4, 62 % pour Nico" in content
     assert "si d3 (20 %) : 5.d3 Nc6, 47 % pour Nico" in content
-    assert ("pièces : blancs Ke1 Qd1 Ra1 Rh1 Bc1 Bf1 Nb1 Ng1, pions a2 b2 c2 d2 f2 g2 h2 e4 ; "
+    assert ("pièces : blancs Ke1 Qd1 Ra1 Rh1 Bc1 Bf1 Nb1 Nf3, pions a2 b2 c2 d2 f2 g2 h2 e4 ; "
             "noirs Ke8 Qd8") in content
     assert "Notation anglaise : N, B, R, Q, K" in content
     assert "ouverture jouée : Scotch Gambit." in content
@@ -250,7 +261,7 @@ def test_normalize_images_result_is_images_text():
 
 def _run_with_llm_text(monkeypatch, tmp_path, llm_text):
     """Deux positions critiques, LLM factice rendant llm_text ; deux fiches → bloc Progression."""
-    plies = [_ply(1, 17, "Ng4+", "Bd7", "c8d7"), _ply(3, 19, "a6", "Nf6", "g8f6")]
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6"), _ply(3, 19, "a6", "Nf6", "g8f6")]
     analysis = GameAnalysis(
         headers={"White": "Ami", "Black": "staroflexeur", "BlackElo": "1307"},
         nico_color="black", color_source="header", plies=plies,
@@ -301,3 +312,10 @@ def test_long_entry_cut_at_last_sentence(monkeypatch, tmp_path):
     caption = result["images"][0]["caption"]
     assert len(caption) <= 1024
     assert caption.endswith("remplir. …")
+
+
+def test_move_facts_capture_and_numbering():
+    text = _move_facts(chess.STARTING_FEN, ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"], 1, "white")
+
+    assert text.startswith("1.e4")
+    assert "4.Bxc6 (prend Nc6)" in text

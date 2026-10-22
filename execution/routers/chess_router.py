@@ -217,6 +217,68 @@ def _attacked_line(fen: str) -> str:
     return "attaquées : " + (" ; ".join(sides) or "aucune")
 
 
+def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
+    """Ligne rejouée depuis `fen`, chaque coup suivi de ses faits observables :
+    prise, échec, mat, roque, promotion, et pièces adverses nouvellement attaquées
+    par la pièce jouée (non défendues ou de valeur supérieure). Le LLM raconte la
+    variante avec ces faits au lieu de les deviner."""
+    board = chess.Board(fen)
+    parts = []
+    recapture_square = None
+    for san in moves_san:
+        move = board.parse_san(san)
+        mover = board.turn
+        castling = board.is_castling(move)
+        facts = []
+        if castling:
+            facts.append("roque")
+        elif board.is_capture(move):
+            # Reprise : prise sur la case où l'adversaire vient de prendre.
+            if move.to_square == recapture_square:
+                facts.append("reprend")
+            else:
+                captured = move.to_square
+                if board.is_en_passant(move):
+                    captured += -8 if mover == chess.WHITE else 8
+                facts.append(f"prend {_square_label(board, captured)}")
+        recapture_square = move.to_square if board.is_capture(move) else None
+        if move.promotion:
+            facts.append(f"promotion en {chess.piece_symbol(move.promotion).upper()}")
+        before = chess.SquareSet() if castling else board.attacks(move.from_square)
+        # Le roi n'attaque utilement qu'une pièce non défendue (valeur 0 dans _VALUES).
+        attacker_value = _VALUES[move.promotion or board.piece_type_at(move.from_square)] or 100
+        board.push(move)
+        if board.is_checkmate():
+            facts.append("mat")
+        elif board.is_check():
+            facts.append("échec")
+        if not castling and not board.is_checkmate():
+            targets = [
+                _square_label(board, sq)
+                for sq in board.attacks(move.to_square) & board.occupied_co[not mover]
+                if sq not in before and board.piece_type_at(sq) != chess.KING
+                and (not board.attackers(not mover, sq)
+                     or _VALUES[board.piece_type_at(sq)] > attacker_value)
+            ]
+            if targets:
+                facts.append("attaque " + ", ".join(targets))
+        label = _move_label(move_number, color, san)
+        parts.append(f"{label} ({', '.join(facts)})" if facts else label)
+        if color == "black":
+            move_number += 1
+        color = "black" if color == "white" else "white"
+    return " ".join(parts)
+
+
+def _evaluation(win: float) -> str:
+    """État de la position d'après le % de gain de Nico."""
+    if win >= 60:
+        return "avantage Nico"
+    if win <= 40:
+        return "avantage adverse"
+    return "équilibre"
+
+
 def _to_english(text: str) -> str:
     """Notation française résiduelle du LLM → anglaise (C→N, F→B, T→R, D→Q)."""
     return _FR_PIECE_RE.sub(lambda m: _FR_TO_EN[m.group(1)] + m.group(2), text)
@@ -365,6 +427,9 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     number, color = _reply_start(p)
     lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
                  f"({_EVIDENCE_FR[e.evidence]})")
+    after = chess.Board(p.fen_before)
+    after.push_san(e.san)
+    lines.append(f"  faits : {_move_facts(after.fen(), e.trap_line_san, number, color)}")
     lines.append(f"  fin de variante : {_material_line(e.trap_end_fen, nico_color)}, "
                  f"% de gain Nico {e.trap_end_win:.0f} %")
     lines.append(f"  fin de variante, {_attacked_line(e.trap_end_fen)}")
@@ -563,10 +628,12 @@ class ChessExecutionRouter(BaseRouter):
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
+                f"  faits : {_move_facts(p.fen_before, p.pv_san, p.move_number, p.color)}",
                 f"  étiquettes : {tags}, phase : {_PHASE_FR[p.phase]}",
                 _pieces_line(p.fen_before),
                 f"  {_material_line(p.fen_before, color)}",
                 f"  {_attacked_line(p.fen_before)}",
+                f"  évaluation : {_evaluation(p.win_before)} ({p.win_before:.0f} %)",
             ]
             if p.motifs:
                 lines.append(f"  motifs : {', '.join(_motif_fr(m) for m in p.motifs)}")
@@ -578,6 +645,7 @@ class ChessExecutionRouter(BaseRouter):
             if critical.kind in ("c", "e"):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
+                lines.append(f"  faits : {_move_facts(p.fen_before, critical.line_san, p.move_number, p.color)}")
             if critical.kind == "d":
                 lines += _explosive_lines(p, critical.explosive, color)
         block = "\n".join(lines) + "]"
@@ -589,9 +657,10 @@ class ChessExecutionRouter(BaseRouter):
             f"exacte « {anchor} » ; puis une entrée par position, dans l'ordre Position 1, "
             "2, 3 (Nico voit les diagrammes du même numéro), jusqu'à 5 phrases et 900 "
             "caractères : d'abord l'idée générale de la position en une phrase (plan, pièce "
-            "faible, roi exposé…) d'après les pièces, le matériel, les attaquées et les motifs "
-            "fournis ; puis la variante du meilleur coup (ligne « ligne : », ou la variante "
-            "indiquée par les consignes ci-dessous) expliquée coup par coup ; au plus un chiffre "
+            "faible, roi exposé…) d'après la ligne « évaluation », les motifs et le but du "
+            "meilleur coup (d'après ses faits) ; puis la variante du meilleur coup (ligne "
+            "« ligne : », ou la variante indiquée par les consignes ci-dessous) racontée coup "
+            "par coup avec les faits fournis (lignes « faits : ») ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
             "(elle est déjà sous le diagramme) ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
@@ -601,7 +670,8 @@ class ChessExecutionRouter(BaseRouter):
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
-            "matériel / attaquées. Notation anglaise : N, B, R, Q, K.]"
+            "matériel / attaquées / faits. Ne recopie ni ne paraphrase « matériel égal » "
+            "ou « aucune attaquée ». Notation anglaise : N, B, R, Q, K.]"
         )
         parts = [block, consigne]
         if opening:
