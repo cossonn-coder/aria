@@ -23,7 +23,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_attente_visible.md` — thread + « écrit… » + message unique (#103), photo en échec sautée (#104) | ⏳ |
+| 01 | `01_attente_visible.md` — thread + « écrit… » + message unique (#103), photo en échec sautée (#104) | ✅ |
 | 02 | `02_seuil_hnsw.md` — script ponctuel seuil HNSW + ménage `.drift-*` (#105) | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico) | ⏳ |
 
@@ -34,4 +34,7 @@
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, `audit_fiabilite_analyse.md`, puis le kickoff du premier tronçon ⏳.
-Prochaine étape : `/sprint-auto sprint 30`.
+Tronçon 01 fait (2026-10-22) : `core/kernel.py` (`asyncio.to_thread` sur classify/dispatch),
+`interfaces/telegram_interface.py` (`_handle_with_waiting` : « écrit… » toutes les 4 s +
+message d'attente unique à 10 s ; photo `images_text` en échec sautée). Tests : 351 verts.
+Prochaine étape : tronçon 02 (`02_seuil_hnsw.md`), via `/sprint-auto sprint 30`.
