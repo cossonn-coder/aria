@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : B'' — retours run live 11 figés (OK Nico 2026-10-22), tronçons 12-14 prêts pour `/sprint-auto sprint 29`
+**Phase** : A''' — run live 12 fait (2026-10-22) : meilleur coup ✅, légende ❌ → audit légende à faire (`/conception`)
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -70,7 +70,7 @@
 | 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
 | 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
 | 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
-| 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
+| 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : meilleur coup ✅, légende ❌ → phase A''' |
 
 ## Dettes
 
@@ -106,6 +106,22 @@ Audit : `audit_retours_run_live.md`. Quatre sujets, tronçons 07+ à concevoir :
   27.Qe5 seul plausible. « 0 % de chances » sur la défense 2 fois / 4 (défense hors réponses Maia gardées).
 - Pire coup : cohérent ✅.
 - Démarrage : ~15 s d'imports avant « ARIA démarrage », prêt en ~23 s [n=1].
+
+## Résultats run live 12 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code des tronçons 12-13 (commit 16:29, service relancé 16:33).
+- Meilleur coup ✅ 4/4 : 29.Nc5+ (15 %), 19.Nd2 (1 %), 22.Qe5 (8 %), 16...Nd5 (8 %) ; ni reprise ni parade
+  d'échec ; plus de « 0 % de chances » ni de log `chess_best_move`.
+- Légende ❌ 0/4 : aucune variante racontée coup par coup ; chaque entrée = « Position <éval>, <attaquées>. Le
+  meilleur est X, qui <1 fait> et maintient N % de gain. » ; « aucune pièce attaquée » encore 6 fois [sur 22 entrées],
+  « matériel égal » disparu ; « maintient 28 % de gain » en position désavantageuse.
+- Non-régression ✅ : `chess_caption_split OK` 4/4, précision 92 / 49 / 88 / 86 %, pire coup présent.
+- Arrêt immédiat (Stopping → « ARIA arrêt » même seconde) ; démarrage → prête en 10 s [n=1].
+- Explosives : bruit d'ouverture toujours là (2.d4, 6.Bb5, 8.g4), accepté (Q3 A'').
+Pistes d'audit (non vérifiées) : (1) `conversation_history` charge 20 messages, dont les réponses au format
+des runs précédents → imitation ; (2) la consigne place l'« idée générale d'après évaluation » en tête, le LLM
+s'arrête après ; (3) contenu réel du message enrichi en prod jamais vu (lignes `faits :` présentes au code
+`chess_router.py:631`, non logguées).
 
 ## Questions ouvertes
 
@@ -177,3 +193,4 @@ Tronçon 13 fait : `chess_router._move_facts(fen, moves_san, move_number, color)
 Choix : roi attaquant compté valeur 100 (n'attaque utilement qu'une pièce non défendue) ; « reprend » = prise sur la case de la prise précédente de la ligne ; coup noir numéroté « 14...O-O » comme l'exemple du kickoff (≠ `_format_line`).
 Écart : fixtures de `test_chess_router.py` illégales (Bd7 / Qh4 après 1.e4) → `d6` et FEN propre au test explosif (assertion « pièces : » adaptée).
 Prochaine étape : tronçon 14 (run live 12 par Nico).
+Tronçon 14 fait (run live 12) : légende ❌. Prochaine étape : `/conception` sur la légende (audit avant fix).
