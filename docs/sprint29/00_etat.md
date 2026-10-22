@@ -66,7 +66,7 @@
 | 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ✅ (non commité, 341 verts) |
 | 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ✅ (non commité, 343 verts) |
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
-| 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ⏳ |
+| 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -129,4 +129,5 @@ Mesure (4 parties `run_live_retours_parties.txt`) [n=4] : précision 91 / 49 / 8
 ⚠ La meilleure défense est hors du top Maia sur les 4 parties [n=4] (biais de sélection : le score est maximal quand les humains ratent la défense) → « 0 % de chances » systématique ; à arbitrer au run live (afficher « < 5 % » ou la p brute non tronquée).
 Tronçon 09 fait : consigne de `_build_enriched` — entrée ≤ 5 phrases / 900 car. = idée générale (pièces, matériel, attaquées, motifs) + variante du meilleur coup (`ligne :`, ou celle des consignes e/d) expliquée coup par coup + au plus « 50 % → 37 % ». Consignes e/d et interdits inchangés. Assertions ajoutées à `test_execute_returns_text_and_images_and_delegates_reasoning`.
 Note : la consigne d garde « Cette entrée peut dépasser 3 phrases » (laissée, hors brief ; désormais en tension avec la limite de 5).
-Prochaine étape : tronçon 10.
+Tronçon 10 fait : `bot.main` après `telegram.start()` (retour de `run_polling`) → `log.info("ARIA arrêt")`, `logging.shutdown()`, `os._exit(0)` ; test `tests/test_bot.py` (kernel / interface simulés, `configure_root` neutralisé à l'import, `logging.shutdown` et `os._exit` monkeypatchés).
+Prochaine étape : tronçon 11 (run live Nico), dont `systemctl restart` < 10 s.
