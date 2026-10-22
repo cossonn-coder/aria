@@ -26,6 +26,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze
+from chess_coach.explosive import _GAIN_MIN
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
 from chess_coach.render import render_position
 from chess_coach.summary import summarize, summary_text
@@ -348,6 +349,9 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     lines.append(f"  réponse humaine la plus probable : {top['san']} ({top['p'] * 100:.0f} %)")
     lines.append(f"  espérance face à un humain : Nico {e.expected:.0f} % "
                  f"(meilleur coup : {e.best_expected:.0f} %)")
+    # Admis par la seule règle sprint 28 (sacrifice / piège) : c'est un pari.
+    if e.expected - e.best_expected < _GAIN_MIN:
+        lines.append("  pari : face à un humain l'espérance n'est pas meilleure que le meilleur coup")
     number, color = _reply_start(p)
     lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
                  f"({_EVIDENCE_FR[e.evidence]})")
@@ -603,7 +607,8 @@ class ChessExecutionRouter(BaseRouter):
                 "protégées / vulnérables de la fin de variante ; quelles réponses humaines "
                 "probables perdent et ce qu'elles coûtent à l'adversaire, d'après les lignes "
                 "« si … ». Ne donne ni le coût, ni quand le tenter, et ne le présente jamais "
-                "comme le meilleur coup. Cette entrée peut dépasser 3 phrases.]"
+                "comme le meilleur coup. Si la ligne « pari » est présente, une demi-phrase "
+                "la présente comme une idée risquée. Cette entrée peut dépasser 3 phrases.]"
             )
         if analysis.color_source == "default":
             parts.append(

@@ -1,12 +1,14 @@
 # aria/chess_coach/explosive.py
 #
 # Recherche des « occasions explosives » (sprint 27, tronçon 01, dette #87 ;
-# coup piégeant face à un humain : sprint 29, tronçon 04).
+# coup piégeant face à un humain : sprint 29, tronçon 04 ; règle hybride :
+# sprint 29, tronçon 07).
 #
 # Sorte d de position critique : avant un coup de Nico, un coup tenait la
-# fenêtre de tolérance (perte ≤ 15 sur jeu parfait) et rapportait nettement
-# plus que le meilleur coup face à un humain de l'Elo adverse. Espérance
-# humaine E(coup) = Σ P_maia(réponse) × % de gain de Nico après la réponse.
+# fenêtre de tolérance et, soit était une idée risquée au sens du sprint 28
+# (sacrifice ou piège), soit rapportait plus que le meilleur coup face à un
+# humain de l'Elo adverse. Espérance humaine E(coup) = Σ P_maia(réponse) ×
+# % de gain de Nico après la réponse ; le gain d'espérance classe les candidats.
 # Seconde passe moteur sur toute la partie, sans budget de temps.
 # Module pur : aucun import mémoire / LLM / exécution.
 
@@ -32,10 +34,13 @@ _EVIDENCE_TIME = 0.6
 _MULTIPV = 5
 # Positions éligibles : coups de Nico non décidés, joués sans erreur nette.
 _WIN_MIN, _WIN_MAX = 35, 75
-# Perte maximale sur jeu parfait (pts de % de gain) et gain minimal d'espérance
-# humaine sur le meilleur coup.
+# Fenêtre de perte sur jeu parfait (pts de % de gain) : 5 en général, 15 pour
+# un piège ou un gain d'espérance humaine. Piège minimal (pts) et gain minimal
+# d'espérance humaine sur le meilleur coup.
+_WINDOW = 5
 _TRAP_WINDOW = 15
-_GAIN_MIN = 10
+_TRAP_MIN = 10
+_GAIN_MIN = 5
 # Nombre maximal de candidats approfondis par position.
 _MAX_DEEP = 3
 # Ligne mesurée (candidat compris) : au moins 6 demi-coups, prolongée tant
@@ -77,6 +82,9 @@ class ExplosiveMove:
     # Espérance humaine du candidat et du meilleur coup (% de gain de Nico).
     expected: float = 0.0
     best_expected: float = 0.0
+    # Piège (règle sprint 28) : % de gain adverse après sa meilleure réponse −
+    # après la prise naturelle du matériel offert (0 sans prise naturelle).
+    trap: float = 0.0
 
 
 def _material(board: chess.Board, color: chess.Color) -> int:
@@ -201,7 +209,7 @@ def _human_replies(engine, after: chess.Board, distribution: list) -> tuple:
 
 def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after: float,
             distribution: list) -> ExplosiveMove:
-    """Approfondit un candidat : ligne, sacrifice, forçant, réponses humaines, avantage clair."""
+    """Approfondit un candidat : ligne, sacrifice, piège, forçant, réponses humaines, avantage clair."""
     after = board.copy(stack=False)
     after.push(move)
 
@@ -219,6 +227,12 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
         taken = chess.PAWN if board.is_en_passant(move) else board.piece_type_at(move.to_square)
         offered = max(0, _VALUES[after.piece_type_at(move.to_square)] - (_VALUES[taken] if taken else 0))
     sacrifice = max(sacrifice_line, offered)
+
+    # Piège : % de gain adverse après sa meilleure réponse − après la prise naturelle.
+    trap = 0.0
+    if capture is not None:
+        taken_line = engine.analyse(after, chess.engine.Limit(time=_DEEP_TIME), root_moves=[capture])
+        trap = max(0.0, _win_of(principal) - _win_of(taken_line))
 
     replies, infos = _human_replies(engine, after, distribution)
 
@@ -245,14 +259,21 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
         sacrifice=sacrifice, forcing=_forcing(board, move), trap_reply_san=replies[0]["san"],
         score=0.0, offered=offered, trap_line_san=trap_line_san, replies=replies,
         trap_end_fen=trap_end_fen, trap_end_win=trap_win, evidence=evidence,
-        expected=_expectation(replies),
+        expected=_expectation(replies), trap=trap,
     )
 
 
 def _admissible(candidate: ExplosiveMove, best_expected: float) -> bool:
-    """Perte ≤ 15 sur jeu parfait, espérance humaine ≥ meilleur coup + 10, avantage clair."""
-    return (candidate.evidence is not None and candidate.loss <= _TRAP_WINDOW
-            and candidate.expected >= best_expected + _GAIN_MIN)
+    """Avantage clair, puis règle hybride : idée risquée du sprint 28 OU gain Maia.
+
+    Sprint 28 : (perte ≤ 5, ou ≤ 15 avec piège ≥ 10) et (sacrifice ≥ 1 ou piège ≥ 10).
+    Maia : perte ≤ 15 et espérance humaine ≥ meilleur coup + 5.
+    """
+    if candidate.evidence is None:
+        return False
+    in_window = candidate.loss <= _WINDOW or (candidate.loss <= _TRAP_WINDOW and candidate.trap >= _TRAP_MIN)
+    risky = in_window and (candidate.sacrifice >= 1 or candidate.trap >= _TRAP_MIN)
+    return risky or (candidate.loss <= _TRAP_WINDOW and candidate.expected >= best_expected + _GAIN_MIN)
 
 
 def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci: str,

@@ -63,7 +63,7 @@
 | 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ✅ (non commité, 337 verts) |
 | 05 | `05_legende.md` — explication en légende sous chaque image | ✅ (non commité, 340 verts) |
 | 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ✅ fait 2026-10-22 (4 parties), retours → phase A' |
-| 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ⏳ |
+| 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ✅ (non commité, 341 verts) |
 | 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ⏳ |
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ⏳ |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ⏳ |
@@ -121,3 +121,6 @@ Mesure : 0 occasion sur les 2 premières parties de `run_live_parties.txt` [n=2]
 Tronçon 05 fait : `chess_router._split_entries` (après `_to_english`) : entrée « Position N — » (gras Markdown et tirets –/- tolérés) → légende = ligne factuelle + saut de ligne + entrée sans son marqueur ; fin d'entrée = entrée suivante ou ligne « Niveau » ; > 1024 → `_fit_entry` (dernière phrase + « … ») ; une entrée 1…len(images) manquante → repli complet ; `log.info` `chess_caption_split OK/FALLBACK`. Consigne : marqueur en début de ligne, ne pas recopier la ligne factuelle. 3 tests.
 Choix : le marqueur « Position N — » est retiré de l'entrée (la ligne factuelle le porte déjà) ; une entrée « Position K » avec K > nombre d'images reste dans le texte.
 Phase A' close, kickoffs 07-11 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 07 → 10), puis run live 11 par Nico.
+Tronçon 07 fait : `ExplosiveMove.trap` réintroduit (prise naturelle en `root_moves=[capture]`, piège = win adverse PV principale − win après la prise), `_admissible` hybride (avantage clair ET (règle sprint 28 `_WINDOW` 5 / `_TRAP_MIN` 10 OU perte ≤ 15 + gain Maia ≥ `_GAIN_MIN` 5)), score = gain Maia inchangé ; router : ligne « pari : … » si gain < 5, consigne d « idée risquée ». Test paramétré `test_explosive_admissible_hybrid` (remplace `…_human_expectation`).
+Mesure (4 parties `run_live_retours_parties.txt`, avant `select_critical` qui en garde ≤ 3) : 5 / 2 / 1 / 4 occasions [n=4] ; 11 sur 12 admises par la seule règle sprint 28 (gain Maia de −13,7 à +0,6), 1 par Maia (Ng4, +5,4).
+Prochaine étape : tronçon 08.

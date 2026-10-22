@@ -38,12 +38,15 @@ def test_analyze_detects_blunder():
     assert any(c.kind == "a" and c.ply.ply == 5 for c in game.critical)
 
 
-@pytest.mark.parametrize("gain, retained", [(15.0, True), (5.0, False)])
-def test_explosive_admissible_human_expectation(gain, retained):
-    # Sprint 29 : perte 12 sur jeu parfait, admissible si l'espérance humaine
-    # dépasse celle du meilleur coup d'au moins 10 pts.
+@pytest.mark.parametrize("loss, sacrifice, gain, retained", [
+    (4.0, 3, 0.0, True),    # ancienne règle sprint 28 : sacrifice dans la fenêtre 5
+    (12.0, 0, 6.0, True),   # règle Maia : gain d'espérance ≥ 5, fenêtre 15
+    (4.0, 0, 3.0, False),   # ni sacrifice, ni piège, gain < 5
+])
+def test_explosive_admissible_hybrid(loss, sacrifice, gain, retained):
+    # Sprint 29, tronçon 07 : ancienne règle OU gain Maia ≥ 5.
     candidate = ExplosiveMove(
-        san="Nd5", uci="c3d5", loss=12.0, win_after=43.0, pv_san=[], sacrifice=3, forcing=[],
+        san="Nd5", uci="c3d5", loss=loss, win_after=43.0, pv_san=[], sacrifice=sacrifice, forcing=[],
         trap_reply_san="exd5", score=0.0, evidence="material", expected=50.0 + gain,
     )
     assert _admissible(candidate, 50.0) is retained
