@@ -65,7 +65,7 @@
 | 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ✅ fait 2026-10-22 (4 parties), retours → phase A' |
 | 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ✅ (non commité, 341 verts) |
 | 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ✅ (non commité, 343 verts) |
-| 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ⏳ |
+| 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ⏳ |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ⏳ |
 
@@ -127,4 +127,6 @@ Tronçon 08 fait : `summary._game_accuracy` (Lichess : fenêtres glissantes, poi
 Choix non tranchés par le kickoff : score Maia = Σ sur les seules **fautes** (écart ≥ 5) ; aucun meilleur coup si score max ≤ 0 ; défense hors des réponses Maia gardées (90 % cumulés) → p = 0, affichée « 0 % de chances ». `summary_text` (document indexé) garde la précision par phase.
 Mesure (4 parties `run_live_retours_parties.txt`) [n=4] : précision 91 / 49 / 88 / 86 % (audit : 91 / 52 / 89 / 85 sans pondération) ; meilleur coup 20.Kd2 (score 44, défense Be6, joué Bxg2), 14.Qxb7 (14), 10.Nb5 (8,5), 33...Qd8 (18,5) ; pire coup 17.Be5 (51 → 37), 39.Bb2 (88 → 2), 28.Ndf7 (85 → 63), 31...Rxa5 (43 → 26) ; passe meilleur coup 15-21 s.
 ⚠ La meilleure défense est hors du top Maia sur les 4 parties [n=4] (biais de sélection : le score est maximal quand les humains ratent la défense) → « 0 % de chances » systématique ; à arbitrer au run live (afficher « < 5 % » ou la p brute non tronquée).
-Prochaine étape : tronçon 09.
+Tronçon 09 fait : consigne de `_build_enriched` — entrée ≤ 5 phrases / 900 car. = idée générale (pièces, matériel, attaquées, motifs) + variante du meilleur coup (`ligne :`, ou celle des consignes e/d) expliquée coup par coup + au plus « 50 % → 37 % ». Consignes e/d et interdits inchangés. Assertions ajoutées à `test_execute_returns_text_and_images_and_delegates_reasoning`.
+Note : la consigne d garde « Cette entrée peut dépasser 3 phrases » (laissée, hors brief ; désormais en tension avec la limite de 5).
+Prochaine étape : tronçon 10.

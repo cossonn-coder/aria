@@ -72,6 +72,10 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
     assert "1re ligne exacte « Partie contre Ami »" in delegated["content"]
     assert "Niveau" in delegated["content"]
+    # Tronçon 09 : entrée = idée générale + variante expliquée coup par coup.
+    assert "idée générale de la position" in delegated["content"]
+    assert "variante du meilleur coup" in delegated["content"]
+    assert "1 à 3 phrases" not in delegated["content"]
     assert "axes de travail" not in delegated["content"]
     # Faits calculés depuis le FEN (après 1.e4) : matériel égal, rien d'attaqué.
     assert "  matériel : égal\n  attaquées : aucune" in delegated["content"]
