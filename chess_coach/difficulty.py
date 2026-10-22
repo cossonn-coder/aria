@@ -33,13 +33,16 @@ def _load(models_dir: str):
     if _model is None:
         from maia2 import inference, model
         net = model.from_pretrained(type="rapid", device="cpu", save_root=models_dir)
+        # Mode évaluation : sans lui le dropout reste actif et les probabilités
+        # varient d'un appel à l'autre (maia2.inference_each fait de même).
+        net.eval()
         all_moves_dict, elo_dict, _ = inference.prepare()
         _model = (net, all_moves_dict, elo_dict)
     return _model
 
 
 def _probabilities(positions: list, elo: int, models_dir: str) -> list:
-    """P(meilleur coup) pour chaque (fen, best_uci), en une passe batchée."""
+    """P(coup) pour chaque couple (fen, uci), en une passe batchée."""
     import chess
     import torch
     from maia2 import inference
@@ -69,13 +72,64 @@ def difficulty_from_p(p: float, elo: int) -> int:
 
 
 def assign_difficulty(plies: list, nico_color: str, nico_elo: int | None, models_dir: str) -> None:
-    """Remplit p.difficulty des coups de Nico après le coup 10 (les autres restent None)."""
+    """Remplit p.difficulty et p.played_p des coups de Nico après le coup 10 (les autres restent None).
+
+    played_p = P(coup joué) (sprint 29, tronçon 12), calculée dans la même passe batchée.
+    """
     started = time.monotonic()
     elo = nico_elo or DEFAULT_ELO
     targets = [p for p in plies if p.color == nico_color and p.move_number > _OPENING_MOVES]
     if not targets:
         return
-    probs = _probabilities([(p.fen_before, p.best_uci) for p in targets], elo, models_dir)
-    for p, prob in zip(targets, probs):
+    # Une passe : n couples (fen, meilleur coup) puis n couples (fen, coup joué).
+    probs = _probabilities([(p.fen_before, p.best_uci) for p in targets]
+                           + [(p.fen_before, p.uci) for p in targets], elo, models_dir)
+    for p, prob, played in zip(targets, probs, probs[len(targets):]):
         p.difficulty = difficulty_from_p(prob, elo)
+        p.played_p = played
     log.info("maia_difficulty OK n=%d duration=%.1fs", len(targets), time.monotonic() - started)
+
+
+# Réponses humaines gardées : jusqu'à 90 % de probabilité cumulée, 6 au plus.
+_REPLY_MASS = 0.9
+_MAX_REPLIES = 6
+
+
+def reply_distribution(fens: list, elo: int, models_dir: str) -> list:
+    """Réponses les plus probables selon Maia-2 dans chaque position, en une passe batchée.
+
+    elo_self = elo_oppo = elo. Rend, par fen, [(uci, p), …] trié par p
+    décroissante, tronqué à 90 % cumulés (le coup qui franchit le seuil
+    compris), 6 au plus ; p brutes (non renormalisées, somme ≤ 1).
+    """
+    import chess
+    import torch
+    from maia2 import inference
+
+    net, all_moves_dict, elo_dict = _load(models_dir)
+    # Inverse indice → UCI (dans le repère de Maia : trait aux blancs).
+    index_to_uci = {idx: uci for uci, idx in all_moves_dict.items()}
+    boards, elos, legals = [], [], []
+    for fen in fens:
+        board_in, elo_cat, _, legal = inference.preprocessing(fen, elo, elo, elo_dict, all_moves_dict)
+        boards.append(board_in)
+        elos.append(elo_cat)
+        legals.append(legal)
+    with torch.no_grad():
+        elo_tensor = torch.tensor(elos)
+        logits, _, _ = net(torch.stack(boards), elo_tensor, elo_tensor)
+        probs = inference._masked_softmax(logits, torch.stack(legals))
+    result = []
+    for i, fen in enumerate(fens):
+        black = chess.Board(fen).turn == chess.BLACK
+        values, indices = torch.sort(probs[i], descending=True)
+        replies, mass = [], 0.0
+        for p, idx in zip(values.tolist(), indices.tolist()):
+            uci = index_to_uci[idx]
+            # Démiroir : Maia voit le plateau retourné quand c'est aux noirs.
+            replies.append((inference.mirror_move(uci) if black else uci, p))
+            mass += p
+            if mass >= _REPLY_MASS or len(replies) == _MAX_REPLIES:
+                break
+        result.append(replies)
+    return result

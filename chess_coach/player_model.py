@@ -17,7 +17,29 @@ _DEFAULT_ELO = 1300
 # Classements : identifiant → libellé affiché.
 LABELS = {
     "global": "Global",
-    "hanging": "Pièces en prise",
+    "hanging": "Gain de matériel",
+    # Motifs tactiques (sprint 29) : clés de chess_coach.motifs, détectés sur la
+    # PV du meilleur coup. « hangingPiece » alimente « hanging » (continuité des
+    # fiches antérieures) ; tous les mats sont regroupés sous « mates ».
+    "fork": "Fourchette",
+    "pin": "Clouage",
+    "skewer": "Enfilade",
+    "discoveredAttack": "Attaque à la découverte",
+    "doubleCheck": "Échec double",
+    "sacrifice": "Sacrifice",
+    "trappedPiece": "Pièce enfermée",
+    "advancedPawn": "Pion avancé",
+    "attackingF2F7": "Attaque sur f2/f7",
+    "capturingDefender": "Capture du défenseur",
+    "exposedKing": "Roi exposé",
+    "attraction": "Attraction",
+    "clearance": "Dégagement",
+    "collinearMove": "Coup colinéaire",
+    "deflection": "Déviation",
+    "interference": "Interception",
+    "intermezzo": "Coup intermédiaire",
+    "xRayAttack": "Rayon X",
+    "mates": "Mats",
     "punish": "Punir les erreurs",
     "opening": "Ouverture",
     "convert": "Convertir l'avantage",
@@ -25,7 +47,32 @@ LABELS = {
     "result": "Résultats",
 }
 
-# Classements joués ; « global » = leur moyenne arithmétique (tronçon 05).
+# Nom affiché de chaque mat de chess_coach.motifs (« mate » seul : mat sans motif nommé).
+MATE_LABELS = {
+    "smotheredMate": "mat étouffé",
+    "backRankMate": "mat du couloir",
+    "anastasiaMate": "mat d'Anastasia",
+    "hookMate": "mat de l'hameçon",
+    "arabianMate": "mat arabe",
+    "dovetailMate": "mat de Cozio",
+    "bodenMate": "mat de Boden",
+    "doubleBishopMate": "mat des deux fous",
+    "balestraMate": "mat de l'arbalète",
+    "cornerMate": "mat du coin",
+    "morphysMate": "mat de Morphy",
+    "operaMate": "mat de l'opéra",
+    "pillsburysMate": "mat de Pillsbury",
+    "killBoxMate": "mat de la mise en boîte",
+    "vukovicMate": "mat de Vukovic",
+    "blindSwineMate": "mat des deux tours",
+    "twoRooksMate": "mat des deux tours",
+    "epauletteMate": "mat des épaulettes",
+    "swallowstailMate": "mat du guéridon",
+    "triangleMate": "mat du triangle",
+    "mate": "mat",
+}
+
+# Classements joués ; « global » = moyenne de ceux qui ont au moins une épreuve.
 _THEMES = [key for key in LABELS if key != "global"]
 
 # Épreuve : seuils en points de % de gain.
@@ -61,6 +108,7 @@ class Trial:
     difficulty: float
     score: float         # 1 trouvé / gagné, 0 raté / perdu, 0,5 nulle
     delta: float
+    mate: str | None = None   # nom du mat (« mat d'Anastasia ») pour une épreuve « mates »
 
 
 @dataclass
@@ -133,15 +181,24 @@ def _record(game_deltas: dict, key: str, trial: Trial) -> None:
         gd.top = trial
 
 
-def _mean(ratings: dict) -> float:
-    return sum(ratings[key].value for key in _THEMES) / len(_THEMES)
+def _mean(ratings: dict, start: float) -> float:
+    """Moyenne des thèmes ayant ≥ 1 épreuve (anti-dilution) ; aucun → valeur de départ."""
+    played = [ratings[key].value for key in _THEMES if ratings[key].trials]
+    return sum(played) / len(played) if played else start
 
 
 def _move_themes(plies: list, i: int) -> list:
     """Thèmes dont relève l'épreuve au demi-coup i (hors global et ouverture)."""
     p = plies[i]
     themes = []
-    if "hanging" in (p.get("tags") or []) or "x" in (p.get("best_san") or ""):
+    if "motifs" in p:
+        # Fiche sprint 29 : motifs du meilleur coup ; mats regroupés sous « mates ».
+        for motif in p["motifs"]:
+            key = "hanging" if motif == "hangingPiece" else "mates" if motif in MATE_LABELS else motif
+            if key not in themes:
+                themes.append(key)
+    elif "hanging" in (p.get("tags") or []) or "x" in (p.get("best_san") or ""):
+        # Fiches antérieures (sans clé motifs) : règle historique des pièces en prise.
         themes.append("hanging")
     if i > 0 and plies[i - 1]["loss"] >= _PUNISH_MIN_LOSS:
         themes.append("punish")
@@ -178,8 +235,8 @@ def build_profile(games: list) -> Profile:
     if not season:
         return profile
 
-    start = season[0][0].get("elo_nico") or _DEFAULT_ELO
-    ratings = {key: Rating(float(start)) for key in LABELS}
+    start = float(season[0][0].get("elo_nico") or _DEFAULT_ELO)
+    ratings = {key: Rating(start) for key in LABELS}
     profile.ratings = ratings
     streak_wins = streak_crush = 0
     family_count = {}
@@ -202,7 +259,7 @@ def build_profile(games: list) -> Profile:
             score = 0.0 if missed else 1.0
             d = _apply(ratings["opening"], opening_diff, score)
             _record(deltas, "opening", Trial("coups 1-10", opening_diff, score, d))
-            ratings["global"].value = _mean(ratings)
+            ratings["global"].value = _mean(ratings, start)
 
         # Épreuves coup par coup.
         for i, p in enumerate(plies):
@@ -212,11 +269,15 @@ def build_profile(games: list) -> Profile:
             score = 1.0 if p["loss"] < _FOUND_MAX_LOSS else 0.0
             if score and difficulty >= ratings["global"].value + 400:
                 unlocked.append("Coup de maître")
+            # Nom du mat nommé (« mate » seul n'en a pas), porté par l'épreuve « mates ».
+            mate = next((MATE_LABELS[m] for m in p.get("motifs") or []
+                         if m in MATE_LABELS and m != "mate"), None)
             for key in _move_themes(plies, i):
                 d = _apply(ratings[key], difficulty, score)
-                _record(deltas, key, Trial(_move_label(p), difficulty, score, d))
+                _record(deltas, key, Trial(_move_label(p), difficulty, score, d,
+                                           mate if key == "mates" else None))
             # Global tenu à jour pour le seuil de « Coup de maître » de l'épreuve suivante.
-            ratings["global"].value = _mean(ratings)
+            ratings["global"].value = _mean(ratings, start)
 
         # Résultat de partie contre l'Elo adverse (thème « Résultats »).
         outcome = game.get("outcome")
@@ -227,7 +288,7 @@ def build_profile(games: list) -> Profile:
             _record(deltas, "result", Trial("résultat", elo_opp, score, d))
 
         # Global = moyenne des thèmes ; son delta = moyenne après − moyenne avant.
-        ratings["global"].value = _mean(ratings)
+        ratings["global"].value = _mean(ratings, start)
         deltas["global"].delta = ratings["global"].value - global_before
 
         # Badges de la partie et des séries.

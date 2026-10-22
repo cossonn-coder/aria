@@ -1,0 +1,230 @@
+# Sprint 29 — état de conception
+
+**Phase** : CLOS (run live 13 OK, 2026-10-22, tag `sprint-29`)
+**Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
+
+## Décisions arrêtées
+
+- Périmètre (Nico, 2026-10-22) : trois sujets échecs — **motifs tactiques** (#100),
+  **coup le plus piégeant**, **explication en légende** sous chaque image — plus deux
+  compléments fiabilité : **erreur kernel vide** (trace logguée, `print()` kernel #71) et
+  **réponse perdue signalée** (échec des réessais Telegram).
+- Audit : `audit_sprint29.md` (HEAD `d2a3150`).
+- Motifs : **compléter** les thèmes. « Pièces en prise » devient le motif « gain de
+  matériel » ; motifs ajoutés ; situations (punir, ouverture, convertir, finale) et
+  Résultats gardées. **Global = moyenne des thèmes ayant ≥ 1 épreuve** (anti-dilution).
+  Liste de Nico (2026-10-22) = thèmes puzzles Lichess : gain de matériel, fourchette,
+  clouage/enfilade, découverte, sacrifice, pièce enfermée, pion avancé, attaque f2/f7,
+  capture du défenseur, échec double, roi exposé, attraction, dégagement, coup
+  colinéaire, déviation, interception, coup intermédiaire, rayon X, + mats nommés
+  (Anastasia, arabes, couloir, arbalète, deux tours, Boden, coin, deux fous, Cozio,
+  épaulettes, hameçon, mise en boîte, Pillsbury, Morphy, opéra, guéridon, triangle,
+  Vukovic, étouffée).
+  ⚠ La plupart exigent la **variante** (PV) : la détection par rejeu sans PV est
+  abandonnée → détection à l'analyse (PV `pv_uci` disponible) et stockage dans
+  `plies_json`. Piste : porter `tagger/cook.py` de lichess-puzzler (python-chess, AGPL,
+  usage perso) qui couvre tous les motifs non-mats et 8 mats ; les 11 autres mats sont à écrire.
+  Copie de référence : `docs/sprint29/ref/` (cook.py, util.py, model.py).
+  Format Lichess : partie qui démarre AVANT le coup adverse précédent, mainline =
+  [coup adverse joué, meilleur coup de Nico, suite de la PV…] ; pov = camp de Nico.
+- Classements : **un par motif**, **mats regroupés** en un classement « Mats » (nom du
+  mat affiché dans l'épreuve). Global = moyenne des thèmes ayant ≥ 1 épreuve.
+- Rétroactivité : **non**. Motifs pour les parties analysées après le sprint ; les 14
+  fiches saison 1 gardent les thèmes de situation + Résultats (et la règle actuelle
+  de « pièces en prise », renommée « Gain de matériel »). Aucune écriture palace hors
+  analyse normale.
+- Budget de la recherche explosive : **aucun** (Nico : temps d'analyse indifférent).
+  Vérifié : aucun timeout dans le pipeline (kernel / dispatcher / interface).
+- Coup piégeant : **espérance humaine Maia** — E = Σ P_maia(réponse, Elo adverse) ×
+  % de gain Nico. Admissible : perte ≤ 15 pts sur jeu parfait et E(candidat) ≥
+  E(meilleur coup) + 10. Réponse logique affichée = réponse humaine la plus probable
+  (traite #91). Règle d'avantage clair gardée pour la variante montrée.
+- Occasions explosives : **toute la partie** (coup 1 au dernier), **Maia partout**,
+  jusqu'à **3 occasions** affichées (les plus belles).
+- Légende : légende = ligne factuelle + entrée « Position N » du LLM ; texte final =
+  ancre + Niveau + Progression ; > 1024 car. → coupure à la dernière phrase + « … » ;
+  entrée introuvable → affichage actuel.
+- Réponse perdue : gardée en RAM par chat_id, **livrée avant la réponse suivante**
+  avec « ⚠️ Ma réponse précédente n'avait pas pu partir : » ; log ERROR à l'échec.
+  Perdue au redémarrage (accepté).
+- Erreur kernel vide : `log.exception` dans le dispatcher (type + trace + router),
+  `print()` du kernel → logger (#71). Sans arbitrage.
+- Réglages par défaut (figés, sans objection de Nico) : Maia indisponible → aucune
+  occasion explosive + WARNING ; positions éligibles non décidées (35-75 %) ; réponses
+  Maia jusqu'à 90 % cumulés, 6 max ; jusqu'à 6 images (3 critiques + 3 occasions).
+
+## Carte des tronçons
+
+| # | Kickoff | Statut |
+|---|---------|--------|
+| 01 | `01_fiabilite.md` — trace dispatcher, logger kernel, réponse perdue livrée au message suivant | ✅ (non commité, 327 verts) |
+| 02 | `02_tagueur_motifs.md` — `chess_coach/motifs.py` (portage cook.py + 11 mats) | ✅ (non commité, 334 verts) |
+| 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ✅ (non commité, 336 verts) |
+| 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ✅ (non commité, 337 verts) |
+| 05 | `05_legende.md` — explication en légende sous chaque image | ✅ (non commité, 340 verts) |
+| 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ✅ fait 2026-10-22 (4 parties), retours → phase A' |
+| 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ✅ (non commité, 341 verts) |
+| 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ✅ (non commité, 343 verts) |
+| 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
+| 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
+| 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
+| 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
+| 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
+| 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : meilleur coup ✅, légende ❌ → phase A''' |
+| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ✅ commit `9c207fc`, 347 verts |
+| 16 | `16_run_live_13.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : 5 critères OK 4/4 → sprint clos |
+
+## Dettes
+
+- Fermées si le sprint passe : #71 (`print()` kernel), #91 (réponse logique = bonne
+  réponse), #100 (motifs) ; #74, #73/#86 non traitées.
+- Nouvelles : #103 `handle_event` synchrone bloque la boucle du bot pendant l'analyse
+  (devient plusieurs minutes sans budget) ; #104 un échec d'envoi de photo interrompt
+  l'envoi du texte qui suit (`images_text`).
+- Nouvelles (retours run live) : #105 quarantaine HNSW récurrente de `mempalace_drawers`
+  (`hnsw:sync_threshold` 50 000 → HNSW jamais persisté) ; #106 le LLM écrit « finale »
+  sur une position classée milieu de partie.
+
+## Phase A' — retours du run live (ouverte 2026-10-22)
+
+Audit : `audit_retours_run_live.md`. Quatre sujets, tronçons 07+ à concevoir :
+1. Occasions explosives : 0 trouvée (gain max 5,9 < seuil 10 [n=4]). Nico : seuil 5,
+   adapté à l'Elo, retrouver les idées risquées d'avant (règle sprint 28).
+2. Légende : gardée (Nico) ; ajouter variante textuelle expliquée + idée générale.
+3. Précision : se rapprocher de chess.com (actuel = moyenne arithmétique).
+4. Arrêt aria.service lent : diagnostic py-spy autorisé (carte blanche Nico), en cours.
+
+## Résultats run live 11 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code des tronçons 07-10.
+- Arrêt : 0,25 s (Stopping 15:35:17.95 → Deactivated 15:35:18.19), « ARIA arrêt » présent ✅.
+  Le restart à plus d'une minute juste avant venait de l'ancien code (process lancé à 14:19, tronçon 10 commité à 15:00).
+- Occasions explosives : 2 à 7 par partie ✅ ; bruit (2.d4, 4.Bc4, 8...Bb7 « explosifs ») et texte
+  contradictoire (« les réponses X perdent toutes » + « l'espérance n'est pas meilleure »).
+- Précision : 49 % Falestinhurra, 90 / 88 / 86 % sur les autres, une valeur par partie ✅.
+- Légende ❌ : pas de variante expliquée coup par coup ; « idée générale » = formule creuse répétée
+  « Position équilibrée, matériel égal, aucune pièce attaquée », même à 75 % (23...f4) ou matériel inégal.
+- Meilleur coup ❌ : 32...bxa5 (reprise), 20.Kd2 (réponse à un échec), 14.Qxb7 (prise de pion) ;
+  27.Qe5 seul plausible. « 0 % de chances » sur la défense 2 fois / 4 (défense hors réponses Maia gardées).
+- Pire coup : cohérent ✅.
+- Démarrage : ~15 s d'imports avant « ARIA démarrage », prêt en ~23 s [n=1].
+
+## Résultats run live 12 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code des tronçons 12-13 (commit 16:29, service relancé 16:33).
+- Meilleur coup ✅ 4/4 : 29.Nc5+ (15 %), 19.Nd2 (1 %), 22.Qe5 (8 %), 16...Nd5 (8 %) ; ni reprise ni parade
+  d'échec ; plus de « 0 % de chances » ni de log `chess_best_move`.
+- Légende ❌ 0/4 : aucune variante racontée coup par coup ; chaque entrée = « Position <éval>, <attaquées>. Le
+  meilleur est X, qui <1 fait> et maintient N % de gain. » ; « aucune pièce attaquée » encore 6 fois [sur 22 entrées],
+  « matériel égal » disparu ; « maintient 28 % de gain » en position désavantageuse.
+- Non-régression ✅ : `chess_caption_split OK` 4/4, précision 92 / 49 / 88 / 86 %, pire coup présent.
+- Arrêt immédiat (Stopping → « ARIA arrêt » même seconde) ; démarrage → prête en 10 s [n=1].
+- Explosives : bruit d'ouverture toujours là (2.d4, 6.Bb5, 8.g4), accepté (Q3 A'').
+Pistes d'audit (non vérifiées) : (1) `conversation_history` charge 20 messages, dont les réponses au format
+des runs précédents → imitation ; (2) la consigne place l'« idée générale d'après évaluation » en tête, le LLM
+s'arrête après ; (3) contenu réel du message enrichi en prod jamais vu (lignes `faits :` présentes au code
+`chess_router.py:631`, non logguées).
+
+## Résultats run live 13 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code du tronçon 15 (service relancé 17:19).
+- Historique coupé ✅ 4/4 : `conversation_history SKIPPED reason=skip_history`, plus de `loaded … messages=20`.
+- Variante ✅ 4/4 : chaque légende a sa ligne « Variante : » avec les faits (prend, reprend, échec, attaque, roque, mat).
+- Idée générale ✅ 4/4 : plus de « maintient N % » ni de « aucune pièce attaquée », texte propre à chaque position.
+- `chess_caption_split OK` ✅ 4/4 (6 / 6 / 3 / 6 images).
+- Non-régression ✅ 4/4 : ligne 🎯 (précision 92 / 49 / 88 / 87 %, meilleur coup « trouvé par N % », pire coup), bloc Progression.
+- Arrêt : « ARIA arrêt » puis Deactivated la même seconde ; démarrage → prête en 9 s [n=1].
+Écarts → dettes : faits inventés résiduels dans l'idée générale (#92 : « trois pièces de plus » à +3 points,
+« Rd1# imparable » alors que 39.Qc2 pare, « tu prends tout sur la colonne d » hors variante) ; variante parfois
+réduite à 1-2 coups (#109) ; consigne d recopiée deux fois mot pour mot (« l'espérance n'est pas meilleure… », #110) ;
+quarantaine HNSW `dba15bea…` à 17:21:48 (#105) ; précision 87 % au lieu de 86 % sur la même partie (#108).
+
+## Questions ouvertes
+
+- (aucune)
+
+## Décisions phase A''' (Nico, 2026-10-22)
+
+Audit `audit_run_live_12.md`.
+- Q1 A''' : analyse de partie **sans historique de conversation** (drapeau `skip_history`
+  posé par `chess_router`, lu par `llm_router`) ; l'échange reste écrit en historique.
+- Q2 A''' : variante **racontée par le code** (ligne « Variante : » dans la légende) ; le LLM
+  n'écrit que l'idée générale.
+- Q3 A''' : consigne avec le **nombre exact d'entrées** (« Position 1 à Position N »).
+- Dettes nouvelles : #107 `context_block` épisodique nourri d'analyses passées (influence non
+  mesurée) ; #108 analyse non déterministe (occasions explosives différentes d'un passage à l'autre).
+
+## Décisions phase A'
+
+- Q1 (Nico, 2026-10-22) : règle hybride — admissible si ancienne règle sprint 28
+  (sacrifice ≥ 1 ou piège ≥ 10, fenêtre 5/15, avantage clair) OU gain Maia ≥ 5 ;
+  seuil fixe (Maia reçoit déjà l'Elo adverse).
+- Q2 (Nico) : précision = algorithme Lichess complet (pas de chiffres chess.com pour
+  calibrer) ; afficher en plus le meilleur et le pire coup de Nico de la partie.
+- Q3 (Nico) : entrée de légende = idée générale + variante du meilleur coup expliquée
+  coup par coup ; chiffre clé supprimé ou réduit à « 57 % → 75 % ».
+
+## Phase A'' — retours du run live 11 (ouverte 2026-10-22)
+
+Audit : `audit_run_live_11.md`. Causes :
+- Légende : consigne contradictoire (« explique coup par coup » + « ne décris aucune attaque
+  absente des lignes matériel / attaquées », qui portent sur la position AVANT) ; aucune
+  donnée sur ce que fait chaque coup ; % de gain non présenté comme état de la position.
+- Meilleur coup : `_problem_score` mesure la position laissée à l'adversaire, pas le mérite
+  du coup ; la difficulté Maia du sprint 28 (déjà calculée) classe bien (bxa5 = 650, Nd5 = 1773).
+- Explosives : bruit d'ouverture (Maia non fiable avant le coup 10).
+
+Décisions (Nico, 2026-10-22) :
+- Q1 A'' : meilleur coup = **coup le plus rare** — parmi les coups de Nico perte ≤ 2 après
+  le coup 10, le plus faible P_Maia(coup joué, Elo de Nico) ; affiché « trouvé par N % des
+  joueurs de ton niveau » ; défense, « 0 % de chances » et passe moteur `find_best_move` supprimés.
+- Q2 A'' : légende = **faits coup par coup** calculés par le code (prise, échec, attaque
+  créée, roque, promotion) pour la variante expliquée + ligne d'évaluation (« avantage
+  Nico 68 % ») ; le LLM peut décrire ces faits ; interdit de paraphraser « matériel égal /
+  aucune attaquée ».
+- Q3 A'' : occasions explosives **toute la partie** (inchangé, bruit d'ouverture accepté).
+- Texte « réponses perdent » + « pari » : non traité (vrai ensemble, formulation LLM).
+
+## §REPRISE
+
+Lire `CLAUDE.md`, `context_kickoff_sprint_29.md`, ce fichier.
+Tronçon 01 fait (dispatcher `log.exception` + type dans `error`, logger kernel, `send` → `_deliver` + attente par chat_id).
+Note : si la livraison de l'attente échoue à son tour, c'est la réponse courante qui est gardée (la plus récente écrase).
+Tronçon 02 fait : `chess_coach/motifs.py` (`tag_motifs`, portage cook.py/util.py filtré + 11 mats ajoutés, ordre `_EXTRA_MATES`), 7 tests `tests/chess_coach/test_motifs.py`. Non branché.
+Adaptation : `is_mate` exige que le camp mat soit l'adversaire (une PV pourrait finir sur un mat contre Nico).
+Mats ajoutés : heuristiques « zone du roi contrôlée uniquement par les pièces du motif » ; seul `triangleMate` est testé.
+Tronçon 03 fait : `analysis.assign_motifs` (PV coupée par `clear_advantage`, appelée dans `analyze` avant `find_explosive`), clé `motifs` dans `plies_json`, `LABELS` motifs + « Mats », `hanging` = « Gain de matériel », `MATE_LABELS` (noms des mats, hors classements), `Trial.mate`, `_mean` = thèmes à ≥ 1 épreuve, ligne `motifs :` du bloc enrichi.
+Vérifié sur 2 parties réelles (run live sprint 28) : motifs non vides (fork, pin, sacrifice, mate…).
+Tronçon 04 fait : `difficulty.reply_distribution` (top Maia jusqu'à 90 % cumulés, 6 max, p brutes), `explosive` réécrit (E = Σ p renormalisée × win Nico, admissible perte ≤ 15 + E ≥ E(meilleur) + 10 + avantage clair sur la réponse la plus probable, score = gain, toute la partie, sans budget, Maia absent → WARNING + aucune occasion), `select_critical` ≤ 3 d en bonus, router (réponse humaine la plus probable, espérance, lignes « si X (p %) »), consigne d mise à jour.
+Champs `trap` / `volatility` supprimés de `ExplosiveMove` ; ajout `expected`, `best_expected`, `p` dans `replies`. Probabilité affichée = p brute Maia.
+Écart : `difficulty._load` n'appelait pas `net.eval()` (dropout actif → probabilités Maia aléatoires d'un appel à l'autre, difficulté du sprint 28 comprise) ; corrigé.
+Tests supprimés : `test_explosive_smith_morra_nd5`, `test_explosive_early_queen_nf6`, `test_explosive_excludes_first_pass_best` (Nd5 / Nf6 ne sont plus des occasions selon Maia ; l'exclusion ne se teste plus sans occasion réelle).
+Mesure : 0 occasion sur les 2 premières parties de `run_live_parties.txt` [n=2] (gains tous < 10) ; passe explosive 57 s et 37 s [n=2].
+Tronçon 05 fait : `chess_router._split_entries` (après `_to_english`) : entrée « Position N — » (gras Markdown et tirets –/- tolérés) → légende = ligne factuelle + saut de ligne + entrée sans son marqueur ; fin d'entrée = entrée suivante ou ligne « Niveau » ; > 1024 → `_fit_entry` (dernière phrase + « … ») ; une entrée 1…len(images) manquante → repli complet ; `log.info` `chess_caption_split OK/FALLBACK`. Consigne : marqueur en début de ligne, ne pas recopier la ligne factuelle. 3 tests.
+Choix : le marqueur « Position N — » est retiré de l'entrée (la ligne factuelle le porte déjà) ; une entrée « Position K » avec K > nombre d'images reste dans le texte.
+Phase A' close, kickoffs 07-11 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 07 → 10), puis run live 11 par Nico.
+Tronçon 07 fait : `ExplosiveMove.trap` réintroduit (prise naturelle en `root_moves=[capture]`, piège = win adverse PV principale − win après la prise), `_admissible` hybride (avantage clair ET (règle sprint 28 `_WINDOW` 5 / `_TRAP_MIN` 10 OU perte ≤ 15 + gain Maia ≥ `_GAIN_MIN` 5)), score = gain Maia inchangé ; router : ligne « pari : … » si gain < 5, consigne d « idée risquée ». Test paramétré `test_explosive_admissible_hybrid` (remplace `…_human_expectation`).
+Mesure (4 parties `run_live_retours_parties.txt`, avant `select_critical` qui en garde ≤ 3) : 5 / 2 / 1 / 4 occasions [n=4] ; 11 sur 12 admises par la seule règle sprint 28 (gain Maia de −13,7 à +0,6), 1 par Maia (Ng4, +5,4).
+Tronçon 08 fait : `summary._game_accuracy` (Lichess : fenêtres glissantes, poids = écart-type population borné 0,5-12, (pondérée + harmonique) / 2, plancher 1 %/coup) → clé `accuracy` ; `worst_move` / `worst_win_before` / `worst_win_after` (perte max ≥ 10) ; `explosive.find_best_move` + `_problem_score` → `GameAnalysis.best_move` (`BestMove`), clés `best_move`, `best_defense`, `best_defense_p`, `best_reply_played` ; router : `_level_line` = `précision Nico : N %`, ligne 🎯 `_moves_line` avant le bloc Progression. 2 tests ajoutés, 4 tests router ajustés (ligne 🎯).
+Choix non tranchés par le kickoff : score Maia = Σ sur les seules **fautes** (écart ≥ 5) ; aucun meilleur coup si score max ≤ 0 ; défense hors des réponses Maia gardées (90 % cumulés) → p = 0, affichée « 0 % de chances ». `summary_text` (document indexé) garde la précision par phase.
+Mesure (4 parties `run_live_retours_parties.txt`) [n=4] : précision 91 / 49 / 88 / 86 % (audit : 91 / 52 / 89 / 85 sans pondération) ; meilleur coup 20.Kd2 (score 44, défense Be6, joué Bxg2), 14.Qxb7 (14), 10.Nb5 (8,5), 33...Qd8 (18,5) ; pire coup 17.Be5 (51 → 37), 39.Bb2 (88 → 2), 28.Ndf7 (85 → 63), 31...Rxa5 (43 → 26) ; passe meilleur coup 15-21 s.
+⚠ La meilleure défense est hors du top Maia sur les 4 parties [n=4] (biais de sélection : le score est maximal quand les humains ratent la défense) → « 0 % de chances » systématique ; à arbitrer au run live (afficher « < 5 % » ou la p brute non tronquée).
+Tronçon 09 fait : consigne de `_build_enriched` — entrée ≤ 5 phrases / 900 car. = idée générale (pièces, matériel, attaquées, motifs) + variante du meilleur coup (`ligne :`, ou celle des consignes e/d) expliquée coup par coup + au plus « 50 % → 37 % ». Consignes e/d et interdits inchangés. Assertions ajoutées à `test_execute_returns_text_and_images_and_delegates_reasoning`.
+Note : la consigne d garde « Cette entrée peut dépasser 3 phrases » (laissée, hors brief ; désormais en tension avec la limite de 5).
+Tronçon 10 fait : `bot.main` après `telegram.start()` (retour de `run_polling`) → `log.info("ARIA arrêt")`, `logging.shutdown()`, `os._exit(0)` ; test `tests/test_bot.py` (kernel / interface simulés, `configure_root` neutralisé à l'import, `logging.shutdown` et `os._exit` monkeypatchés).
+Prochaine étape : tronçon 11 (run live Nico), dont `systemctl restart` < 10 s.
+Phase A'' close (OK Nico), kickoffs 12-14 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 12 → 13), puis run live 12 par Nico (tronçon 14).
+Tronçon 12 fait : `PlyAnalysis.played_p` rempli par `assign_difficulty` (même passe batchée : n couples (fen, meilleur coup) + n couples (fen, coup joué)) ; `summary` : `best_move` = coup de Nico de perte ≤ 2 au plus faible `played_p`, clé `best_move_p` (3 décimales) ; router : « meilleur coup X (trouvé par N % des joueurs de ton niveau) ». Supprimés : `find_best_move`, `_problem_score`, `BestMove`, `GameAnalysis.best_move`, clés `best_defense` / `best_defense_p` / `best_reply_played`, test `test_problem_score_counts_human_faults`. Test ajouté `test_best_move_is_rarest_played_move` ; `test_assign_difficulty_formula_and_filter` adapté (2 couples par coup, `played_p`).
+Prochaine étape : tronçon 13 (légende par faits).
+Tronçon 13 fait : `chess_router._move_facts(fen, moves_san, move_number, color)` (rejoue la ligne : roque, prend X / reprend, promotion, échec / mat, attaque des pièces adverses nouvellement attaquées non défendues ou de valeur supérieure) ; lignes `  faits :` sous `ligne :` (toutes sortes), sous la variante c / e et sous la variante d (depuis la position après le coup explosif) ; `_evaluation` → `  évaluation : avantage Nico / équilibre / avantage adverse (N %)` depuis `p.win_before` ; consigne : idée générale d'après évaluation + motifs + but du meilleur coup, variante racontée avec les faits, interdit étendu aux faits, interdit de paraphraser « matériel égal » / « aucune attaquée ». Test `test_move_facts_capture_and_numbering`.
+Choix : roi attaquant compté valeur 100 (n'attaque utilement qu'une pièce non défendue) ; « reprend » = prise sur la case de la prise précédente de la ligne ; coup noir numéroté « 14...O-O » comme l'exemple du kickoff (≠ `_format_line`).
+Écart : fixtures de `test_chess_router.py` illégales (Bd7 / Qh4 après 1.e4) → `d6` et FEN propre au test explosif (assertion « pièces : » adaptée).
+Prochaine étape : tronçon 14 (run live 12 par Nico).
+Tronçon 14 fait (run live 12) : légende ❌. Prochaine étape : `/conception` sur la légende (audit avant fix).
+Phase A''' : audit `audit_run_live_12.md` écrit ; prochaine étape : arbitrages Q1-Q3 A''' (§Questions ouvertes) puis kickoffs 15+.
+Phase A''' close (OK Nico), kickoffs 15-16 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçon 15), puis run live 13 par Nico (tronçon 16).
+Tronçon 15 fait : `llm_router` étape 1b — `skip_history` → historique non lu (`conversation_history SKIPPED reason=skip_history`), échange toujours écrit ; `chess_router` pose `skip_history: True` sur l'appel REASONING. `_move_fact_items` (calcul par coup partagé) → `_move_facts` (ligne `faits :`) et `_variant_line` (ligne « Variante : » ajoutée sous la ligne factuelle à la création de la légende, survit au FALLBACK). Consigne : idée générale seule, 1 à 3 phrases / 400 car., « de Position 1 à Position N, aucune omise ». Tests : `test_skip_history_skips_load_but_writes_turn`, `test_variant_line_capture_and_check`, 4 tests router ajustés.
+Choix : sorte b (occasion manquée après erreur adverse, absente du tableau du kickoff) traitée comme a (`p.pv_san`).
+Note : consignes e (« montre la variante qui la punit ») et d (variante + « peut dépasser 3 phrases ») inchangées comme prescrit, en tension avec « n'énumère pas les coups » / 3 phrases.
+Prochaine étape : tronçon 16 (run live 13 par Nico).
+Tronçon 15 fait et commité (`9c207fc`). Tronçon 16 fait (run live 13) : OK 4/4. Sprint clos : kickoff `docs/sprint30/context_kickoff_sprint_30.md`, tag `sprint-29`.

@@ -26,7 +26,8 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze
-from chess_coach.player_model import LABELS, build_profile, opening_family
+from chess_coach.explosive import _GAIN_MIN
+from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
 from chess_coach.render import render_position
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -216,24 +217,122 @@ def _attacked_line(fen: str) -> str:
     return "attaquées : " + (" ; ".join(sides) or "aucune")
 
 
+def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) -> list:
+    """Ligne rejouée depuis `fen` : liste de (libellé du coup, faits observables) —
+    prise, échec, mat, roque, promotion, et pièces adverses nouvellement attaquées
+    par la pièce jouée (non défendues ou de valeur supérieure). Calcul unique partagé
+    par la ligne « faits : » du message enrichi et la ligne « Variante : » des légendes."""
+    board = chess.Board(fen)
+    parts = []
+    recapture_square = None
+    for san in moves_san:
+        move = board.parse_san(san)
+        mover = board.turn
+        castling = board.is_castling(move)
+        facts = []
+        if castling:
+            facts.append("roque")
+        elif board.is_capture(move):
+            # Reprise : prise sur la case où l'adversaire vient de prendre.
+            if move.to_square == recapture_square:
+                facts.append("reprend")
+            else:
+                captured = move.to_square
+                if board.is_en_passant(move):
+                    captured += -8 if mover == chess.WHITE else 8
+                facts.append(f"prend {_square_label(board, captured)}")
+        recapture_square = move.to_square if board.is_capture(move) else None
+        if move.promotion:
+            facts.append(f"promotion en {chess.piece_symbol(move.promotion).upper()}")
+        before = chess.SquareSet() if castling else board.attacks(move.from_square)
+        # Le roi n'attaque utilement qu'une pièce non défendue (valeur 0 dans _VALUES).
+        attacker_value = _VALUES[move.promotion or board.piece_type_at(move.from_square)] or 100
+        board.push(move)
+        if board.is_checkmate():
+            facts.append("mat")
+        elif board.is_check():
+            facts.append("échec")
+        if not castling and not board.is_checkmate():
+            targets = [
+                _square_label(board, sq)
+                for sq in board.attacks(move.to_square) & board.occupied_co[not mover]
+                if sq not in before and board.piece_type_at(sq) != chess.KING
+                and (not board.attackers(not mover, sq)
+                     or _VALUES[board.piece_type_at(sq)] > attacker_value)
+            ]
+            if targets:
+                facts.append("attaque " + ", ".join(targets))
+        parts.append((_move_label(move_number, color, san), facts))
+        if color == "black":
+            move_number += 1
+        color = "black" if color == "white" else "white"
+    return parts
+
+
+def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
+    """Ligne « faits : » du message enrichi : chaque coup suivi de ses faits entre
+    parenthèses. Le LLM s'appuie sur ces faits au lieu de les deviner."""
+    return " ".join(
+        f"{label} ({', '.join(facts)})" if facts else label
+        for label, facts in _move_fact_items(fen, moves_san, move_number, color)
+    )
+
+
+def _variant_line(critical) -> str:
+    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15) : coups
+    séparés par « ; », chacun suivi de ses faits. Vide si la ligne n'a aucun coup."""
+    p = critical.ply
+    if critical.kind in ("c", "e"):
+        moves = critical.line_san
+    elif critical.kind == "d":
+        moves = [critical.explosive.san] + critical.explosive.trap_line_san
+    else:
+        moves = p.pv_san
+    if not moves:
+        return ""
+    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
+    return "Variante : " + " ; ".join(
+        f"{label} {', '.join(facts)}" if facts else label for label, facts in items
+    ) + "."
+
+
+def _evaluation(win: float) -> str:
+    """État de la position d'après le % de gain de Nico."""
+    if win >= 60:
+        return "avantage Nico"
+    if win <= 40:
+        return "avantage adverse"
+    return "équilibre"
+
+
 def _to_english(text: str) -> str:
     """Notation française résiduelle du LLM → anglaise (C→N, F→B, T→R, D→Q)."""
     return _FR_PIECE_RE.sub(lambda m: _FR_TO_EN[m.group(1)] + m.group(2), text)
 
 
 def _level_line(summary: dict) -> str:
-    """Données de niveau de la partie (précision par phase, erreurs adverses punies, résultat)."""
-    accuracies = ", ".join(
-        f"{_PHASE_FR[phase]} {summary[f'accuracy_{phase}']:.0f} %"
-        for phase in ("opening", "middlegame", "endgame") if summary[f"accuracy_{phase}"] is not None
-    )
+    """Données de niveau de la partie (précision Lichess, erreurs adverses punies, résultat)."""
     parts = []
-    if accuracies:
-        parts.append(f"précision Nico : {accuracies}")
+    if summary["accuracy"] is not None:
+        parts.append(f"précision Nico : {summary['accuracy']:.0f} %")
     parts.append(f"erreurs adverses punies : {summary['opponent_errors_punished']}"
                  f"/{summary['opponent_errors']}")
     parts.append(f"résultat : {summary['result'] or '?'} ({_OUTCOME_FR[summary['outcome']]})")
     return "Niveau (données) : " + " ; ".join(parts)
+
+
+def _moves_line(summary: dict) -> str:
+    """Ligne déterministe sous le texte LLM : précision, meilleur et pire coup (tronçon 08)."""
+    parts = []
+    if summary["accuracy"] is not None:
+        parts.append(f"Précision {summary['accuracy']:.0f} %")
+    if summary["best_move"]:
+        parts.append(f"meilleur coup {summary['best_move']} "
+                     f"(trouvé par {summary['best_move_p'] * 100:.0f} % des joueurs de ton niveau)")
+    if summary["worst_move"]:
+        parts.append(f"pire coup {summary['worst_move']} "
+                     f"({summary['worst_win_before']:.0f} % → {summary['worst_win_after']:.0f} %)")
+    return "🎯 " + " · ".join(parts) if parts else ""
 
 
 def _signed(x: float) -> str:
@@ -256,8 +355,17 @@ def _trial_text(trial) -> str:
         return f"{_RESULT_FR[trial.score]} contre {round(trial.difficulty)}"
     if trial.label == "coups 1-10":
         return f"coups 1-10 {'réussis' if trial.score else 'ratés'} (difficulté ≈{round(trial.difficulty)})"
-    return (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
+    text = (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
             f"(difficulté ≈{round(trial.difficulty, -1):.0f})")
+    return f"{text}, {trial.mate}" if trial.mate else text
+
+
+def _motif_fr(motif: str) -> str:
+    """Libellé français d'un motif (« fork » → « fourchette ») pour le bloc enrichi."""
+    if motif in MATE_LABELS:
+        return MATE_LABELS[motif]
+    label = LABELS["hanging" if motif == "hangingPiece" else motif]
+    return label[0].lower() + label[1:]
 
 
 def _rating_line(key: str, before, after) -> str:
@@ -321,8 +429,9 @@ def _reply_start(p) -> tuple:
 
 
 def _explosive_lines(p, e, nico_color: str) -> list:
-    """Faits moteur du coup explosif d'une position de sorte d : l'idée, la variante
-    si l'adversaire joue la réponse logique, la difficulté de la bonne réponse."""
+    """Faits moteur du coup explosif d'une position de sorte d : l'idée, les réponses
+    humaines probables (Maia, Elo adverse), l'espérance face à un humain, la variante
+    si l'adversaire joue la réponse la plus probable."""
     lines = [f"  explosif {_move_label(p.move_number, p.color, e.san)}!?"]
     facts = []
     # Matériel : pièce offerte (posée en prise) prioritaire sur le sacrifice de ligne.
@@ -334,39 +443,25 @@ def _explosive_lines(p, e, nico_color: str) -> list:
         facts.append("forçant : " + "/".join(_FORCING_FR[f] for f in e.forcing))
     if facts:
         lines.append("  " + " ; ".join(facts))
-    # Réponse logique : prise naturelle du matériel offert, à défaut la 1re réponse moteur.
-    if e.trap_reply_san:
-        piece = _PIECE_FR.get(e.san[0], "le pion")
-        offered = "offerte" if piece.startswith("la ") else "offert"
-        lines.append(f"  réponse logique : {e.trap_reply_san} (prend {piece} {offered})")
-    elif e.replies:
-        lines.append(f"  réponse logique : {e.replies[0]['san']}")
+    top = e.replies[0]
+    lines.append(f"  réponse humaine la plus probable : {top['san']} ({top['p'] * 100:.0f} %)")
+    lines.append(f"  espérance face à un humain : Nico {e.expected:.0f} % "
+                 f"(meilleur coup : {e.best_expected:.0f} %)")
+    # Admis par la seule règle sprint 28 (sacrifice / piège) : c'est un pari.
+    if e.expected - e.best_expected < _GAIN_MIN:
+        lines.append("  pari : face à un humain l'espérance n'est pas meilleure que le meilleur coup")
     number, color = _reply_start(p)
     lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
                  f"({_EVIDENCE_FR[e.evidence]})")
+    after = chess.Board(p.fen_before)
+    after.push_san(e.san)
+    lines.append(f"  faits : {_move_facts(after.fen(), e.trap_line_san, number, color)}")
     lines.append(f"  fin de variante : {_material_line(e.trap_end_fen, nico_color)}, "
                  f"% de gain Nico {e.trap_end_win:.0f} %")
     lines.append(f"  fin de variante, {_attacked_line(e.trap_end_fen)}")
-    # Difficulté : réponses qui tiennent = écart ≤ 5 pts avec la meilleure réponse.
-    difficulty = []
-    if e.trap_reply_san:
-        trap = f", elle lui fait perdre {e.trap:.0f} pts" if round(e.trap) else ""
-        difficulty.append(f"la réponse logique gagne du matériel à vue{trap}")
-    if e.replies:
-        best = min(r["win"] for r in e.replies)
-        holding = [r["san"] for r in e.replies if r["win"] - best <= 5]
-        others = [r["win"] for r in e.replies if r["win"] - best > 5]
-        label = "seule réponse qui tient" if len(holding) == 1 else "réponses qui tiennent"
-        text = f"{label} : {', '.join(holding)}"
-        if others:
-            rest = "l'autre" if len(others) == 1 else f"les {len(others)} autres"
-            text += f" ({rest} : Nico ≥ {min(others):.0f} %)"
-        difficulty.append(text)
-    if difficulty:
-        lines.append("  difficulté pour l'adversaire : " + " ; ".join(difficulty))
     for reply in e.replies:
-        lines.append(f"  si {reply['san']} : {_format_line(reply['line_san'], number, color)}, "
-                     f"{reply['win']:.0f} % pour Nico")
+        lines.append(f"  si {reply['san']} ({reply['p'] * 100:.0f} %) : "
+                     f"{_format_line(reply['line_san'], number, color)}, {reply['win']:.0f} % pour Nico")
     return lines
 
 
@@ -389,6 +484,62 @@ def _caption(index: int, critical, plies: list) -> str:
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
             f"joué {_move_label(p.move_number, p.color, p.san)}, "
             f"meilleur {_move_label(p.move_number, p.color, p.best_san)}")
+
+
+# Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
+# une ligne « Niveau : » clôt la dernière entrée.
+_ENTRY_RE = re.compile(r"^\**Position (\d+)\**\s*[—–-]\**\s*", re.MULTILINE)
+_LEVEL_RE = re.compile(r"^\**Niveau\b", re.MULTILINE)
+_SENTENCE_END_RE = re.compile(r"[.!?…](?=\s|$)")
+
+# Limite Telegram d'une légende de photo.
+_CAPTION_MAX = 1024
+
+
+def _fit_entry(entry: str, budget: int) -> str:
+    """Entrée ≤ budget : coupée à la dernière phrase complète qui tient, puis « … »."""
+    if len(entry) <= budget:
+        return entry
+    head = entry[:budget - 2]
+    ends = [m.end() for m in _SENTENCE_END_RE.finditer(head)]
+    return (head[:ends[-1]] if ends else head).rstrip() + " …"
+
+
+def _split_entries(text: str, images: list) -> tuple:
+    """
+    Déplace l'entrée « Position N » du LLM dans la légende de l'image N.
+
+    Retourne (texte restant, images). Si une entrée 1…len(images) manque,
+    texte et images sont rendus tels quels (pas de découpage partiel).
+    """
+    marks = list(_ENTRY_RE.finditer(text))
+    found = {int(m.group(1)): m for m in marks}
+    if not images or any(i not in found for i in range(1, len(images) + 1)):
+        log.info("chess_caption_split FALLBACK images=%d entries=%s",
+                 len(images), sorted(found))
+        return text, images
+
+    # Fin d'une entrée : début de l'entrée suivante, ligne « Niveau », ou fin du texte.
+    bounds = [m.start() for m in marks] + [m.start() for m in _LEVEL_RE.finditer(text)]
+    rest, cursor, captioned = [], 0, []
+    for m in marks:
+        n = int(m.group(1))
+        if n > len(images):
+            continue
+        end = min([b for b in bounds if b > m.start()] + [len(text)])
+        rest.append(text[cursor:m.start()])
+        cursor = end
+        entry = text[m.end():end].strip()
+        factual = images[n - 1]["caption"]
+        captioned.append((n, factual + "\n" + _fit_entry(entry, _CAPTION_MAX - len(factual) - 1)))
+    rest.append(text[cursor:])
+
+    new_images = [dict(img) for img in images]
+    for n, caption in captioned:
+        new_images[n - 1]["caption"] = caption
+    remaining = re.sub(r"\n{3,}", "\n\n", "".join(rest)).strip()
+    log.info("chess_caption_split OK images=%d", len(images))
+    return remaining, new_images
 
 
 class ChessExecutionRouter(BaseRouter):
@@ -428,7 +579,13 @@ class ChessExecutionRouter(BaseRouter):
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci)
-            images.append({"path": str(out_path), "caption": _caption(i, critical, analysis.plies)})
+            # La variante est écrite sous la ligne factuelle dès la création de la
+            # légende : elle survit au repli chess_caption_split FALLBACK.
+            caption = _caption(i, critical, analysis.plies)
+            variant = _variant_line(critical)
+            if variant:
+                caption += "\n" + variant
+            images.append({"path": str(out_path), "caption": caption})
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
         # Hash des coups seuls (pas des en-têtes) : le même PGN recopié sans
@@ -464,11 +621,18 @@ class ChessExecutionRouter(BaseRouter):
             "content" : enriched,
             # Pas de skip_intent (Q4) : la partie doit aller en mémoire épisodique,
             # sous un intent imposé (le namer répondait « aucun », audit 05).
-            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME},
+            # skip_history (tronçon 15) : les analyses passées en historique servaient
+            # de moule au LLM ; l'échange reste écrit pour les questions de suivi.
+            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME,
+                         "skip_history": True},
         })
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
-        text = _to_english(result["text"])
+        # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
+        text, images = _split_entries(_to_english(result["text"]), images)
+        moves_line = _moves_line(summary)
+        if moves_line:
+            text += "\n\n" + moves_line
         if block:
             text += "\n\n" + block
         return {"text": text, "images": images}
@@ -499,11 +663,15 @@ class ChessExecutionRouter(BaseRouter):
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
+                f"  faits : {_move_facts(p.fen_before, p.pv_san, p.move_number, p.color)}",
                 f"  étiquettes : {tags}, phase : {_PHASE_FR[p.phase]}",
                 _pieces_line(p.fen_before),
                 f"  {_material_line(p.fen_before, color)}",
                 f"  {_attacked_line(p.fen_before)}",
+                f"  évaluation : {_evaluation(p.win_before)} ({p.win_before:.0f} %)",
             ]
+            if p.motifs:
+                lines.append(f"  motifs : {', '.join(_motif_fr(m) for m in p.motifs)}")
             if critical.kind == "e":
                 prev = analysis.plies[p.ply - 1]
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
@@ -512,24 +680,33 @@ class ChessExecutionRouter(BaseRouter):
             if critical.kind in ("c", "e"):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
+                lines.append(f"  faits : {_move_facts(p.fen_before, critical.line_san, p.move_number, p.color)}")
             if critical.kind == "d":
                 lines += _explosive_lines(p, critical.explosive, color)
         block = "\n".join(lines) + "]"
 
         elo = analysis.headers.get("WhiteElo" if color == "white" else "BlackElo", "")
         player = f"joueur d'environ {elo} Elo" if elo and elo != "?" else "joueur amateur"
+        n = len(analysis.critical)
         consigne = (
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
-            f"exacte « {anchor} » ; puis une entrée par position, dans l'ordre Position 1, "
-            "2, 3 (Nico voit les diagrammes du même numéro), de 1 à 3 phrases : le coup, "
-            "l'idée, le chiffre clé ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
+            f"exacte « {anchor} » ; puis une entrée pour chacune des {n} positions, de "
+            f"Position 1 à Position {n}, aucune omise (Nico voit les diagrammes du même "
+            "numéro), 1 à 3 phrases et 400 caractères : l'idée générale de la position "
+            "seulement (plan, pièce faible, roi exposé…) d'après la ligne « évaluation », les "
+            "motifs et le but du meilleur coup (d'après ses faits) ; n'énumère pas les coups "
+            "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
+            "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
+            "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
+            "(elle est déjà sous le diagramme) ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
             "passif, solide ou brillant), justifiée par la ligne « Niveau (données) » et, si "
             "présente, par la ligne « Historique (données) ». Rien "
             "d'autre : pas de section « ce qui se passe » ni « pourquoi ». Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
-            "matériel / attaquées. Notation anglaise : N, B, R, Q, K.]"
+            "matériel / attaquées / faits. Ne recopie ni ne paraphrase « matériel égal » "
+            "ou « aucune attaquée ». Notation anglaise : N, B, R, Q, K.]"
         )
         parts = [block, consigne]
         if opening:
@@ -547,12 +724,13 @@ class ChessExecutionRouter(BaseRouter):
         if any(c.kind == "d" for c in analysis.critical):
             parts.append(
                 "[Consigne : pour chaque occasion explosive : l'idée en une phrase ; la "
-                "variante si l'adversaire joue la réponse logique (coups fournis, rien "
+                "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "
                 "au-delà) et l'avantage atteint (critère fourni), expliqué par les pièces "
-                "protégées / vulnérables de la fin de variante ; pourquoi la bonne réponse "
-                "est difficile à trouver pour l'adversaire, d'après la ligne difficulté. Ne "
-                "donne ni le coût, ni quand le tenter, et ne le présente jamais comme le "
-                "meilleur coup. Cette entrée peut dépasser 3 phrases.]"
+                "protégées / vulnérables de la fin de variante ; quelles réponses humaines "
+                "probables perdent et ce qu'elles coûtent à l'adversaire, d'après les lignes "
+                "« si … ». Ne donne ni le coût, ni quand le tenter, et ne le présente jamais "
+                "comme le meilleur coup. Si la ligne « pari » est présente, une demi-phrase "
+                "la présente comme une idée risquée. Cette entrée peut dépasser 3 phrases.]"
             )
         if analysis.color_source == "default":
             parts.append(

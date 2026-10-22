@@ -36,9 +36,11 @@ def test_assign_difficulty_formula_and_filter(monkeypatch):
 
     difficulty.assign_difficulty(plies, "white", 1307, "unused")
 
-    assert len(seen) == 1
-    assert plies[1].difficulty == 1307
+    # Une seule passe : (fen, meilleur coup) puis (fen, coup joué) (sprint 29, tronçon 12).
+    assert len(seen) == 2
+    assert plies[1].difficulty == 1307 and plies[1].played_p == 0.5
     assert plies[0].difficulty is None and plies[2].difficulty is None
+    assert plies[0].played_p is None and plies[2].played_p is None
 
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(config.maia_models_dir, "rapid_model.pt")),
@@ -47,3 +49,16 @@ def test_assign_difficulty_real_maia():
     plies = [_ply(32, 17, "white")]
     difficulty.assign_difficulty(plies, "white", 1307, config.maia_models_dir)
     assert plies[0].difficulty > 1700
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(config.maia_models_dir, "rapid_model.pt")),
+                    reason="poids Maia-2 absents")
+def test_reply_distribution_real_maia():
+    # Sprint 29 : position aux noirs (démiroir) et aux blancs, en un seul lot.
+    import chess
+    black_fen = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 3 3"
+    fens = [black_fen, SPIKE_FEN]
+    for fen, replies in zip(fens, difficulty.reply_distribution(fens, 1300, config.maia_models_dir)):
+        legal = {m.uci() for m in chess.Board(fen).legal_moves}
+        assert replies and all(uci in legal and 0 < p <= 1 for uci, p in replies)
+        assert sum(p for _, p in replies) <= 1

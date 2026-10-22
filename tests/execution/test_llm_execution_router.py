@@ -350,3 +350,24 @@ def test_namer_aucun_skips_intent(mock_store, mock_conv, mock_namer):
     intent_engine.apply.assert_not_called()
     mock_store.assert_not_called()
     mock_conv.assert_called()
+
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_skip_history_skips_load_but_writes_turn(mock_store, mock_conv):
+    """Sprint 29 : skip_history → historique non lu, vide pour l'agent, échange écrit."""
+    router, _, _, fake_intent, bridge = make_router()
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["history"] = ctx.extra["conversation_history"]
+        return _fake_ctx(fake_intent, result="analyse")
+
+    router.controller.run = capture_ctx
+
+    router._run_pipeline("partie", CognitiveOperation.REASONING,
+                         {"chat_id": 42, "skip_history": True})
+
+    bridge.load_conversation_history.assert_not_called()
+    assert captured["history"] == []
+    assert mock_conv.call_count == 2

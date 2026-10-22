@@ -17,6 +17,7 @@ import chess
 import chess.engine
 import chess.pgn
 
+from chess_coach.motifs import tag_motifs
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -73,6 +74,10 @@ class PlyAnalysis:
     pv_mate: bool = False
     # Difficulté du coup en Elo (Maia-2, sprint 28) : coups de Nico après le coup 10.
     difficulty: float | None = None
+    # Probabilité Maia-2 (Elo de Nico) du coup joué (sprint 29, tronçon 12) : mêmes coups.
+    played_p: float | None = None
+    # Motifs tactiques du meilleur coup (sprint 29, clés de chess_coach.motifs).
+    motifs: list = field(default_factory=list)
 
 
 @dataclass
@@ -353,8 +358,25 @@ def _evidence(p: PlyAnalysis) -> tuple | None:
     return n, criterion, san
 
 
+def assign_motifs(plies: list, nico_color: str) -> None:
+    """Pose sur chaque coup de Nico (ply > 0) les motifs de la PV de son meilleur coup.
+
+    La PV est coupée au point d'avantage clair (comme _evidence) ; pas
+    d'avantage clair → aucun motif. Le coup adverse précédent ouvre la ligne
+    (format des puzzles Lichess). Fonction pure : aucune analyse moteur.
+    """
+    for p in plies:
+        if p.color != nico_color or p.ply == 0:
+            continue
+        line = [chess.Move.from_uci(uci) for uci in p.pv_uci]
+        result = clear_advantage(chess.Board(p.fen_before), line, p.win_before, p.pv_mate)
+        if result is not None:
+            prev = plies[p.ply - 1]
+            p.motifs = tag_motifs(prev.fen_before, prev.uci, p.pv_uci[:result[0]])
+
+
 def select_critical(plies: list, nico_color: str, explosive=()) -> list:
-    """Sélectionne ≤ 3 positions critiques + 1 occasion explosive en bonus, ordre chronologique.
+    """Sélectionne ≤ 3 positions critiques + ≤ 3 occasions explosives en bonus, ordre chronologique.
 
     (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
     assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
@@ -364,8 +386,9 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     rend l'avantage clair (clear_advantage). Les a/b par score décroissant, puis
     les e, puis les c remplissent le budget de 3 ; un ply à la fois e et c reste e.
     (d) occasion explosive, fournie par chess_coach.explosive (perte du coup joué
-    < 10, donc jamais a/b) : la meilleure s'ajoute en 4e sans rien évincer, sauf
-    si sa position est déjà retenue. Aucune position retenue → liste vide.
+    < 10, donc jamais a/b) : jusqu'à 3, meilleur score d'abord, s'ajoutent sans
+    rien évincer ; celles dont la position est déjà retenue sont sautées.
+    Aucune position retenue → liste vide.
     """
     errors, turns, uniques = [], [], []
     for p in plies:
@@ -399,10 +422,9 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     turns.sort(key=lambda c: c.score, reverse=True)
     uniques.sort(key=lambda c: c.score, reverse=True)
     selected = (errors + turns + uniques)[:3]
-    if explosive:
-        best_d = max(explosive, key=lambda c: c.score)
-        if all(c.ply.ply != best_d.ply.ply for c in selected):
-            selected.append(best_d)
+    taken = {c.ply.ply for c in selected}
+    bonus = [d for d in sorted(explosive, key=lambda c: c.score, reverse=True) if d.ply.ply not in taken]
+    selected += bonus[:3]
     return sorted(selected, key=lambda c: c.ply.ply)
 
 
@@ -410,7 +432,8 @@ def analyze(text: str, message: str, username: str, engine_path: str,
             maia_models_dir: str | None = None) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
 
-    maia_models_dir : dossier des poids Maia-2 ; None → pas de difficulté.
+    maia_models_dir : dossier des poids Maia-2 ; None → pas de difficulté ni
+    d'occasion explosive.
     """
     started = time.monotonic()
     game = parse_pgn(text)
@@ -421,16 +444,19 @@ def analyze(text: str, message: str, username: str, engine_path: str,
     plies = analyze_game(game, nico_color, engine_path)
     if maia_models_dir is not None:
         # Maia est une dépendance lourde optionnelle : son échec laisse
-        # difficulty = None partout et l'analyse continue.
+        # difficulty / played_p = None partout et l'analyse continue.
         try:
             from chess_coach.difficulty import assign_difficulty
             elo = headers.get("WhiteElo" if nico_color == "white" else "BlackElo", "")
             assign_difficulty(plies, nico_color, int(elo) if elo.isdigit() else None, maia_models_dir)
         except Exception:
             log.exception("maia_difficulty FAILED")
+    assign_motifs(plies, nico_color)
     # Import local : explosive.py importe ce module (CriticalPosition, _win).
     from chess_coach.explosive import find_explosive
-    explosive = find_explosive(plies, nico_color, engine_path)
+    opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
+    opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
+    explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir)
     critical = select_critical(plies, nico_color, explosive)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s critical=%s duration=%.1fs",

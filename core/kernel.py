@@ -16,6 +16,7 @@
 #         → normalisation → str (réponse Telegram)
 
 from config import config
+from logger import get_logger
 
 from core.event import Event
 from cognition.cognitive_engine import CognitiveEngine, CognitiveResult
@@ -38,6 +39,8 @@ from execution.routers.image_router import ImageExecutionRouter
 from execution.routers.llm_router import LLMExecutionRouter
 from execution.routers.web_router import WebExecutionRouter
 from execution.routers.chess_router import ChessExecutionRouter
+
+log = get_logger(__name__)
 
 
 # ── Table de routing opération → nom de router ──────────────────────────────
@@ -231,5 +234,5 @@ class AriaKernel:
 
         # Erreur d'exécution — message neutre, pas de crash Telegram
         error = exec_result.get("error", "Erreur interne")
-        print(f"[KERNEL] execution error: {error}")
+        log.error("kernel execution error: %s", error)
         return "Une erreur s'est produite, réessaie."
