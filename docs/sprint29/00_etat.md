@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-22), prête pour `/sprint-auto sprint 29`
+**Phase** : B' — retours run live figés (OK Nico 2026-10-22), tronçons 07-11 prêts pour `/sprint-auto sprint 29`
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -62,7 +62,12 @@
 | 03 | `03_motifs_profil.md` — motifs à l'analyse, `plies_json`, classements, Global pondéré | ✅ (non commité, 336 verts) |
 | 04 | `04_coup_piegeant.md` — espérance humaine Maia, toute la partie, 3 occasions | ✅ (non commité, 337 verts) |
 | 05 | `05_legende.md` — explication en légende sous chaque image | ✅ (non commité, 340 verts) |
-| 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ⏳ |
+| 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ✅ fait 2026-10-22 (4 parties), retours → phase A' |
+| 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ⏳ |
+| 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ⏳ |
+| 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ⏳ |
+| 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ⏳ |
+| 11 | `11_run_live_retours.md` — run live (Nico) | ⏳ |
 
 ## Dettes
 
@@ -71,10 +76,32 @@
 - Nouvelles : #103 `handle_event` synchrone bloque la boucle du bot pendant l'analyse
   (devient plusieurs minutes sans budget) ; #104 un échec d'envoi de photo interrompt
   l'envoi du texte qui suit (`images_text`).
+- Nouvelles (retours run live) : #105 quarantaine HNSW récurrente de `mempalace_drawers`
+  (`hnsw:sync_threshold` 50 000 → HNSW jamais persisté) ; #106 le LLM écrit « finale »
+  sur une position classée milieu de partie.
+
+## Phase A' — retours du run live (ouverte 2026-10-22)
+
+Audit : `audit_retours_run_live.md`. Quatre sujets, tronçons 07+ à concevoir :
+1. Occasions explosives : 0 trouvée (gain max 5,9 < seuil 10 [n=4]). Nico : seuil 5,
+   adapté à l'Elo, retrouver les idées risquées d'avant (règle sprint 28).
+2. Légende : gardée (Nico) ; ajouter variante textuelle expliquée + idée générale.
+3. Précision : se rapprocher de chess.com (actuel = moyenne arithmétique).
+4. Arrêt aria.service lent : diagnostic py-spy autorisé (carte blanche Nico), en cours.
 
 ## Questions ouvertes
 
 - (aucune)
+
+## Décisions phase A'
+
+- Q1 (Nico, 2026-10-22) : règle hybride — admissible si ancienne règle sprint 28
+  (sacrifice ≥ 1 ou piège ≥ 10, fenêtre 5/15, avantage clair) OU gain Maia ≥ 5 ;
+  seuil fixe (Maia reçoit déjà l'Elo adverse).
+- Q2 (Nico) : précision = algorithme Lichess complet (pas de chiffres chess.com pour
+  calibrer) ; afficher en plus le meilleur et le pire coup de Nico de la partie.
+- Q3 (Nico) : entrée de légende = idée générale + variante du meilleur coup expliquée
+  coup par coup ; chiffre clé supprimé ou réduit à « 57 % → 75 % ».
 
 ## §REPRISE
 
@@ -93,4 +120,4 @@ Tests supprimés : `test_explosive_smith_morra_nd5`, `test_explosive_early_queen
 Mesure : 0 occasion sur les 2 premières parties de `run_live_parties.txt` [n=2] (gains tous < 10) ; passe explosive 57 s et 37 s [n=2].
 Tronçon 05 fait : `chess_router._split_entries` (après `_to_english`) : entrée « Position N — » (gras Markdown et tirets –/- tolérés) → légende = ligne factuelle + saut de ligne + entrée sans son marqueur ; fin d'entrée = entrée suivante ou ligne « Niveau » ; > 1024 → `_fit_entry` (dernière phrase + « … ») ; une entrée 1…len(images) manquante → repli complet ; `log.info` `chess_caption_split OK/FALLBACK`. Consigne : marqueur en début de ligne, ne pas recopier la ligne factuelle. 3 tests.
 Choix : le marqueur « Position N — » est retiré de l'entrée (la ligne factuelle le porte déjà) ; une entrée « Position K » avec K > nombre d'images reste dans le texte.
-Prochaine étape : run live 06 par Nico.
+Phase A' close, kickoffs 07-11 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 07 → 10), puis run live 11 par Nico.
