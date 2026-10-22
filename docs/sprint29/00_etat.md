@@ -67,7 +67,7 @@
 | 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ✅ (non commité, 343 verts) |
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
-| 11 | `11_run_live_retours.md` — run live (Nico) | ⏳ |
+| 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
 
 ## Dettes
 
@@ -88,6 +88,21 @@ Audit : `audit_retours_run_live.md`. Quatre sujets, tronçons 07+ à concevoir :
 2. Légende : gardée (Nico) ; ajouter variante textuelle expliquée + idée générale.
 3. Précision : se rapprocher de chess.com (actuel = moyenne arithmétique).
 4. Arrêt aria.service lent : diagnostic py-spy autorisé (carte blanche Nico), en cours.
+
+## Résultats run live 11 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code des tronçons 07-10.
+- Arrêt : 0,25 s (Stopping 15:35:17.95 → Deactivated 15:35:18.19), « ARIA arrêt » présent ✅.
+  Le restart à plus d'une minute juste avant venait de l'ancien code (process lancé à 14:19, tronçon 10 commité à 15:00).
+- Occasions explosives : 2 à 7 par partie ✅ ; bruit (2.d4, 4.Bc4, 8...Bb7 « explosifs ») et texte
+  contradictoire (« les réponses X perdent toutes » + « l'espérance n'est pas meilleure »).
+- Précision : 49 % Falestinhurra, 90 / 88 / 86 % sur les autres, une valeur par partie ✅.
+- Légende ❌ : pas de variante expliquée coup par coup ; « idée générale » = formule creuse répétée
+  « Position équilibrée, matériel égal, aucune pièce attaquée », même à 75 % (23...f4) ou matériel inégal.
+- Meilleur coup ❌ : 32...bxa5 (reprise), 20.Kd2 (réponse à un échec), 14.Qxb7 (prise de pion) ;
+  27.Qe5 seul plausible. « 0 % de chances » sur la défense 2 fois / 4 (défense hors réponses Maia gardées).
+- Pire coup : cohérent ✅.
+- Démarrage : ~15 s d'imports avant « ARIA démarrage », prêt en ~23 s [n=1].
 
 ## Questions ouvertes
 
