@@ -15,6 +15,8 @@
 #         → ExecutionDispatcher.dispatch() → ExecutionResult
 #         → normalisation → str (réponse Telegram)
 
+import asyncio
+
 from config import config
 from logger import get_logger
 
@@ -158,8 +160,14 @@ class AriaKernel:
         5. normalize → str pour la couche interface (Telegram)
         """
 
+        # classify et dispatch sont synchrones (LLM, Stockfish, chromadb…) :
+        # ils tournent dans un thread pour ne pas bloquer la boucle asyncio
+        # de l'interface pendant un traitement long (#103, sprint 30).
+
         # ── 1. Classification cognitive ──────────────────────────────────────
-        cognitive_result: CognitiveResult = self.cognitive_engine.classify(event)
+        cognitive_result: CognitiveResult = await asyncio.to_thread(
+            self.cognitive_engine.classify, event
+        )
 
         # ── 2. Short-circuit ────────────────────────────────────────────────
         # Utilisé quand le CognitiveEngine peut répondre sans exécution
@@ -183,7 +191,7 @@ class AriaKernel:
         )
 
         # ── 4. Dispatch vers le router d'exécution ───────────────────────────
-        exec_result = self.execution_dispatcher.dispatch(exec_op)
+        exec_result = await asyncio.to_thread(self.execution_dispatcher.dispatch, exec_op)
 
         # ── 5. Normalisation vers str ────────────────────────────────────────
         # ExecutionDispatcher retourne toujours un dict {"status", "data"/"error"}

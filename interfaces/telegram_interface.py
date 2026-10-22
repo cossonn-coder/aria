@@ -13,7 +13,8 @@
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
 from telegram import Update
-from telegram.error import NetworkError
+from telegram.constants import ChatAction
+from telegram.error import NetworkError, TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
@@ -40,6 +41,13 @@ SEND_BACKOFF_SECONDS = (2, 4)
 
 # Préfixe de la réponse non livrée, renvoyée avant la réponse suivante (sprint 29).
 UNDELIVERED_NOTICE = "⚠️ Ma réponse précédente n'avait pas pu partir :"
+
+# Signal d'attente pendant le traitement (sprint 30, #103) : indicateur
+# « écrit… » renvoyé toutes les 4 s (Telegram l'efface après 5 s), et un
+# seul message d'attente si le traitement dépasse 10 s.
+TYPING_REFRESH_SECONDS = 4
+WAIT_NOTICE_SECONDS = 10
+WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
 
 
 class TelegramInterface(BaseInterface):
@@ -103,7 +111,7 @@ class TelegramInterface(BaseInterface):
                 content=update.message.text,
                 metadata={"chat_id": chat_id},
             )
-            result = await self.kernel.handle_event(event)
+            result = await self._handle_with_waiting(chat_id, event)
 
         await self.send(chat_id, result)
 
@@ -144,9 +152,50 @@ class TelegramInterface(BaseInterface):
                 },
                 metadata={"chat_id": chat_id},
             )
-            result = await self.kernel.handle_event(event)
+            result = await self._handle_with_waiting(chat_id, event)
 
         await self.send(chat_id, result)
+
+    # =========================================================
+    # SIGNAL D'ATTENTE
+    # =========================================================
+
+    async def _handle_with_waiting(self, chat_id: int, event: Event):
+        """
+        Appelle le kernel en tenant l'utilisateur informé de l'attente.
+
+        Deux tâches tournent pendant le traitement : l'indicateur « écrit… »
+        renouvelé, et le message d'attente unique après WAIT_NOTICE_SECONDS.
+        Elles sont annulées dès que le kernel rend la main (réponse ou
+        exception), avant l'envoi de la réponse.
+        """
+        waiting = [
+            asyncio.create_task(self._keep_typing(chat_id)),
+            asyncio.create_task(self._notice_after_delay(chat_id)),
+        ]
+        try:
+            return await self.kernel.handle_event(event)
+        finally:
+            for task in waiting:
+                task.cancel()
+            await asyncio.gather(*waiting, return_exceptions=True)
+
+    async def _keep_typing(self, chat_id: int):
+        """Renvoie l'indicateur « écrit… » jusqu'à annulation."""
+        while True:
+            try:
+                await self.app.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            except TelegramError as e:
+                log.warning("telegram typing indicator failed: %s, chat_id=%s", type(e).__name__, chat_id)
+            await asyncio.sleep(TYPING_REFRESH_SECONDS)
+
+    async def _notice_after_delay(self, chat_id: int):
+        """Envoie le message d'attente une seule fois, si le traitement dure."""
+        await asyncio.sleep(WAIT_NOTICE_SECONDS)
+        try:
+            await self.app.bot.send_message(chat_id=chat_id, text=WAIT_NOTICE)
+        except TelegramError as e:
+            log.warning("telegram wait notice failed: %s, chat_id=%s", type(e).__name__, chat_id)
 
     # =========================================================
     # ENVOI SORTANT
@@ -228,7 +277,14 @@ class TelegramInterface(BaseInterface):
                             photo=photo,
                             caption=caption[:1024] if caption else None,
                         )
-                await self._send_with_retry(chat_id, _send_photo)
+                # Photo en échec définitif : sautée, la suite part quand même (#104).
+                try:
+                    await self._send_with_retry(chat_id, _send_photo)
+                except NetworkError as e:
+                    log.warning(
+                        "telegram images_text: photo non envoyée, ignorée: %s (%s)",
+                        path, type(e).__name__,
+                    )
             message = message.get("text", "")
 
         # ── Résultat image ───────────────────────────────────────────────────
