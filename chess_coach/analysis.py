@@ -98,6 +98,8 @@ class GameAnalysis:
     color_source: str
     plies: list = field(default_factory=list)
     critical: list = field(default_factory=list)
+    # Coup qui pose problème (sprint 29, chess_coach.explosive.BestMove), ou None.
+    best_move: object | None = None
 
 
 def parse_pgn(text: str) -> chess.pgn.Game | None:
@@ -451,10 +453,11 @@ def analyze(text: str, message: str, username: str, engine_path: str,
             log.exception("maia_difficulty FAILED")
     assign_motifs(plies, nico_color)
     # Import local : explosive.py importe ce module (CriticalPosition, _win).
-    from chess_coach.explosive import find_explosive
+    from chess_coach.explosive import find_best_move, find_explosive
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
-    explosive = find_explosive(plies, nico_color, engine_path,
-                               int(opponent_elo) if opponent_elo.isdigit() else None, maia_models_dir)
+    opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
+    explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir)
+    best_move = find_best_move(plies, nico_color, engine_path, opponent_elo, maia_models_dir)
     critical = select_critical(plies, nico_color, explosive)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s critical=%s duration=%.1fs",
@@ -463,4 +466,4 @@ def analyze(text: str, message: str, username: str, engine_path: str,
         time.monotonic() - started,
     )
     return GameAnalysis(headers=headers, nico_color=nico_color, color_source=source,
-                        plies=plies, critical=critical)
+                        plies=plies, critical=critical, best_move=best_move)

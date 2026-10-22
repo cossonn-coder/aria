@@ -10,7 +10,7 @@ from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
 from chess_coach.analysis import clear_advantage
-from chess_coach.explosive import ExplosiveMove, _admissible, _expectation, _line_sacrifice
+from chess_coach.explosive import ExplosiveMove, _admissible, _expectation, _line_sacrifice, _problem_score
 from chess_coach.render import SIZE, render_position
 
 STOCKFISH = "/usr/games/stockfish"
@@ -109,6 +109,16 @@ def test_parse_pgn_indented_headers():
     # Collage Telegram : lignes 2+ indentées (run live 03, partie Dame précoce).
     game = parse_pgn('[White "Test"]\n  [Black "staroflexeur"]\n  1. e4 e5 2. Nf3 *\n')
     assert game.headers["Black"] == "staroflexeur"
+
+
+def test_problem_score_counts_human_faults():
+    # Meilleure défense : Nico à 60 %. Réponses Maia : défense 40 %, faute à 80 % (p 0,5),
+    # quasi-défense à 63 % (p 0,1, écart < 5 : pas une faute).
+    maia = [(0.4, 60.0), (0.5, 80.0), (0.1, 63.0)]
+    assert _problem_score(maia, [60.0, 62.0, 70.0], 60.0) == pytest.approx(0.5 * 20)
+    # Maia hésitante (p max < 0,15) : 2 fautes sur le top 5 Stockfish, écart moyen 15.
+    hesitant = [(0.12, 60.0), (0.1, 90.0)]
+    assert _problem_score(hesitant, [60.0, 62.0, 70.0, 80.0, 61.0], 60.0) == pytest.approx(2 / 5 * 15)
 
 
 def test_select_critical_explosive_is_bonus():

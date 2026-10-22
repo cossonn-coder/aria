@@ -64,7 +64,7 @@
 | 05 | `05_legende.md` — explication en légende sous chaque image | ✅ (non commité, 340 verts) |
 | 06 | `06_run_live.md` — run live (Nico), messages : `run_live_parties.txt` | ✅ fait 2026-10-22 (4 parties), retours → phase A' |
 | 07 | `07_explosif_hybride.md` — règle hybride (ancienne règle OU gain Maia ≥ 5) | ✅ (non commité, 341 verts) |
-| 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ⏳ |
+| 08 | `08_precision_meilleur_pire.md` — précision Lichess, meilleur coup (Maia + Stockfish), pire coup | ✅ (non commité, 343 verts) |
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ⏳ |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ⏳ |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ⏳ |
@@ -123,4 +123,8 @@ Choix : le marqueur « Position N — » est retiré de l'entrée (la ligne fact
 Phase A' close, kickoffs 07-11 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 07 → 10), puis run live 11 par Nico.
 Tronçon 07 fait : `ExplosiveMove.trap` réintroduit (prise naturelle en `root_moves=[capture]`, piège = win adverse PV principale − win après la prise), `_admissible` hybride (avantage clair ET (règle sprint 28 `_WINDOW` 5 / `_TRAP_MIN` 10 OU perte ≤ 15 + gain Maia ≥ `_GAIN_MIN` 5)), score = gain Maia inchangé ; router : ligne « pari : … » si gain < 5, consigne d « idée risquée ». Test paramétré `test_explosive_admissible_hybrid` (remplace `…_human_expectation`).
 Mesure (4 parties `run_live_retours_parties.txt`, avant `select_critical` qui en garde ≤ 3) : 5 / 2 / 1 / 4 occasions [n=4] ; 11 sur 12 admises par la seule règle sprint 28 (gain Maia de −13,7 à +0,6), 1 par Maia (Ng4, +5,4).
-Prochaine étape : tronçon 08.
+Tronçon 08 fait : `summary._game_accuracy` (Lichess : fenêtres glissantes, poids = écart-type population borné 0,5-12, (pondérée + harmonique) / 2, plancher 1 %/coup) → clé `accuracy` ; `worst_move` / `worst_win_before` / `worst_win_after` (perte max ≥ 10) ; `explosive.find_best_move` + `_problem_score` → `GameAnalysis.best_move` (`BestMove`), clés `best_move`, `best_defense`, `best_defense_p`, `best_reply_played` ; router : `_level_line` = `précision Nico : N %`, ligne 🎯 `_moves_line` avant le bloc Progression. 2 tests ajoutés, 4 tests router ajustés (ligne 🎯).
+Choix non tranchés par le kickoff : score Maia = Σ sur les seules **fautes** (écart ≥ 5) ; aucun meilleur coup si score max ≤ 0 ; défense hors des réponses Maia gardées (90 % cumulés) → p = 0, affichée « 0 % de chances ». `summary_text` (document indexé) garde la précision par phase.
+Mesure (4 parties `run_live_retours_parties.txt`) [n=4] : précision 91 / 49 / 88 / 86 % (audit : 91 / 52 / 89 / 85 sans pondération) ; meilleur coup 20.Kd2 (score 44, défense Be6, joué Bxg2), 14.Qxb7 (14), 10.Nb5 (8,5), 33...Qd8 (18,5) ; pire coup 17.Be5 (51 → 37), 39.Bb2 (88 → 2), 28.Ndf7 (85 → 63), 31...Rxa5 (43 → 26) ; passe meilleur coup 15-21 s.
+⚠ La meilleure défense est hors du top Maia sur les 4 parties [n=4] (biais de sélection : le score est maximal quand les humains ratent la défense) → « 0 % de chances » systématique ; à arbitrer au run live (afficher « < 5 % » ou la p brute non tronquée).
+Prochaine étape : tronçon 09.

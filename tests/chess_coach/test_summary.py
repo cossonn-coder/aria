@@ -57,3 +57,25 @@ def test_summarize_nominal():
 
     text = summary_text(analysis, s)
     assert "Nico (noirs, 1307) contre Ami (1272)" in text and "victoire" in text
+
+
+def test_accuracy_lichess_and_worst_move():
+    # Nico (blancs) : 9 coups propres (perte 2) et une gaffe de 80 pts au coup 9.
+    plies = []
+    for i in range(20):
+        white, blunder = i % 2 == 0, i == 16
+        loss = 80.0 if blunder else 2.0
+        win_before = 90.0 if blunder else (50.0 if white else 52.0)
+        plies.append(_ply(i, i // 2 + 1, "white" if white else "black", "Bb2" if blunder else "a3",
+                          "a2a3", "blunder" if blunder else "correct", loss, win_before, None))
+    analysis = GameAnalysis(headers={}, nico_color="white", color_source="header", plies=plies)
+
+    s = summarize(analysis)
+
+    arithmetic = sum(min(100, 103.1668 * 2.718281828 ** (-0.04354 * p.loss) - 3.1669)
+                     for p in plies if p.color == "white") / 10
+    # La gaffe pèse bien plus que dans la moyenne arithmétique (≈ 88 %).
+    assert s["accuracy"] < arithmetic - 15
+    assert s["worst_move"] == "9.Bb2"
+    assert (s["worst_win_before"], s["worst_win_after"]) == (90.0, 10.0)
+    assert s["best_move"] is None and s["best_defense"] is None

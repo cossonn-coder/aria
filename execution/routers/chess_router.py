@@ -223,18 +223,30 @@ def _to_english(text: str) -> str:
 
 
 def _level_line(summary: dict) -> str:
-    """Données de niveau de la partie (précision par phase, erreurs adverses punies, résultat)."""
-    accuracies = ", ".join(
-        f"{_PHASE_FR[phase]} {summary[f'accuracy_{phase}']:.0f} %"
-        for phase in ("opening", "middlegame", "endgame") if summary[f"accuracy_{phase}"] is not None
-    )
+    """Données de niveau de la partie (précision Lichess, erreurs adverses punies, résultat)."""
     parts = []
-    if accuracies:
-        parts.append(f"précision Nico : {accuracies}")
+    if summary["accuracy"] is not None:
+        parts.append(f"précision Nico : {summary['accuracy']:.0f} %")
     parts.append(f"erreurs adverses punies : {summary['opponent_errors_punished']}"
                  f"/{summary['opponent_errors']}")
     parts.append(f"résultat : {summary['result'] or '?'} ({_OUTCOME_FR[summary['outcome']]})")
     return "Niveau (données) : " + " ; ".join(parts)
+
+
+def _moves_line(summary: dict) -> str:
+    """Ligne déterministe sous le texte LLM : précision, meilleur et pire coup (tronçon 08)."""
+    parts = []
+    if summary["accuracy"] is not None:
+        parts.append(f"Précision {summary['accuracy']:.0f} %")
+    if summary["best_move"]:
+        detail = f"défense {summary['best_defense']} : {summary['best_defense_p'] * 100:.0f} % de chances"
+        if summary["best_reply_played"]:
+            detail += f", joué {summary['best_reply_played']}"
+        parts.append(f"meilleur coup {summary['best_move']} ({detail})")
+    if summary["worst_move"]:
+        parts.append(f"pire coup {summary['worst_move']} "
+                     f"({summary['worst_win_before']:.0f} % → {summary['worst_win_after']:.0f} %)")
+    return "🎯 " + " · ".join(parts) if parts else ""
 
 
 def _signed(x: float) -> str:
@@ -520,6 +532,9 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
         text, images = _split_entries(_to_english(result["text"]), images)
+        moves_line = _moves_line(summary)
+        if moves_line:
+            text += "\n\n" + moves_line
         if block:
             text += "\n\n" + block
         return {"text": text, "images": images}

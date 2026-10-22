@@ -13,6 +13,7 @@
 
 import json
 import math
+import statistics
 
 from chess_coach.analysis import GameAnalysis
 
@@ -49,6 +50,45 @@ def _outcome(result: str, nico_color: str) -> str:
 def _accuracy(loss: float) -> float:
     """Précision d'un coup (formule Lichess), bornée à [0, 100]."""
     return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * loss) - 3.1669))
+
+
+def _move_accuracy(loss: float) -> float:
+    """Précision d'un coup, formule Lichess complète (bonus +1), bornée à [0, 100]."""
+    if loss <= 0:
+        return 100.0
+    return max(0.0, min(100.0, 103.1668100711649 * math.exp(-0.04354415386753951 * loss)
+                        - 3.166924740191411 + 1))
+
+
+def _game_accuracy(plies: list, color: str) -> float | None:
+    """Précision de la partie pour color, algorithme Lichess (AccuracyPercent.scala).
+
+    Série des % de gain point de vue blancs sur les N+1 positions ; une
+    fenêtre glissante par coup (le début répète la première fenêtre) ; poids
+    d'un coup = écart-type (population) de sa fenêtre, borné [0,5 ; 12].
+    Précision = (moyenne pondérée + moyenne harmonique) / 2 sur les coups de color.
+    """
+    if not any(p.color == color for p in plies):
+        return None
+    series = [p.win_before if p.color == "white" else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    series.append(last.win_after if last.color == "white" else 100 - last.win_after)
+    window = max(2, min(8, (len(series) - 1) // 10))
+    windows = [series[:window]] * max(0, min(window, len(series)) - 2)
+    windows += [series[i:i + window] for i in range(len(series) - window + 1)]
+    weights = [max(0.5, min(12.0, statistics.pstdev(w))) for w in windows]
+
+    pairs = [(_move_accuracy(_effective_loss(p)), w) for p, w in zip(plies, weights) if p.color == color]
+    weighted = sum(a * w for a, w in pairs) / sum(w for _, w in pairs)
+    # Écart à Lichess : plancher à 1 % par coup, sinon une précision nulle
+    # (gaffe totale) rendrait la moyenne harmonique indéfinie.
+    harmonic = statistics.harmonic_mean([max(1.0, a) for a, _ in pairs])
+    return round((weighted + harmonic) / 2, 1)
+
+
+def _label(p) -> str:
+    """« 39.Bb2 » pour les blancs, « 39...Bb2 » pour les noirs."""
+    return f"{p.move_number}{'.' if p.color == 'white' else '...'}{p.san}"
 
 
 def _effective_loss(p) -> float:
@@ -105,6 +145,25 @@ def summarize(analysis: GameAnalysis) -> dict:
         summary[f"accuracy_{phase}"] = (
             round(sum(_accuracy(loss) for loss in losses) / len(losses), 1) if losses else None
         )
+
+    # Sprint 29 : précision unique de la partie (Lichess) ; accuracy_{phase}
+    # gardées pour la compatibilité des fiches, plus affichées.
+    summary["accuracy"] = _game_accuracy(plies, color)
+
+    # Pire coup de Nico : plus forte perte, seulement à partir de 10 pts.
+    worst = max(nico, key=lambda p: p.loss, default=None)
+    if worst is None or worst.loss < 10:
+        worst = None
+    summary["worst_move"] = _label(worst) if worst else None
+    summary["worst_win_before"] = round(worst.win_before, 1) if worst else None
+    summary["worst_win_after"] = round(worst.win_after, 1) if worst else None
+
+    # Meilleur coup (« coup qui pose problème », chess_coach.explosive.find_best_move).
+    best = analysis.best_move
+    summary["best_move"] = _label(best.ply) if best else None
+    summary["best_defense"] = best.defense_san if best else None
+    summary["best_defense_p"] = round(best.defense_p, 3) if best else None
+    summary["best_reply_played"] = best.reply_played if best else None
 
     # % de gain de Nico avant chacun de ses coups.
     wins = [p.win_before for p in nico]

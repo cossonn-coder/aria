@@ -57,7 +57,11 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     )
 
     delegated = llm_exec.execute.call_args.args[0]
-    assert result["text"].startswith("explication\n\n🎮 Progression — saison 1, partie 2")
+    # Ligne déterministe (tronçon 08) entre le texte LLM et le bloc Progression.
+    assert result["text"].startswith(
+        "explication\n\n🎯 Précision 41 % · pire coup 17...Ng4+ (50 % → 30 %)\n\n"
+        "🎮 Progression — saison 1, partie 2")
+    assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 2
     assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
@@ -171,7 +175,7 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     assert "variante : 8.e5 d5 9.exd6 (gain matériel)" in content
     assert "montre la variante qui la punit" in content
     # Conversion de la notation française résiduelle en sortie ; bridge en échec → pas de bloc.
-    assert result["text"] == "2.Qh5 Nxe5 Rae1 Be7, Cela"
+    assert result["text"].startswith("2.Qh5 Nxe5 Rae1 Be7, Cela\n\n🎯 Précision")
     assert "Historique (données) :" not in content
 
 
@@ -272,14 +276,15 @@ def test_entries_move_to_captions(monkeypatch, tmp_path):
     assert caps[0].endswith("\nLe fou devait parer l'échec.")
     assert caps[1].endswith("\nNf6 développait avec tempo.")
     assert "Position 1 —" not in result["text"] and "Position 2 —" not in result["text"]
-    assert result["text"].startswith("Partie contre Ami\n\nNiveau : solide. Peu d'erreurs.\n\n🎮 Progression")
+    assert result["text"].startswith("Partie contre Ami\n\nNiveau : solide. Peu d'erreurs.\n\n🎯 ")
+    assert "\n\n🎮 Progression" in result["text"]
 
 
 def test_missing_entry_keeps_current_behavior(monkeypatch, tmp_path):
     llm = "Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\nNiveau : solide."
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
-    assert result["text"].startswith(llm + "\n\n🎮 Progression")
+    assert result["text"].startswith(llm + "\n\n🎯 ")
     assert "\n" not in result["images"][0]["caption"]
     assert "\n" not in result["images"][1]["caption"]
 
