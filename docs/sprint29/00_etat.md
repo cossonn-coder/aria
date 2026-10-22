@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : B''' — retours run live 12 figés (OK Nico 2026-10-22), tronçons 15-16 prêts pour `/sprint-auto sprint 29`
+**Phase** : CLOS (run live 13 OK, 2026-10-22, tag `sprint-29`)
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -71,8 +71,8 @@
 | 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
 | 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
 | 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : meilleur coup ✅, légende ❌ → phase A''' |
-| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ✅ (non commité, 347 verts) |
-| 16 | `16_run_live_13.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
+| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ✅ commit `9c207fc`, 347 verts |
+| 16 | `16_run_live_13.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : 5 critères OK 4/4 → sprint clos |
 
 ## Dettes
 
@@ -124,6 +124,20 @@ Pistes d'audit (non vérifiées) : (1) `conversation_history` charge 20 messages
 des runs précédents → imitation ; (2) la consigne place l'« idée générale d'après évaluation » en tête, le LLM
 s'arrête après ; (3) contenu réel du message enrichi en prod jamais vu (lignes `faits :` présentes au code
 `chess_router.py:631`, non logguées).
+
+## Résultats run live 13 (2026-10-22)
+
+4 parties de `run_live_11_parties.txt`, code du tronçon 15 (service relancé 17:19).
+- Historique coupé ✅ 4/4 : `conversation_history SKIPPED reason=skip_history`, plus de `loaded … messages=20`.
+- Variante ✅ 4/4 : chaque légende a sa ligne « Variante : » avec les faits (prend, reprend, échec, attaque, roque, mat).
+- Idée générale ✅ 4/4 : plus de « maintient N % » ni de « aucune pièce attaquée », texte propre à chaque position.
+- `chess_caption_split OK` ✅ 4/4 (6 / 6 / 3 / 6 images).
+- Non-régression ✅ 4/4 : ligne 🎯 (précision 92 / 49 / 88 / 87 %, meilleur coup « trouvé par N % », pire coup), bloc Progression.
+- Arrêt : « ARIA arrêt » puis Deactivated la même seconde ; démarrage → prête en 9 s [n=1].
+Écarts → dettes : faits inventés résiduels dans l'idée générale (#92 : « trois pièces de plus » à +3 points,
+« Rd1# imparable » alors que 39.Qc2 pare, « tu prends tout sur la colonne d » hors variante) ; variante parfois
+réduite à 1-2 coups (#109) ; consigne d recopiée deux fois mot pour mot (« l'espérance n'est pas meilleure… », #110) ;
+quarantaine HNSW `dba15bea…` à 17:21:48 (#105) ; précision 87 % au lieu de 86 % sur la même partie (#108).
 
 ## Questions ouvertes
 
@@ -213,3 +227,4 @@ Tronçon 15 fait : `llm_router` étape 1b — `skip_history` → historique non 
 Choix : sorte b (occasion manquée après erreur adverse, absente du tableau du kickoff) traitée comme a (`p.pv_san`).
 Note : consignes e (« montre la variante qui la punit ») et d (variante + « peut dépasser 3 phrases ») inchangées comme prescrit, en tension avec « n'énumère pas les coups » / 3 phrases.
 Prochaine étape : tronçon 16 (run live 13 par Nico).
+Tronçon 15 fait et commité (`9c207fc`). Tronçon 16 fait (run live 13) : OK 4/4. Sprint clos : kickoff `docs/sprint30/context_kickoff_sprint_30.md`, tag `sprint-29`.
