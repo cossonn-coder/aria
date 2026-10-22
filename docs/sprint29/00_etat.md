@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : A''' — run live 12 fait (2026-10-22) : meilleur coup ✅, légende ❌ → audit légende à faire (`/conception`)
+**Phase** : A''' — audit légende fait (`audit_run_live_12.md`), arbitrages Q1-Q3 A''' en attente de Nico
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -125,7 +125,13 @@ s'arrête après ; (3) contenu réel du message enrichi en prod jamais vu (ligne
 
 ## Questions ouvertes
 
-- (aucune)
+Audit `audit_run_live_12.md` : historique = cause du moule (confirmé [n=2]) ; le LLM recopie la
+variante sans la raconter même sans historique ; « Position 1, 2, 3 » → positions omises.
+- Q1 A''' : analyse de partie sans historique de conversation (drapeau metadata posé par
+  `chess_router`, lu par `llm_router`) ? Reco : oui.
+- Q2 A''' : variante racontée par le CODE (phrase déterministe sous la légende), le LLM
+  n'écrit que l'idée générale ? Reco : oui.
+- Q3 A''' : consigne nomme le nombre exact d'entrées (« Position 1 à Position N, toutes ») ? Reco : oui.
 
 ## Décisions phase A'
 
@@ -194,3 +200,4 @@ Choix : roi attaquant compté valeur 100 (n'attaque utilement qu'une pièce non 
 Écart : fixtures de `test_chess_router.py` illégales (Bd7 / Qh4 après 1.e4) → `d6` et FEN propre au test explosif (assertion « pièces : » adaptée).
 Prochaine étape : tronçon 14 (run live 12 par Nico).
 Tronçon 14 fait (run live 12) : légende ❌. Prochaine étape : `/conception` sur la légende (audit avant fix).
+Phase A''' : audit `audit_run_live_12.md` écrit ; prochaine étape : arbitrages Q1-Q3 A''' (§Questions ouvertes) puis kickoffs 15+.
