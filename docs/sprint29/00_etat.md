@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : B' — retours run live figés (OK Nico 2026-10-22), tronçons 07-11 prêts pour `/sprint-auto sprint 29`
+**Phase** : B'' — retours run live 11 figés (OK Nico 2026-10-22), tronçons 12-14 prêts pour `/sprint-auto sprint 29`
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -68,6 +68,9 @@
 | 09 | `09_legende_variante.md` — légende : idée générale + variante expliquée | ✅ (non commité, 343 verts) |
 | 10 | `10_arret_rapide.md` — `os._exit(0)` après arrêt PTB | ✅ (non commité, 344 verts) |
 | 11 | `11_run_live_retours.md` — run live (Nico) | ✅ fait 2026-10-22 (4 parties) : légende ❌, meilleur coup ❌ → phase A'' |
+| 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ⏳ |
+| 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ⏳ |
+| 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
 
 ## Dettes
 
@@ -118,6 +121,27 @@ Audit : `audit_retours_run_live.md`. Quatre sujets, tronçons 07+ à concevoir :
 - Q3 (Nico) : entrée de légende = idée générale + variante du meilleur coup expliquée
   coup par coup ; chiffre clé supprimé ou réduit à « 57 % → 75 % ».
 
+## Phase A'' — retours du run live 11 (ouverte 2026-10-22)
+
+Audit : `audit_run_live_11.md`. Causes :
+- Légende : consigne contradictoire (« explique coup par coup » + « ne décris aucune attaque
+  absente des lignes matériel / attaquées », qui portent sur la position AVANT) ; aucune
+  donnée sur ce que fait chaque coup ; % de gain non présenté comme état de la position.
+- Meilleur coup : `_problem_score` mesure la position laissée à l'adversaire, pas le mérite
+  du coup ; la difficulté Maia du sprint 28 (déjà calculée) classe bien (bxa5 = 650, Nd5 = 1773).
+- Explosives : bruit d'ouverture (Maia non fiable avant le coup 10).
+
+Décisions (Nico, 2026-10-22) :
+- Q1 A'' : meilleur coup = **coup le plus rare** — parmi les coups de Nico perte ≤ 2 après
+  le coup 10, le plus faible P_Maia(coup joué, Elo de Nico) ; affiché « trouvé par N % des
+  joueurs de ton niveau » ; défense, « 0 % de chances » et passe moteur `find_best_move` supprimés.
+- Q2 A'' : légende = **faits coup par coup** calculés par le code (prise, échec, attaque
+  créée, roque, promotion) pour la variante expliquée + ligne d'évaluation (« avantage
+  Nico 68 % ») ; le LLM peut décrire ces faits ; interdit de paraphraser « matériel égal /
+  aucune attaquée ».
+- Q3 A'' : occasions explosives **toute la partie** (inchangé, bruit d'ouverture accepté).
+- Texte « réponses perdent » + « pari » : non traité (vrai ensemble, formulation LLM).
+
 ## §REPRISE
 
 Lire `CLAUDE.md`, `context_kickoff_sprint_29.md`, ce fichier.
@@ -146,3 +170,4 @@ Tronçon 09 fait : consigne de `_build_enriched` — entrée ≤ 5 phrases / 900
 Note : la consigne d garde « Cette entrée peut dépasser 3 phrases » (laissée, hors brief ; désormais en tension avec la limite de 5).
 Tronçon 10 fait : `bot.main` après `telegram.start()` (retour de `run_polling`) → `log.info("ARIA arrêt")`, `logging.shutdown()`, `os._exit(0)` ; test `tests/test_bot.py` (kernel / interface simulés, `configure_root` neutralisé à l'import, `logging.shutdown` et `os._exit` monkeypatchés).
 Prochaine étape : tronçon 11 (run live Nico), dont `systemctl restart` < 10 s.
+Phase A'' close (OK Nico), kickoffs 12-14 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçons 12 → 13), puis run live 12 par Nico (tronçon 14).
