@@ -1,6 +1,6 @@
 # Sprint 29 — état de conception
 
-**Phase** : A''' — audit légende fait (`audit_run_live_12.md`), arbitrages Q1-Q3 A''' en attente de Nico
+**Phase** : B''' — retours run live 12 figés (OK Nico 2026-10-22), tronçons 15-16 prêts pour `/sprint-auto sprint 29`
 **Branche** : `feat/sprint29-coach-motifs` (créée sur OK de Nico)
 
 ## Décisions arrêtées
@@ -71,6 +71,8 @@
 | 12 | `12_meilleur_coup_rare.md` — meilleur coup = coup joué le moins probable (Maia, Elo Nico), `find_best_move` supprimé | ✅ (non commité, 344 verts) |
 | 13 | `13_legende_faits.md` — faits coup par coup + ligne évaluation + consigne | ✅ (non commité, 345 verts) |
 | 14 | `14_run_live_12.md` — run live (Nico), parties `run_live_11_parties.txt` | ✅ fait 2026-10-22 (4 parties) : meilleur coup ✅, légende ❌ → phase A''' |
+| 15 | `15_legende_sans_historique.md` — analyse sans historique, ligne « Variante : » écrite par le code, consigne N entrées | ⏳ |
+| 16 | `16_run_live_13.md` — run live (Nico), parties `run_live_11_parties.txt` | ⏳ |
 
 ## Dettes
 
@@ -125,13 +127,18 @@ s'arrête après ; (3) contenu réel du message enrichi en prod jamais vu (ligne
 
 ## Questions ouvertes
 
-Audit `audit_run_live_12.md` : historique = cause du moule (confirmé [n=2]) ; le LLM recopie la
-variante sans la raconter même sans historique ; « Position 1, 2, 3 » → positions omises.
-- Q1 A''' : analyse de partie sans historique de conversation (drapeau metadata posé par
-  `chess_router`, lu par `llm_router`) ? Reco : oui.
-- Q2 A''' : variante racontée par le CODE (phrase déterministe sous la légende), le LLM
-  n'écrit que l'idée générale ? Reco : oui.
-- Q3 A''' : consigne nomme le nombre exact d'entrées (« Position 1 à Position N, toutes ») ? Reco : oui.
+- (aucune)
+
+## Décisions phase A''' (Nico, 2026-10-22)
+
+Audit `audit_run_live_12.md`.
+- Q1 A''' : analyse de partie **sans historique de conversation** (drapeau `skip_history`
+  posé par `chess_router`, lu par `llm_router`) ; l'échange reste écrit en historique.
+- Q2 A''' : variante **racontée par le code** (ligne « Variante : » dans la légende) ; le LLM
+  n'écrit que l'idée générale.
+- Q3 A''' : consigne avec le **nombre exact d'entrées** (« Position 1 à Position N »).
+- Dettes nouvelles : #107 `context_block` épisodique nourri d'analyses passées (influence non
+  mesurée) ; #108 analyse non déterministe (occasions explosives différentes d'un passage à l'autre).
 
 ## Décisions phase A'
 
@@ -201,3 +208,4 @@ Choix : roi attaquant compté valeur 100 (n'attaque utilement qu'une pièce non 
 Prochaine étape : tronçon 14 (run live 12 par Nico).
 Tronçon 14 fait (run live 12) : légende ❌. Prochaine étape : `/conception` sur la légende (audit avant fix).
 Phase A''' : audit `audit_run_live_12.md` écrit ; prochaine étape : arbitrages Q1-Q3 A''' (§Questions ouvertes) puis kickoffs 15+.
+Phase A''' close (OK Nico), kickoffs 15-16 figés. Prochaine étape : `/sprint-auto sprint 29` (tronçon 15), puis run live 13 par Nico (tronçon 16).
