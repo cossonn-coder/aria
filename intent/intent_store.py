@@ -6,6 +6,10 @@ from intent.intent import Intent, IntentStatus
 
 STORE_PATH = Path.home() / ".aria" / "intents.json"
 
+# Longueur maximale d'une action à l'écriture disque (#114) : aucun lecteur n'exploite
+# leur contenu, seul le nombre d'entrées sert aux scripts. Évite de stocker les messages entiers.
+ACTION_MAX_CHARS = 100
+
 
 def save_intents(intents: dict[str, Intent]):
     STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -17,7 +21,7 @@ def save_intents(intents: dict[str, Intent]):
             "description": intent.description,
             "status": intent.status.value if hasattr(intent.status, 'value') else intent.status,
             "next_action": intent.next_action,
-            "actions_history": intent.actions_history,
+            "actions_history": [a[:ACTION_MAX_CHARS] for a in intent.actions_history],
         }
     STORE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
