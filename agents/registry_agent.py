@@ -1,8 +1,6 @@
 #aria/agents/registry_agent.py
 from agents.analyst_agent import AnalystAgent
 from agents.planner_agent import PlannerAgent
-from agents.executor_agent import ExecutorAgent
-from agents.critic_agent import CriticAgent
 
 
 class AgentRegistry:
@@ -18,8 +16,6 @@ class AgentRegistry:
         self._agents = {
             "analyst": AnalystAgent(),
             "planner": PlannerAgent(),
-            "executor": ExecutorAgent(),
-            "critic": CriticAgent(),
         }
 
     def get(self, name: str):
