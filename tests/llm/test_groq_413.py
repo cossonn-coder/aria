@@ -46,3 +46,42 @@ def test_groq_413_skips_other_groq(monkeypatch, no_sleep):
     assert [c for c in calls if c.startswith("groq")] == ["groq"]
     assert result.metadata["provider"] == "deepseek"
     assert router._negative_cache == {}
+
+
+# Sprint 31 / dette #73 : au-delà de GROQ_MAX_PAYLOAD_CHARS, Groq est sauté
+# d'emblée (aucun appel HTTP, aucun sommeil) et DeepSeek répond.
+
+def test_large_payload_skips_groq_without_call(monkeypatch):
+    router = LLMRouter()
+    calls: list[str] = []
+    sleeps: list = []
+    monkeypatch.setattr("llm.llm_router.time.sleep", lambda *a: sleeps.append(a))
+
+    def fake_call(self, prompt, provider_cfg, temperature, max_tokens, messages=None):
+        calls.append(provider_cfg["provider"])
+        return LLMResponse(content="ok", metadata={"provider": provider_cfg["provider"]})
+
+    monkeypatch.setattr(LLMRouter, "_call", fake_call)
+
+    messages = [{"role": "user", "content": "x" * 12_001}]
+    result = router.complete(messages=messages, role=LLMRole.CHAT)
+
+    assert not any(c.startswith("groq") for c in calls)
+    assert result.metadata["provider"] == "deepseek"
+    assert sleeps == []
+
+
+def test_small_payload_calls_groq_first(monkeypatch, no_sleep):
+    router = LLMRouter()
+    calls: list[str] = []
+
+    def fake_call(self, prompt, provider_cfg, temperature, max_tokens):
+        calls.append(provider_cfg["provider"])
+        return LLMResponse(content="ok", metadata={"provider": provider_cfg["provider"]})
+
+    monkeypatch.setattr(LLMRouter, "_call", fake_call)
+
+    result = router.complete("salut", role=LLMRole.CHAT)
+
+    assert calls == ["groq"]
+    assert result.metadata["provider"] == "groq"

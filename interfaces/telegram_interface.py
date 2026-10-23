@@ -44,9 +44,9 @@ UNDELIVERED_NOTICE = "⚠️ Ma réponse précédente n'avait pas pu partir :"
 
 # Signal d'attente pendant le traitement (sprint 30, #103) : indicateur
 # « écrit… » renvoyé toutes les 4 s (Telegram l'efface après 5 s), et un
-# seul message d'attente si le traitement dépasse 10 s.
+# seul message d'attente si le traitement dépasse 20 s (sprint 31, #111).
 TYPING_REFRESH_SECONDS = 4
-WAIT_NOTICE_SECONDS = 10
+WAIT_NOTICE_SECONDS = 20
 WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
 
 

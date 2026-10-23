@@ -21,7 +21,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_saut_groq_seuil_attente.md` — saut préventif Groq > 12 000 car. (#73/#86) + ⏳ à 20 s (#111) | ⏳ |
+| 01 | `01_saut_groq_seuil_attente.md` — saut préventif Groq > 12 000 car. (#73/#86) + ⏳ à 20 s (#111) | ✅ (353 tests verts, non commité) |
 | 02 | `02_run_live.md` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -31,5 +31,6 @@
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_messages_courts.md`, puis le kickoff du premier tronçon ⏳.
-Prochaine étape : `/sprint-auto sprint 31`.
+Tronçon 01 fait (`GROQ_MAX_PAYLOAD_CHARS` dans `llm/llm_router.py`, `WAIT_NOTICE_SECONDS = 20`,
+2 tests dans `tests/llm/test_groq_413.py`). Reste le tronçon 02 : run live par Nico
+(`02_run_live.md`). Lire `CLAUDE.md`, ce fichier, puis ce kickoff.

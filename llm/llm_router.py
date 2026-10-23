@@ -98,6 +98,11 @@ ROUTING_TABLE = {
 # fallback global si role inconnu
 DEFAULT_CHAIN = ROUTING_TABLE[LLMRole.CHAT]
 
+# Sprint 31 / dette #73 : au-delà de cette taille (en caractères), le
+# payload dépasserait le palier ITPM Groq (7000 tokens) → 413 certain.
+# On saute alors Groq d'emblée, sans aller-retour HTTP ni sommeil.
+GROQ_MAX_PAYLOAD_CHARS = 12_000
+
 
 # ==========================
 # ROUTER
@@ -213,6 +218,11 @@ class LLMRouter:
         # déterministe : les autres entrées groq* (même modèle, même
         # limite) échoueraient pareil. Local à cette requête : pas de cache.
         groq_too_large = False
+        # Taille du payload : le prompt, ou la somme des contenus des messages.
+        if messages is not None:
+            size = sum(len(m["content"]) for m in messages)
+        else:
+            size = len(prompt)
 
         for i, provider_cfg in enumerate(chain):
             provider = provider_cfg["provider"]
@@ -224,6 +234,13 @@ class LLMRouter:
 
             if groq_too_large and provider.startswith("groq"):
                 log.info("[LLM] provider %s skipped (413 sur groq)", provider)
+                continue
+
+            # Saut préventif : placé avant le try, il ne déclenche pas le
+            # time.sleep(1) de fin d'except.
+            if size > GROQ_MAX_PAYLOAD_CHARS and provider.startswith("groq"):
+                log.info("[LLM] provider %s skipped (payload %d chars > %d)",
+                         provider, size, GROQ_MAX_PAYLOAD_CHARS)
                 continue
 
             # On ne forwarde `messages` à `_call` que dans la branche
