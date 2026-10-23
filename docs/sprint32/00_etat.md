@@ -30,7 +30,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_controleur_analyst_seul.md` — messages courts et non classés : analyst seul (#74, #113) | ⏳ |
+| 01 | `01_controleur_analyst_seul.md` — messages courts et non classés : analyst seul (#74, #113) | ✅ (pytest 354 verts, non commité) |
 | 02 | `02_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ⏳ |
 
 ## Dettes
@@ -42,4 +42,6 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 32` (tronçon 01), puis run live par Nico.
+Tronçon 01 ✅ : branche `else` du contrôleur → `["analyst"]` sans consulter la phase ; test
+`tests/agents/test_controller_pipeline.py` (échoue sans le fix). Prochaine étape : commit du
+tronçon 01, puis tronçon 02 (run live par Nico).
