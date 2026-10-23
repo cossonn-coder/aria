@@ -266,6 +266,39 @@ def test_conversation_history_loaded_and_written(mock_store, mock_conv):
 
 @patch("execution.routers.llm_router.write_conversation_turn")
 @patch("execution.routers.llm_router.write_interaction")
+def test_conversation_history_trimmed_to_budget(mock_store, mock_conv):
+    """
+    Sprint 33 : messages user enrichis de 9 000 car. → chaque message plafonné
+    à 1 500 car. (+ « […] »), total ≤ 6 000, ordre chronologique conservé.
+    """
+    router, _, _, fake_intent, bridge = make_router()
+    history = []
+    for i in range(3):
+        history.append({"role": "user", "content": f"u{i}" + "x" * 9_000})
+        history.append({"role": "assistant", "content": f"réponse {i}"})
+    bridge.load_conversation_history.return_value = history
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["history"] = ctx.extra["conversation_history"]
+        return _fake_ctx(fake_intent, result="réponse")
+
+    router.controller.run = capture_ctx
+
+    router._run_pipeline("salut", CognitiveOperation.UNKNOWN, {"chat_id": 42})
+
+    trimmed = captured["history"]
+    contents = [t["content"] for t in trimmed]
+    assert sum(len(c) for c in contents) <= 6_000
+    assert all(len(c) <= 1_500 + len(" […]") for c in contents)
+    assert trimmed[-1] == history[-1]
+    # Ordre chronologique : sous-suite contiguë de la fin du bridge.
+    assert [t["role"] for t in trimmed] == [t["role"] for t in history[-len(trimmed):]]
+    assert contents[-2].startswith("u2") and contents[-2].endswith(" […]")
+
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
 def test_conversation_written_without_intent(mock_store, mock_conv):
     """Amendement Nico : l'échange est écrit même sans intent résolu."""
     router, _, intent_engine, _, bridge = make_router()

@@ -1,0 +1,18 @@
+===== Message 1 — partie contre AaronDias16 =====
+[Event "Live Chess"]
+[Site "Chess.com"]
+[White "AaronDias16"]
+[Black "staroflexeur"]
+[Result "0-1"]
+[WhiteElo "1539"]
+[BlackElo "1622"]
+[TimeControl "600"]
+[ECOUrl "https://www.chess.com/openings/Dutch-Defense-Normal-Variation"]
+
+1. d4 f5 2. c4 Nf6 3. Nf3 g6 4. Bg5 Ne4 5. Nc3 Nxg5 6. Nxg5 Bg7 7. e3 e6 8. Qb3 Qxg5 9. g3 O-O 10. Bg2 Nc6 11. d5 Ne5 12. dxe6 dxe6 13. Bxb7 Bxb7 14. Qxb7 Nd3+ 15. Ke2 Nc5 16. Qxc7 Rfc8 17. Qd6 Qg4+ 18. f3 Qxc4+ 19. Kf2 Rd8 20. Qe7 Rd2+ 21. Kg1 Bxc3 22. h4 Qe2 0-1
+
+===== Message 2 =====
+salut
+
+===== Message 3 =====
+pourquoi mon 12e coup était une erreur ?

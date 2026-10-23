@@ -150,12 +150,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 32 clos (tag `sprint-32`, messages courts et non classés → analyst seul : plus de
-« Prochaine action » sur un `salut`, plus de prompts executor/critic de 319 000 car. ;
-voir `docs/sprint32/00_etat.md`).
-Prochain : **sprint 33**, cible à arbitrer (candidates : #37/#38, #72 élargie, #114).
-Kickoff : `docs/sprint33/context_kickoff_sprint_33.md`.
-Prochaine étape : `/conception sprint 33`.
+Sprint 33 clos (tag `sprint-33`, historique plafonné à 1 500 car./message et 6 000 car.
+au total : `salut` en 3 s, Groq répond ; coût : suivi de partie inventé #115 ;
+voir `docs/sprint33/00_etat.md`).
+Prochain : **sprint 34**, cible à arbitrer (candidates : #115, #72 élargie, #114).
+Kickoff : `docs/sprint34/context_kickoff_sprint_34.md`.
+Prochaine étape : `/conception sprint 34`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
