@@ -149,6 +149,39 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     assert "ne le présente jamais comme le meilleur coup" in content
 
 
+def test_explosive_without_clear_advantage_renders(monkeypatch, tmp_path):
+    # Sprint 36 : explosif admis par sacrifice accepté avec échec, sans avantage clair.
+    ply = _ply(7, 4, "Nf6", "Nc6", "b8c6")
+    ply.fen_before = "rnbqkbnr/pppp1ppp/4p3/8/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    ply.pv_san = ["Nc6", "Bb5"]
+    explosive = ExplosiveMove(
+        san="Qh4", uci="d8h4", loss=4.0, win_after=46.0, pv_san=["Qh4", "Nxh4"],
+        sacrifice=0, forcing=["threat"], trap_reply_san="Nxh4", score=0.0, accepted=2,
+        replies=[{"san": "Nxh4", "p": 0.62, "line_san": ["Nxh4"], "win": 62.0}],
+        trap_end_win=50.0, expected=46.0, best_expected=46.0,
+    )
+    analysis = GameAnalysis(
+        headers={}, nico_color="black", color_source="header", plies=[ply],
+        critical=[CriticalPosition(kind="d", ply=ply, score=0.0, explosive=explosive)],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", MagicMock(side_effect=lambda *a, **k: a[3]))
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "sacrifie 2 pion(s) sur la ligne" in content
+    assert "  variante :" not in content.split("[Consigne")[0]
+
+
 def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     # Sorte e : 7...h6? (erreur adverse) puni par 8.e5 (Nico blancs).
     error = PlyAnalysis(

@@ -33,7 +33,7 @@ _DEEP_TIME = 0.3
 _EVIDENCE_TIME = 0.6
 _MULTIPV = 5
 # Positions éligibles : coups de Nico non décidés, joués sans erreur nette.
-_WIN_MIN, _WIN_MAX = 35, 75
+_WIN_MIN, _WIN_MAX = 35, 85
 # Fenêtre de perte sur jeu parfait (pts de % de gain) : 5 en général, 15 pour
 # un piège ou un gain d'espérance humaine. Piège minimal (pts) et gain minimal
 # d'espérance humaine sur le meilleur coup.
@@ -41,6 +41,9 @@ _WINDOW = 5
 _TRAP_WINDOW = 15
 _TRAP_MIN = 10
 _GAIN_MIN = 5
+# Voie « sacrifice accepté » (sprint 36) : perte maximale (pts) d'un candidat
+# dont l'offre est prise par l'adversaire.
+_SACRIFICE_WINDOW = 10
 # Nombre maximal de candidats approfondis par position.
 _MAX_DEEP = 3
 # Ligne mesurée (candidat compris) : au moins 6 demi-coups, prolongée tant
@@ -85,6 +88,9 @@ class ExplosiveMove:
     # Piège (règle sprint 28) : % de gain adverse après sa meilleure réponse −
     # après la prise naturelle du matériel offert (0 sans prise naturelle).
     trap: float = 0.0
+    # Déficit d'offre acceptée (sprint 36) : pions de moins que sur la ligne du
+    # meilleur coup, quand l'adversaire prend l'offre (max ligne moteur / humaine).
+    accepted: int = 0
 
 
 def _material(board: chess.Board, color: chess.Color) -> int:
@@ -105,14 +111,13 @@ def _san_line(board: chess.Board, moves: list) -> list:
     return san
 
 
-def _line_sacrifice(board: chess.Board, line: list) -> tuple:
-    """Matériel perdu par le trait de board sur une ligne stabilisée, et sa longueur.
+def _measure_point(board: chess.Board, line: list) -> tuple:
+    """Position au point de mesure d'une ligne stabilisée, et sa longueur.
 
     Point de mesure : le premier demi-coup à partir du 6e après lequel le coup
     suivant n'est pas une prise (on laisse finir l'échange), borne _LINE_MAX ;
     fin de la ligne si elle s'épuise avant.
     """
-    mover = board.turn
     pv_board = board.copy(stack=False)
     plies = 0
     for move in line[:_LINE_MAX]:
@@ -120,7 +125,41 @@ def _line_sacrifice(board: chess.Board, line: list) -> tuple:
             break
         pv_board.push(move)
         plies += 1
-    return max(0, _material(board, mover) - _material(pv_board, mover)), plies
+    return pv_board, plies
+
+
+def _line_sacrifice(board: chess.Board, line: list) -> tuple:
+    """Matériel perdu par le trait de board sur une ligne stabilisée, et sa longueur."""
+    pv_board, plies = _measure_point(board, line)
+    return max(0, _material(board, board.turn) - _material(pv_board, board.turn)), plies
+
+
+def _reference_material(board: chess.Board, best_pv: list) -> int:
+    """Matériel de référence du trait : max(départ, point de mesure de la PV du meilleur coup)."""
+    pv_board, _ = _measure_point(board, best_pv)
+    return max(_material(board, board.turn), _material(pv_board, board.turn))
+
+
+def _accepted_deficit(board: chess.Board, line: list, reference: int) -> int:
+    """Déficit d'offre acceptée : pions de moins que reference, si la réponse prend.
+
+    line = [candidat, réponse, …] depuis board. 0 si la ligne a moins de 3
+    demi-coups ou si la réponse n'est pas une prise ; sinon le pire déficit
+    (borné à 0) mesuré après chacun des coups suivants du trait, dans _LINE_MAX.
+    """
+    if len(line) < 3:
+        return 0
+    mover = board.turn
+    position = board.copy(stack=False)
+    position.push(line[0])
+    if not position.is_capture(line[1]):
+        return 0
+    deficit = 0
+    for i, move in enumerate(line[1:_LINE_MAX], start=1):
+        position.push(move)
+        if i % 2 == 0:
+            deficit = max(deficit, reference - _material(position, mover))
+    return deficit
 
 
 def _win_of(info: dict) -> float:
@@ -208,7 +247,7 @@ def _human_replies(engine, after: chess.Board, distribution: list) -> tuple:
 
 
 def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after: float,
-            distribution: list) -> ExplosiveMove:
+            distribution: list, reference: int) -> ExplosiveMove:
     """Approfondit un candidat : ligne, sacrifice, piège, forçant, réponses humaines, avantage clair."""
     after = board.copy(stack=False)
     after.push(move)
@@ -254,21 +293,30 @@ def _deepen(engine, board: chess.Board, move: chess.Move, loss: float, win_after
             end.push(reply_move)
         trap_end_fen = end.fen()
 
+    # Offre acceptée : ligne moteur et ligne de la réponse humaine la plus probable.
+    accepted = max(_accepted_deficit(board, line, reference),
+                   _accepted_deficit(board, [move] + logical["pv"], reference))
+
     return ExplosiveMove(
         san=board.san(move), uci=move.uci(), loss=loss, win_after=win_after, pv_san=pv_san,
         sacrifice=sacrifice, forcing=_forcing(board, move), trap_reply_san=replies[0]["san"],
         score=0.0, offered=offered, trap_line_san=trap_line_san, replies=replies,
         trap_end_fen=trap_end_fen, trap_end_win=trap_win, evidence=evidence,
-        expected=_expectation(replies), trap=trap,
+        expected=_expectation(replies), trap=trap, accepted=accepted,
     )
 
 
 def _admissible(candidate: ExplosiveMove, best_expected: float) -> bool:
-    """Avantage clair, puis règle hybride : idée risquée du sprint 28 OU gain Maia.
+    """Sacrifice accepté, OU avantage clair puis règle hybride (sprint 28 OU gain Maia).
 
+    Sacrifice accepté (sprint 36) : déficit ≥ 1, perte ≤ 10, et avantage clair
+    ou échec (l'échec lève l'avantage clair : Fxh7+ à égalité après Rxh7).
     Sprint 28 : (perte ≤ 5, ou ≤ 15 avec piège ≥ 10) et (sacrifice ≥ 1 ou piège ≥ 10).
     Maia : perte ≤ 15 et espérance humaine ≥ meilleur coup + 5.
     """
+    if (candidate.accepted >= 1 and candidate.loss <= _SACRIFICE_WINDOW
+            and (candidate.evidence is not None or "check" in candidate.forcing)):
+        return True
     if candidate.evidence is None:
         return False
     in_window = candidate.loss <= _WINDOW or (candidate.loss <= _TRAP_WINDOW and candidate.trap >= _TRAP_MIN)
@@ -280,20 +328,25 @@ def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci
                      elo: int, models_dir: str) -> ExplosiveMove | None:
     """Coup admissible au plus fort gain d'espérance humaine d'une position, ou None.
 
-    Exclus : le coup joué, le meilleur coup de cette analyse et celui de la
-    1re passe (first_best_uci, celui que la légende affiche comme meilleur),
-    et les coups qui terminent la partie (Maia n'a aucune réponse à évaluer).
+    Exclus : le coup joué, le meilleur coup de la 1re passe (first_best_uci,
+    celui que la légende affiche comme meilleur ; "" en live, où le meilleur
+    coup est donc candidat), et les coups qui terminent la partie (Maia n'a
+    aucune réponse à évaluer).
     """
     reference = engine.analyse(board, chess.engine.Limit(time=_ROOT_TIME), multipv=_MULTIPV)
     win_best = _win_of(reference[0])
     best = reference[0]["pv"][0]
+    material = _reference_material(board, reference[0]["pv"])
     wins = {info["pv"][0]: _win_of(info) for info in reference}
+    # PV de racine par coup, pour trier d'abord les offres acceptées.
+    pvs = {info["pv"][0]: info["pv"] for info in reference}
 
     shaped = _by_shape(board)
     if shaped:
         infos = engine.analyse(board, chess.engine.Limit(time=_ROOT_TIME), root_moves=shaped, multipv=len(shaped))
         for info in infos:
             wins.setdefault(info["pv"][0], _win_of(info))
+            pvs.setdefault(info["pv"][0], info["pv"])
 
     def after(move):
         position = board.copy(stack=False)
@@ -304,13 +357,15 @@ def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci
         return None
     candidates = [
         (move, max(0.0, win_best - win)) for move, win in wins.items()
-        if move != best and move.uci() not in (played_uci, first_best_uci)
+        if move.uci() not in (played_uci, first_best_uci)
         and win_best - win <= _TRAP_WINDOW and not after(move).is_game_over()
     ]
     if not candidates:
         return None
-    # Sacrifices, échecs et prises passent d'abord, puis la perte croissante.
-    candidates.sort(key=lambda c: (not _priority(board, c[0]), c[1]))
+    # Offres acceptées sur la PV de racine d'abord, puis sacrifices, échecs et
+    # prises, puis la perte croissante.
+    candidates.sort(key=lambda c: (_accepted_deficit(board, pvs[c[0]], material) < 1,
+                                   not _priority(board, c[0]), c[1]))
     candidates = candidates[:_MAX_DEEP]
 
     # Une passe Maia batchée : meilleur coup + candidats approfondis.
@@ -320,7 +375,7 @@ def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci
 
     kept = None
     for (move, loss), distribution in zip(candidates, distributions[1:]):
-        candidate = _deepen(engine, board, move, loss, win_best - loss, distribution)
+        candidate = _deepen(engine, board, move, loss, win_best - loss, distribution, material)
         candidate.best_expected = best_expected
         candidate.score = candidate.expected - best_expected
         if _admissible(candidate, best_expected) and (kept is None or candidate.score > kept.score):

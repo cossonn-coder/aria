@@ -437,8 +437,8 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     # Matériel : pièce offerte (posée en prise) prioritaire sur le sacrifice de ligne.
     if e.offered:
         facts.append(f"offre {_PIECE_FR.get(e.san[0], 'le pion')} ({e.offered})")
-    elif e.sacrifice:
-        facts.append(f"sacrifie {e.sacrifice} pion(s) sur la ligne")
+    elif max(e.sacrifice, e.accepted):
+        facts.append(f"sacrifie {max(e.sacrifice, e.accepted)} pion(s) sur la ligne")
     if e.forcing:
         facts.append("forçant : " + "/".join(_FORCING_FR[f] for f in e.forcing))
     if facts:
@@ -451,14 +451,16 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     if e.expected - e.best_expected < _GAIN_MIN:
         lines.append("  pari : face à un humain l'espérance n'est pas meilleure que le meilleur coup")
     number, color = _reply_start(p)
-    lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
-                 f"({_EVIDENCE_FR[e.evidence]})")
-    after = chess.Board(p.fen_before)
-    after.push_san(e.san)
-    lines.append(f"  faits : {_move_facts(after.fen(), e.trap_line_san, number, color)}")
-    lines.append(f"  fin de variante : {_material_line(e.trap_end_fen, nico_color)}, "
-                 f"% de gain Nico {e.trap_end_win:.0f} %")
-    lines.append(f"  fin de variante, {_attacked_line(e.trap_end_fen)}")
+    # Admis sans avantage clair (sacrifice accepté avec échec) : pas de variante.
+    if e.evidence is not None:
+        lines.append(f"  variante : {_format_line(e.trap_line_san, number, color)} "
+                     f"({_EVIDENCE_FR[e.evidence]})")
+        after = chess.Board(p.fen_before)
+        after.push_san(e.san)
+        lines.append(f"  faits : {_move_facts(after.fen(), e.trap_line_san, number, color)}")
+        lines.append(f"  fin de variante : {_material_line(e.trap_end_fen, nico_color)}, "
+                     f"% de gain Nico {e.trap_end_win:.0f} %")
+        lines.append(f"  fin de variante, {_attacked_line(e.trap_end_fen)}")
     for reply in e.replies:
         lines.append(f"  si {reply['san']} ({reply['p'] * 100:.0f} %) : "
                      f"{_format_line(reply['line_san'], number, color)}, {reply['win']:.0f} % pour Nico")

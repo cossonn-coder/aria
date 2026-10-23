@@ -35,7 +35,7 @@ Lot 1, « on suit tes recos » (2026-10-23) :
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_definition_explosif.md` — `explosive.py` (déficit d'offre acceptée, `_admissible`, meilleur coup, tri, `_WIN_MAX`) + `chess_router._explosive_lines` | ⏳ |
+| 01 | `01_definition_explosif.md` — `explosive.py` (déficit d'offre acceptée, `_admissible`, meilleur coup, tri, `_WIN_MAX`) + `chess_router._explosive_lines` | ✅ (368 tests verts, non commité) |
 | 02 | `02_run_live.md` — run live (Nico), coups dans `run_live_coups.txt` | ⏳ |
 
 ## Dettes
@@ -46,5 +46,8 @@ Lot 1, « on suit tes recos » (2026-10-23) :
 
 ## §REPRISE
 
-Lire : `CLAUDE.md`, ce fichier, le kickoff du prochain tronçon ⏳. Prochaine étape :
-`/sprint-auto sprint 36` (tronçon 01), puis run live par Nico (tronçon 02).
+Lire : `CLAUDE.md`, ce fichier, le kickoff du prochain tronçon ⏳. Tronçon 01 fait
+(`explosive.py` : `_measure_point`, `_reference_material`, `_accepted_deficit`, champ
+`accepted`, voie « sacrifice accepté » dans `_admissible`, tri, `_WIN_MAX` 85 ;
+`_explosive_lines` sans variante si `evidence=None`). Prochaine étape : run live par Nico
+(tronçon 02, `02_run_live.md`).

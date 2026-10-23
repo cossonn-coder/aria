@@ -10,7 +10,7 @@ from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
 from chess_coach.analysis import clear_advantage
-from chess_coach.explosive import ExplosiveMove, _admissible, _expectation, _line_sacrifice
+from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
 from chess_coach.render import SIZE, render_position
 
 STOCKFISH = "/usr/games/stockfish"
@@ -48,6 +48,29 @@ def test_explosive_admissible_hybrid(loss, sacrifice, gain, retained):
     candidate = ExplosiveMove(
         san="Nd5", uci="c3d5", loss=loss, win_after=43.0, pv_san=[], sacrifice=sacrifice, forcing=[],
         trap_reply_san="exd5", score=0.0, evidence="material", expected=50.0 + gain,
+    )
+    assert _admissible(candidate, 50.0) is retained
+
+
+def test_accepted_deficit_gambit():
+    # Sprint 36 : Göring 4.c3 dxc3 5.Nxc3 = offre acceptée (1 pion) ; 4.Be2 Nf6 sans prise → 0.
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "d4", "exd4"]:
+        board.push_san(san)
+    goring = [chess.Move.from_uci(u) for u in ("c2c3", "d4c3", "b1c3")]
+    quiet = [chess.Move.from_uci(u) for u in ("f1e2", "g8f6", "f3d4")]
+    assert _accepted_deficit(board, goring, 0) == 1
+    assert _accepted_deficit(board, quiet, 0) == 0
+
+
+@pytest.mark.parametrize("forcing, loss, retained", [
+    (["check", "capture"], 0.0, True),   # sacrifice accepté avec échec, sans avantage clair
+    ([], 4.0, False),                    # bruit 3...a6 : ni échec ni avantage clair
+])
+def test_explosive_admissible_accepted_sacrifice(forcing, loss, retained):
+    candidate = ExplosiveMove(
+        san="Bxf7+", uci="c4f7", loss=loss, win_after=50.0, pv_san=[], sacrifice=0, forcing=forcing,
+        trap_reply_san="Kxf7", score=0.0, evidence=None, expected=50.0, accepted=2,
     )
     assert _admissible(candidate, 50.0) is retained
 
