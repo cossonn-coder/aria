@@ -43,6 +43,36 @@ from cognition.context_builder import build_context_block
 
 log = get_logger(__name__)
 
+# Plafonds de l'historique conversationnel passé à l'analyst (sprint 33).
+# Raison : les messages user enrichis (blocs de faits d'échecs, pages web)
+# sont relus tels quels en historique et faisaient sauter Groq sur un simple
+# « salut » (36 813 car. de payload). Même idiome que GROQ_MAX_PAYLOAD_CHARS.
+HISTORY_MESSAGE_MAX_CHARS = 1_500
+HISTORY_BUDGET_CHARS = 6_000
+
+
+def _trim_history(history: list[dict]) -> list[dict]:
+    """
+    Plafonne l'historique : chaque message coupé à HISTORY_MESSAGE_MAX_CHARS
+    (suffixe « […] »), total borné à HISTORY_BUDGET_CHARS.
+
+    Rempli du plus récent au plus ancien ; arrêt au premier message qui
+    ferait dépasser le budget (fenêtre contiguë, pas de trou).
+    Rendu en ordre chronologique, comme le bridge.
+    """
+    kept: list[dict] = []
+    total = 0
+    for turn in reversed(history):
+        content = turn.get("content", "")
+        if len(content) > HISTORY_MESSAGE_MAX_CHARS:
+            content = content[:HISTORY_MESSAGE_MAX_CHARS] + " […]"
+        if total + len(content) > HISTORY_BUDGET_CHARS:
+            break
+        kept.append({**turn, "content": content})
+        total += len(content)
+    kept.reverse()
+    return kept
+
 
 class LLMExecutionRouter(BaseRouter):
     """
@@ -131,12 +161,15 @@ class LLMExecutionRouter(BaseRouter):
             conversation_history = []
             log.info("conversation_history SKIPPED reason=skip_history")
         else:
-            conversation_history = self.mempalace_bridge.load_conversation_history(
-                conversation_key, n=config.max_history_turns * 2,
+            conversation_history = _trim_history(
+                self.mempalace_bridge.load_conversation_history(
+                    conversation_key, n=config.max_history_turns * 2,
+                )
             )
             log.info(
-                "conversation_history loaded key=%s messages=%d",
+                "conversation_history loaded key=%s messages=%d chars=%d",
                 conversation_key, len(conversation_history),
+                sum(len(t.get("content", "")) for t in conversation_history),
             )
 
         # ── 2-3. Drapeau skip_intent (photo interrogative, #51) ─────────────

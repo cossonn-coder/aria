@@ -49,7 +49,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_plafond_historique.md` — plafond 1 500 car./message + budget 6 000 car. (étape 1b `llm_router.py`) | ⏳ |
+| 01 | `01_plafond_historique.md` — plafond 1 500 car./message + budget 6 000 car. (étape 1b `llm_router.py`) | ✅ (non commité) |
 | 02 | `02_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ⏳ |
 
 ## Dettes (à reporter à la clôture)
@@ -60,5 +60,7 @@
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_historique.md`. Conception figée : lancer
-`/sprint-auto sprint 33` (tronçon 01), puis run live par Nico (tronçon 02).
+Lire `CLAUDE.md`, ce fichier, `audit_historique.md`. Tronçon 01 implémenté
+(`_trim_history` + constantes `HISTORY_MESSAGE_MAX_CHARS` / `HISTORY_BUDGET_CHARS` dans
+`execution/routers/llm_router.py`, test `test_conversation_history_trimmed_to_budget`,
+pytest 355 verts). Reste : commit local du tronçon 01, puis run live par Nico (tronçon 02).
