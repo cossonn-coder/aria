@@ -83,6 +83,8 @@ class Config:
     chess_username: str = "staroflexeur"
     # Poids Maia-2 (rapid_model.pt + config.yaml), hors Nextcloud : 280 Mo (sprint 28).
     maia_models_dir: str = "/home/nico/.cache/aria-maia"
+    # Port du serveur de l'échiquier ARIA (sprint 35), vérifié libre sur la VM.
+    board_port: int = 5002
 
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")

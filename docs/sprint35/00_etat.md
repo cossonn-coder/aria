@@ -40,7 +40,7 @@ montre en flèche orange, avec les réponses humaines probables (Maia) au survol
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_backend_analyse_live.md` — `chess_coach/live.py` + `interfaces/board_interface.py` + `bot.py` + `config.board_port` | ⏳ |
+| 01 | `01_backend_analyse_live.md` — `chess_coach/live.py` + `interfaces/board_interface.py` + `bot.py` + `config.board_port` | ✅ (363 tests verts, non commité) |
 | 02 | `02_page_echiquier.md` — `interfaces/board/index.html` (chessground, interrupteurs, Elo, états, survol) | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico, Brave/Windows), coups dans `run_live_coups.txt` | ⏳ |
 
@@ -61,5 +61,11 @@ montre en flèche orange, avec les réponses humaines probables (Maia) au survol
 
 ## §REPRISE
 
-Implémentation : `/sprint-auto sprint 35` — tronçons 01 puis 02 (sous-agents), puis
-remise du protocole `03_run_live.md` à Nico.
+Tronçon 01 ✅ (2026-10-23) : `chess_coach/live.py` (proxy `EngineProxy` + `Superseded`,
+`analyse_pass`, `FACTORS`), `interfaces/board_interface.py` (`BoardWorker`, routes
+`GET /`, `POST /position`, `GET /state`, `start_board_server`), page provisoire
+`interfaces/board/index.html`, `config.board_port`, appel dans `bot.py`. Stockfish ouvert
+à la première position reçue (pas au démarrage du bot). Champ `pass` de `/state` = passe en
+cours (dernière passe quand `running` est faux) ; `result` = dernière passe terminée.
+Smoke VM : une passe ×1 réelle (Stockfish + Maia) 21,4 s [n=1, chargement Maia 14 s inclus].
+Suite : tronçon 02 (page échiquier), puis remise du protocole `03_run_live.md` à Nico.

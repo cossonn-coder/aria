@@ -12,6 +12,7 @@ from logger import configure_root
 configure_root(level=os.getenv("ARIA_LOG_LEVEL", "INFO"))
 
 from core.kernel import AriaKernel
+from interfaces.board_interface import start_board_server
 from interfaces.telegram_interface import TelegramInterface
  
  
@@ -26,6 +27,8 @@ def main():
         token=os.environ["ARIA_BOT_TOKEN"],
     )
     log.info("Telegram interface prête")
+    # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
+    start_board_server()
     telegram.start()
 
     # Sortie immédiate, sans finalisation Python : sous swap, le ramasse-miettes

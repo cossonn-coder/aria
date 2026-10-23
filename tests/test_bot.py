@@ -22,9 +22,11 @@ def test_main_exits_immediately_after_start(monkeypatch):
     monkeypatch.setenv("ARIA_BOT_TOKEN", "x")
     monkeypatch.setattr(bot, "AriaKernel", lambda: object())
     monkeypatch.setattr(bot, "TelegramInterface", FakeTelegram)
+    # Le serveur de l'échiquier lierait un port réel.
+    monkeypatch.setattr(bot, "start_board_server", lambda: calls.append("board"))
     monkeypatch.setattr(bot.logging, "shutdown", lambda: calls.append("shutdown"))
     monkeypatch.setattr(bot.os, "_exit", lambda code: calls.append(("exit", code)))
 
     bot.main()
 
-    assert calls == ["start", "shutdown", ("exit", 0)]
+    assert calls == ["board", "start", "shutdown", ("exit", 0)]
