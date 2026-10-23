@@ -1,6 +1,6 @@
 # Sprint 35 — état de conception
 
-**Phase** : B figée (2026-10-23) — prêt pour `/sprint-auto sprint 35`.
+**Phase** : CLOS (2026-10-23) — tronçons 01-02 commités, run live fait par Nico.
 **Branche** : `feat/sprint35-echiquier`.
 
 ## Objectif
@@ -41,13 +41,14 @@ montre en flèche orange, avec les réponses humaines probables (Maia) au survol
 | # | Kickoff | État |
 |---|---|---|
 | 01 | `01_backend_analyse_live.md` — `chess_coach/live.py` + `interfaces/board_interface.py` + `bot.py` + `config.board_port` | ✅ (363 tests verts, 5934579) |
-| 02 | `02_page_echiquier.md` — `interfaces/board/index.html` (chessground, interrupteurs, Elo, états, survol) | ✅ (364 tests verts, non commité) |
-| 03 | `03_run_live.md` — run live (Nico, Brave/Windows), coups dans `run_live_coups.txt` | ⏳ |
+| 02 | `02_page_echiquier.md` — `interfaces/board/index.html` (chessground, interrupteurs, Elo, états, survol) | ✅ (364 tests verts, c248d7a) |
+| 03 | `03_run_live.md` — run live (Nico, Brave/Windows), coups dans `run_live_coups.txt` | ✅ (retour global, voir §Run live) |
 
 ## Dettes
 
-- Traitée : #94, moitié « échiquier rejouable » réorientée en échiquier de jeu avec calque
-  explosif (fermeture partielle à décider après run live). Calque chess.com : abandonné.
+- #94 : partiellement résolue — échiquier de jeu avec calque explosif livré ; échiquier
+  d'analyse rejouable d'une partie (PGN) non traité. Calque chess.com : abandonné.
+- Nouvelle : #121 — coups explosifs trop rares, définition à revoir (retour run live).
 - Inchangées : #115, #116 (repères ci-dessous).
 - À surveiller au run live : mémoire du service avec Maia (#102).
 
@@ -58,6 +59,15 @@ montre en flèche orange, avec les réponses humaines probables (Maia) au survol
   second défaut : originaux non retirés du pool après fusion.
 - #115 : le bloc enrichi ne porte des faits que pour les positions critiques ; 12.dxe6
   (run 33) n'en était pas une → l'hypothèse « plafond » est incomplète.
+
+## Run live (2026-10-23, ~14:20)
+
+- Premier accès : `ERR_CONNECTION_REFUSED` — page ouverte pendant le redémarrage du service ;
+  port 5002 ensuite à l'écoute sur `0.0.0.0`, `curl` 200, OK après rechargement.
+- Retour de Nico : « ça fonctionne pas mal ». Scénarios du protocole non détaillés un à un.
+- Retour de fond → #121 : les coups explosifs sont trop rares ; la définition de Nico
+  (gambit d'ouverture, sacrifice de pièce sur le roi type Fxf7+ ou sacrifice grec Fxh7+)
+  n'est pas celle du moteur. Diagnostic et premiers arbitrages : kickoff sprint 36.
 
 ## §REPRISE
 
@@ -75,4 +85,5 @@ orange/verte en `autoShapes`, ligne d'état selon la table du kickoff, `GET /sta
 filtré par `id`). Survol : **ligne d'état** (repli prévu au kickoff, pas la flèche SVG) →
 panneau `replies` (san, % , line_san) + `trap_line_san`. Test : `GET /` contient l'import
 chessground. JS vérifié en syntaxe (`node --check`) seulement, aucun navigateur sur la VM.
-Suite : remise du protocole `03_run_live.md` à Nico.
+Sprint clos (2026-10-23). Suite : `/conception sprint 36` (#121), kickoff
+`docs/sprint36/context_kickoff_sprint_36.md`.
