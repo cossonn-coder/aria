@@ -54,6 +54,38 @@ logique, il se retrouve moins bien.
 - Fenêtre de positions éligibles élargie (borne haute à chiffrer, ex. 90 %).
 - Gambits d'ouverture, Fxf7+, Fxh7+ doivent apparaître : cas de test à fournir / choisir.
 
+### Cas de test de Nico et mesure du moteur actuel (2026-10-23)
+
+Mesure : Stockfish 3 s MultiPV 8, puis `_deepen` / `_admissible` de `explosive.py` sur le coup
+visé, Maia Elo 1500 [n=1 par cas, Threads=8 : non déterministe].
+
+**Cas A — 1.e4 e5 2.Cf3 Cc6 3.d4 exd4, blancs au trait.** Attendus : 4.c3 (Göring) ou
+4.Fc4 (gambit écossais) au lieu de 4.Cxd4.
+
+| Coup | % gain | perte | sacrifice net | offert | piège | E humaine / E meilleur | admis |
+|---|---|---|---|---|---|---|---|
+| 4.Cxd4 (meilleur) | 53,2 | 0 | 0 | 0 | 0 | 56,0 / 55,3 | non |
+| 4.Fc4 | 49,8 | 2,4 | 0 | 0 | 0 | 53,3 / 56,6 | non |
+| 4.c3 | 49,0 | 5,1 | 0 | 0 | 0 | 49,4 / 57,1 | non |
+
+Rejet : aucune mesure ne voit le gambit. Le pion n'est pas « offert » sur la case d'arrivée
+(4.Fc4 laisse simplement le pion d4 non repris ; 4.c3 offre un pion défendu par Cb1, que
+`_natural_capture` écarte) ; le sacrifice net est nul ; Maia ne donne pas de gain d'espérance
+(le gambit est moins bon que 4.Cxd4 face à un humain 1500). 4.c3 dépasse aussi la fenêtre 5
+de 0,1 pt. → il manque une mesure du type « accepte d'avoir du matériel en moins sur la
+suite » (déficit tenu sur la PV), indépendante de la case d'arrivée.
+
+**Cas B — 1.e4 e5 2.Cf3 Cc6 3.d4 exd4 4.c3 dxc3 5.Fc4 Fc5, blancs au trait.** Attendu :
+6.Fxf7+ Rxf7 7.Dd5+ (fourchette roi / Fc5, roi déroqué).
+
+| Coup | % gain | perte | sacrifice net | offert | piège | E humaine / E meilleur | admis |
+|---|---|---|---|---|---|---|---|
+| 6.Fxf7+ (meilleur) | 57,9 | 0 | 2 | 2 | 0 | 60,6 / 60,3 | **oui** |
+| 6.Cxc3 | 48,7 | 10,0 | 0 | 0 | 0 | 54,7 / 60,6 | non |
+
+Rejet : uniquement parce que c'est le meilleur coup (`move != best`). Les filtres actuels
+l'admettent → lever l'exclusion du meilleur coup (arbitrage Nico) suffit pour ce cas.
+
 ### Question ouverte : coût des motifs d'attaque
 
 - Détection : `chess_coach/motifs.py` (portage cook.py, sprint 29) tague déjà `sacrifice`,
