@@ -1,6 +1,6 @@
 # Sprint 36 — état de conception
 
-**Phase** : B figée (2026-10-23) — prête pour `/sprint-auto sprint 36`.
+**Phase** : CLOS (2026-10-23) — run live OK, tag `sprint-36`.
 **Branche** : `feat/sprint36-explosif`.
 **Cible** : #121, redéfinir le coup explosif.
 
@@ -35,19 +35,22 @@ Lot 1, « on suit tes recos » (2026-10-23) :
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_definition_explosif.md` — `explosive.py` (déficit d'offre acceptée, `_admissible`, meilleur coup, tri, `_WIN_MAX`) + `chess_router._explosive_lines` | ✅ (368 tests verts, non commité) |
-| 02 | `02_run_live.md` — run live (Nico), coups dans `run_live_coups.txt` | ⏳ |
+| 01 | `01_definition_explosif.md` — `explosive.py` (déficit d'offre acceptée, `_admissible`, meilleur coup, tri, `_WIN_MAX`) + `chess_router._explosive_lines` | ✅ `4a0551c` (368 tests verts) |
+| 02 | `02_run_live.md` — run live (Nico), coups dans `run_live_coups.txt` | ✅ Nico, 2026-10-23 : « tout bien » |
 
 ## Dettes
 
-- Ferme (si run live OK) : #121.
-- À surveiller au run live : 9…d5 (Espagnole, perte 7,8) admis au prototype, fréquence
-  générale des flèches ; non-déterminisme (#108).
+- Fermée : #121.
+- Ouverte : #122, latence de l'analyse live (passe ×1 ≈ 4-6 s, ×4 ≈ 30 s [journal 2026-10-23, n=3 à 31 par passe]), inchangée par le
+  sprint (journal : passe ×1 « explosif » 4,2 s en moyenne avant [n=6] et après [n=3]).
+  Jugée « trop lente » puis acceptée par Nico.
+- Toujours ouverte : #108 (non-déterminisme).
+
+## Run live (2026-10-23, Nico)
+
+Scénarios 1-7 OK (« tout bien »). Ressenti « trop lent » au premier retour, puis « finalement
+ça va » : consigné en #122, pas de correctif.
 
 ## §REPRISE
 
-Lire : `CLAUDE.md`, ce fichier, le kickoff du prochain tronçon ⏳. Tronçon 01 fait
-(`explosive.py` : `_measure_point`, `_reference_material`, `_accepted_deficit`, champ
-`accepted`, voie « sacrifice accepté » dans `_admissible`, tri, `_WIN_MAX` 85 ;
-`_explosive_lines` sans variante si `evidence=None`). Prochaine étape : run live par Nico
-(tronçon 02, `02_run_live.md`).
+Sprint clos. Suite : `docs/sprint37/context_kickoff_sprint_37.md`, puis `/conception sprint 37`.
