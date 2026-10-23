@@ -1,6 +1,6 @@
 # Sprint 33 — état de conception
 
-**Phase** : B — conception figée (2026-10-23), prête pour `/sprint-auto sprint 33`.
+**Phase** : CLOS (2026-10-23) — tronçon 01 validé au run live par Nico.
 **Branche** : `feat/sprint33-historique`.
 
 ## Décisions arrêtées
@@ -49,18 +49,32 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_plafond_historique.md` — plafond 1 500 car./message + budget 6 000 car. (étape 1b `llm_router.py`) | ✅ (non commité) |
-| 02 | `02_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ⏳ |
+| 01 | `01_plafond_historique.md` — plafond 1 500 car./message + budget 6 000 car. (étape 1b `llm_router.py`) | ✅ (355 tests verts, `98b645f`) |
+| 02 | `02_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ✅ (2026-10-23, validé par Nico) |
 
-## Dettes (à reporter à la clôture)
+## Run live (2026-10-23, 11:55-11:59, service redémarré avec `98b645f`)
 
+| Message | Durée réception → `pipeline done` | Historique | Appels de réponse | Résultat |
+|---|---|---|---|---|
+| 1. partie AaronDias16 | 60 s | `SKIPPED reason=skip_history` ✓ | deepseek-v4-pro ×1 | analyse + 3 images ✓ |
+| 2. `salut` | 3 s ✓ (sprint 32 : 6 s) | 12 messages, `chars=5463` ✓ | groq qwen ×2, aucun `groq skipped (payload …)` ✓ | « Salut. Qu'est-ce que tu veux faire ? » ✓ |
+| 3. `pourquoi mon 12e coup était une erreur ?` | 9 s | 14 messages, `chars=5504` | groq ×2 + deepseek-v4-pro ×1 | bonne partie, bon coup (dxe6), mais contenu faux ✗ |
+
+Réponse 3 : accepte la prémisse (« une erreur ») alors que l'analyse disait « aucune erreur
+ni gaffe, 93 % » ; dit « tu as gagné un pion » (c'est une reprise) ; invente 12…Nd3+
+« décisif ». Cause probable : coût accepté en Q2 (faits moteur et PGN coupés du bloc
+enrichi), non prouvée faute de point de comparaison avant correctif. Nico clôt quand même
+(objectif du sprint atteint) ; nouvelle dette #115.
+
+## Dettes
+
+- Fermée : volume d'historique sur un `salut` (Groq répond, 3 s).
 - #37 : reformulée « nommage seul, sans effet sur le volume » (conversion × 2 faite).
 - #38 : reste ouverte, bornée (400 car./souvenir), pas la cause.
-- Volume d'historique sur un `salut` : fermé par ce sprint si le run live passe.
+- Nouvelle #115 : suivi de partie — l'analyst accepte une prémisse fausse et invente
+  (« erreur » au 12e coup, 12…Nd3+ « décisif ») ; faits moteur et PGN absents de
+  l'historique depuis le plafond [n=1].
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_historique.md`. Tronçon 01 implémenté
-(`_trim_history` + constantes `HISTORY_MESSAGE_MAX_CHARS` / `HISTORY_BUDGET_CHARS` dans
-`execution/routers/llm_router.py`, test `test_conversation_history_trimmed_to_budget`,
-pytest 355 verts). Reste : commit local du tronçon 01, puis run live par Nico (tronçon 02).
+Sprint clos. Suite : `docs/sprint34/context_kickoff_sprint_34.md`, puis `/conception sprint 34`.
