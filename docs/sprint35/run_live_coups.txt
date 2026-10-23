@@ -1,0 +1,14 @@
+Run live sprint 35 — coups à jouer sur http://192.168.1.124:5002
+Elo blancs 1600, Elo noirs 1540. Nouvelle partie avant chaque section.
+
+Section 1 — explosif attendu (e3 au banc d'essai), blancs au trait, gain 53 % :
+1. d4 f5 2. c4 Nf6 3. Nf3 g6 4. Bg5 Ne4
+
+Section 2 — à jouer le plus vite possible (5 coups en ~2 s) :
+1. e4 e5 2. Nf3 Nc6 3. Bb5
+
+Section 3 — seul coup attendu : 6. Nxg5 (écart 35 pts), blancs au trait, gain 53 % :
+1. d4 f5 2. c4 Nf6 3. Nf3 g6 4. Bg5 Ne4 5. Nc3 Nxg5
+
+Section 4 — position décidée (blancs au trait, gain 9 %) :
+1. d4 f5 2. c4 Nf6 3. Nf3 g6 4. Bg5 Ne4 5. Nc3 Nxg5 6. Nxg5 Bg7 7. e3 e6 8. Qb3 Qxg5 9. g3 O-O 10. Bg2 Nc6 11. d5 Ne5 12. dxe6 dxe6 13. Bxb7 Bxb7
