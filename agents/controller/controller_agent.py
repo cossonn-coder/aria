@@ -34,16 +34,11 @@ class AgentController:
             pipeline = ["analyst"]
 
         else:
-            phase = ctx.intent.infer_phase() if ctx.intent else "creation"
-
-            if phase == "creation":
-                pipeline = ["analyst"]
-            elif phase == "planning":
-                pipeline = ["analyst", "planner"]
-            elif phase == "execution":
-                pipeline = ["executor", "critic"]
-            else:
-                pipeline = ["analyst"]
+            # Messages courts et non classés (CONFIRMATION, UNKNOWN…) : analyst seul,
+            # sans consulter la phase de l'intent. La phase « execution » lançait
+            # executor + critic, qui répondaient « Prochaine action » à un « salut »
+            # et collaient à l'intent (#74), avec un prompt executor de 319 000 car. (#113).
+            pipeline = ["analyst"]
 
         # =====================================================
         # 2 — EXECUTION ENGINE (nouvelle couche explicite)
