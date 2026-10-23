@@ -1,6 +1,6 @@
 # Sprint 34 — état de conception
 
-**Phase** : B figée (OK de Nico, 2026-10-23) — prêt pour `/sprint-auto sprint 34`.
+**Phase** : CLOS (run live OK, 2026-10-23).
 **Branche** : `feat/sprint34-rangement` (créée depuis `main` `89b2dbc`).
 
 ## Décisions arrêtées
@@ -31,15 +31,24 @@
 | # | Kickoff | État |
 |---|---|---|
 | 01 | `01_rangement_code_mort.md` — suppression executor, critic, dispatcher, types, plan builder + orphelins (#72) | ✅ (355 verts, `17dc7ca`) |
-| 02 | `02_troncature_actions.md` — `save_intents` coupe chaque action à 100 car. (#114) | ✅ (356 verts) |
-| 03 | `03_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ⏳ |
+| 02 | `02_troncature_actions.md` — `save_intents` coupe chaque action à 100 car. (#114) | ✅ (356 verts, `51b11e9`) |
+| 03 | `03_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ✅ (2026-10-23) |
 
 ## Dettes
 
-- Fermées par le sprint (à confirmer au run live) : #72, #39, #41, #55, #114.
+- Fermées par le sprint (confirmées au run live) : #72, #39, #41, #55, #114.
 - Nouvelles (constats d'audit, hors scope) : `intent_compression_engine.py:101` affecte la
   property `actions` sans setter (crash si fusion, non vérifié) ; `print()` dans
-  `intent_store.py:44` ; deux intents `jeux echecs` ; `ExecutionStatus` sans usage.
+  `intent_store.py` ; deux intents `jeux echecs` ; `ExecutionStatus` sans usage
+  → #116-#119 ; `aria.egg-info/SOURCES.txt` versionné liste les fichiers supprimés → #120.
+
+## Run live (2026-10-23, 12:46)
+
+- Redémarrage sans `ImportError` / `ModuleNotFoundError` / traceback.
+- `salut` : réponse normale (50 car.), `intent SKIPPED reason=namer_aucun` comme prévu.
+- `où en est ma plantation de tomates sur le balcon ?` : intent résolu
+  (`intent_name=plantation tomates balcon est`), `memory_write OK`, réponse 207 car.
+- `intents.json` : 343 805 → 13 922 octets (critère < 20 Ko ✅).
 
 ## Repères pré-audit (2026-10-23)
 
@@ -52,6 +61,4 @@
 
 ## §REPRISE
 
-Tronçon 01 fait et commité (`17dc7ca`). Tronçon 02 fait (`save_intents` coupe chaque action
-à `ACTION_MAX_CHARS = 100`, test `tests/intent/test_intent_store.py`, 356 verts ; reste à
-commiter par l'orchestrateur). Suite : run live 03 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon en cours.
+Sprint clos. Suite : `/conception sprint 35`, kickoff `docs/sprint35/context_kickoff_sprint_35.md`.
