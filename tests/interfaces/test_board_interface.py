@@ -54,3 +54,18 @@ def test_position_then_state_replaces_previous():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_index_serves_chessboard_page(monkeypatch):
+    # Sprint 35, tronçon 02 : la page servie importe chessground (Maia non chargé en test).
+    monkeypatch.setattr("interfaces.board_interface._load_maia_in_background", lambda: None)
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}/"
+        with urllib.request.urlopen(url) as response:
+            page = response.read().decode()
+        assert "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm" in page
+    finally:
+        server.shutdown()
+        server.server_close()

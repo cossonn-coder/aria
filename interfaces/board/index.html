@@ -1,5 +1,182 @@
 <!doctype html>
 <html lang="fr">
-<head><meta charset="utf-8"><title>Échiquier ARIA</title></head>
-<body><p>Échiquier : tronçon 02.</p></body>
+<head>
+<meta charset="utf-8">
+<title>Échiquier ARIA</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.base.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.brown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.cburnett.css">
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f1ec; color: #222; margin: 24px; }
+  main { display: flex; gap: 32px; align-items: flex-start; }
+  #board { width: 560px; height: 560px; }
+  #controls { display: flex; flex-direction: column; gap: 12px; min-width: 260px; }
+  #controls label { display: flex; justify-content: space-between; gap: 8px; }
+  #controls input[type=number] { width: 80px; }
+  #status { margin-top: 12px; font-size: 1.1em; width: 560px; cursor: default; }
+  #replies { display: none; margin-top: 8px; padding: 10px 14px; width: 532px;
+             background: #fff; border: 1px solid #e0a050; border-radius: 6px; }
+  #replies.visible { display: block; }
+  #replies ul { margin: 4px 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <div id="board"></div>
+    <div id="status"></div>
+    <div id="replies"></div>
+  </div>
+  <div id="controls">
+    <button id="new">Nouvelle partie</button>
+    <button id="undo">Annuler le dernier coup</button>
+    <button id="flip">Retourner l'échiquier</button>
+    <label>Elo blancs <input id="elo-white" type="number" value="1300" min="400" max="3000" step="50"></label>
+    <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
+    <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
+    <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
+  </div>
+</main>
+<script type="module">
+import { Chessground } from "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm";
+import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
+
+const $ = (id) => document.getElementById(id);
+const chess = new Chess();
+// Numéro de la position courante (rendu par POST /position) et dernier état reçu.
+let positionId = null;
+let state = null;
+
+// Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
+function legalDests() {
+  const dests = new Map();
+  for (const move of chess.moves({ verbose: true })) {
+    if (!dests.has(move.from)) dests.set(move.from, []);
+    dests.get(move.from).push(move.to);
+  }
+  return dests;
+}
+
+const ground = Chessground($("board"), {
+  movable: { free: false, color: "both", showDests: true,
+             events: { after: (from, to) => { chess.move({ from, to, promotion: "q" }); newPosition(); } } },
+  drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 } } },
+});
+
+// Synchronise l'échiquier sur chess.js (la promotion en dame remplace le pion affiché).
+function syncBoard() {
+  const history = chess.history({ verbose: true });
+  const last = history[history.length - 1];
+  ground.set({
+    fen: chess.fen(),
+    turnColor: chess.turn() === "w" ? "white" : "black",
+    check: chess.inCheck(),
+    lastMove: last ? [last.from, last.to] : undefined,
+    movable: { dests: legalDests() },
+  });
+}
+
+// Nouvelle position : envoi au serveur, flèches et panneau effacés.
+async function newPosition() {
+  syncBoard();
+  positionId = null;
+  state = null;
+  render();
+  const response = await fetch("/position", {
+    method: "POST",
+    body: JSON.stringify({ fen: chess.fen(), elo_white: Number($("elo-white").value),
+                           elo_black: Number($("elo-black").value) }),
+  });
+  positionId = (await response.json()).id;
+}
+
+// Flèches : orange = coup explosif, verte = seul coup ; jamais le meilleur coup hors « seul coup ».
+function drawShapes() {
+  const shapes = [];
+  if (state && state.explosive && $("show-explosive").checked) {
+    const uci = state.explosive.uci;
+    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "orange" });
+  }
+  if (state && state.forced && $("show-forced").checked) {
+    const uci = state.forced.uci;
+    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "green" });
+  }
+  ground.setAutoShapes(shapes);
+}
+
+function statusText() {
+  if (!state) return "";
+  const pass = `passe ${state.pass}/${state.passes}`;
+  if (state.error) return `erreur : ${state.error}`;
+  switch (state.result) {
+    case "pending": return `⏳ analyse en cours — ${pass}…`;
+    case "explosive": return state.running
+      ? `🟠 coup explosif ${state.explosive.san} — recherche continue (${pass})`
+      : `🟠 coup explosif ${state.explosive.san} — analyse terminée`;
+    case "none": return state.running
+      ? `aucun coup explosif pour l'instant — recherche continue (${pass})`
+      : "✔ aucun coup explosif — analyse terminée";
+    case "decided": return "— position décidée, pas de recherche";
+    case "game_over": return "partie terminée";
+  }
+}
+
+// Panneau des réponses humaines probables (Maia), rempli en textContent.
+function fillReplies() {
+  const panel = $("replies");
+  panel.replaceChildren();
+  if (!state || !state.explosive) return;
+  const title = document.createElement("div");
+  title.textContent = `Réponses humaines probables à ${state.explosive.san} :`;
+  const list = document.createElement("ul");
+  for (const reply of state.explosive.replies) {
+    const item = document.createElement("li");
+    item.textContent = `${reply.san} — ${Math.round(reply.p * 100)} % — ${reply.line_san.join(" ")}`;
+    list.append(item);
+  }
+  panel.append(title, list);
+  if (state.explosive.trap_line_san.length) {
+    const trap = document.createElement("div");
+    trap.textContent = `Suite : ${state.explosive.trap_line_san.join(" ")}`;
+    panel.append(trap);
+  }
+}
+
+function render() {
+  drawShapes();
+  $("status").textContent = statusText();
+  fillReplies();
+  if (!state || !state.explosive) $("replies").classList.remove("visible");
+}
+
+// Interrogation de l'état toutes les ~1 s ; une réponse d'une autre position est ignorée.
+async function poll() {
+  if (positionId !== null) {
+    const fresh = await (await fetch("/state")).json();
+    if (fresh.id === positionId) {
+      state = fresh;
+      render();
+    }
+  }
+  setTimeout(poll, 1000);
+}
+
+// Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG).
+$("status").addEventListener("mouseenter", () => {
+  if (state && state.explosive) $("replies").classList.add("visible");
+});
+$("status").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
+
+$("new").addEventListener("click", () => { chess.reset(); newPosition(); });
+$("undo").addEventListener("click", () => { if (chess.undo()) newPosition(); });
+$("flip").addEventListener("click", () => ground.toggleOrientation());
+$("elo-white").addEventListener("change", newPosition);
+$("elo-black").addEventListener("change", newPosition);
+$("show-explosive").addEventListener("change", drawShapes);
+$("show-forced").addEventListener("change", drawShapes);
+
+newPosition();
+poll();
+</script>
+</body>
 </html>

@@ -40,8 +40,8 @@ montre en flèche orange, avec les réponses humaines probables (Maia) au survol
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_backend_analyse_live.md` — `chess_coach/live.py` + `interfaces/board_interface.py` + `bot.py` + `config.board_port` | ✅ (363 tests verts, non commité) |
-| 02 | `02_page_echiquier.md` — `interfaces/board/index.html` (chessground, interrupteurs, Elo, états, survol) | ⏳ |
+| 01 | `01_backend_analyse_live.md` — `chess_coach/live.py` + `interfaces/board_interface.py` + `bot.py` + `config.board_port` | ✅ (363 tests verts, 5934579) |
+| 02 | `02_page_echiquier.md` — `interfaces/board/index.html` (chessground, interrupteurs, Elo, états, survol) | ✅ (364 tests verts, non commité) |
 | 03 | `03_run_live.md` — run live (Nico, Brave/Windows), coups dans `run_live_coups.txt` | ⏳ |
 
 ## Dettes
@@ -68,4 +68,11 @@ Tronçon 01 ✅ (2026-10-23) : `chess_coach/live.py` (proxy `EngineProxy` + `Sup
 à la première position reçue (pas au démarrage du bot). Champ `pass` de `/state` = passe en
 cours (dernière passe quand `running` est faux) ; `result` = dernière passe terminée.
 Smoke VM : une passe ×1 réelle (Stockfish + Maia) 21,4 s [n=1, chargement Maia 14 s inclus].
-Suite : tronçon 02 (page échiquier), puis remise du protocole `03_run_live.md` à Nico.
+Tronçon 02 ✅ (2026-10-23) : `interfaces/board/index.html` = échiquier chessground 9.2.1 +
+chess.js 1.4.0 (deux camps, promotion dame, nouvelle partie / annuler / retourner, Elo
+blancs/noirs défaut 1300, interrupteurs « Calque explosif » et « Seul coup », flèches
+orange/verte en `autoShapes`, ligne d'état selon la table du kickoff, `GET /state` ~1 s
+filtré par `id`). Survol : **ligne d'état** (repli prévu au kickoff, pas la flèche SVG) →
+panneau `replies` (san, % , line_san) + `trap_line_san`. Test : `GET /` contient l'import
+chessground. JS vérifié en syntaxe (`node --check`) seulement, aucun navigateur sur la VM.
+Suite : remise du protocole `03_run_live.md` à Nico.
