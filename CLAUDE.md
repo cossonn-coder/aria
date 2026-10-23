@@ -150,11 +150,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 35 clos (tag `sprint-35`, échiquier ARIA à calque explosif sur le port 5002, #94
-partiel ; voir `docs/sprint35/00_etat.md`).
-Prochain : **sprint 36**, cible pressentie : redéfinition du coup explosif (#121).
-Kickoff : `docs/sprint36/context_kickoff_sprint_36.md`.
-Prochaine étape : `/conception sprint 36`.
+Sprint 36 clos (tag `sprint-36`, nouvelle définition du coup explosif, #121 ;
+voir `docs/sprint36/00_etat.md`).
+Prochain : **sprint 37**, cible à choisir.
+Kickoff : `docs/sprint37/context_kickoff_sprint_37.md`.
+Prochaine étape : `/conception sprint 37`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
