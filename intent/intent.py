@@ -30,12 +30,6 @@ class IntentStatus(str, Enum):
     ABANDONED = "abandoned"
 
 
-class IntentPhase(str, Enum):
-    CREATION  = "creation"
-    PLANNING  = "planning"
-    EXECUTION = "execution"
-
-
 # =====================================================
 # COGNITIVE STATE
 # =====================================================
@@ -103,16 +97,6 @@ class Intent:
 
     def subject(self) -> str:
         return self.name
-
-    # -----------------------------
-    # Workflow phase inference
-    # -----------------------------
-    def infer_phase(self) -> str:
-        if not self.actions_history:
-            return IntentPhase.CREATION.value
-        if self.next_action:
-            return IntentPhase.EXECUTION.value
-        return IntentPhase.PLANNING.value
 
     # -----------------------------
     # LLM context builder

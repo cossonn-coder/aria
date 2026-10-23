@@ -1,6 +1,6 @@
 #aria/execution/execution_types.py
 
-from typing import TypedDict, Any, Dict, Optional
+from typing import TypedDict, Any, Optional
 from enum import Enum
 
 
@@ -14,9 +14,3 @@ class ExecutionResult(TypedDict, total=False):
     data: Any
     error: Optional[str]
     router: str
-
-
-class ExecutionPlan(TypedDict, total=False):
-    router: str
-    payload: Dict[str, Any]
-    fallback_router: Optional[str]

@@ -30,7 +30,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_rangement_code_mort.md` — suppression executor, critic, dispatcher, types, plan builder + orphelins (#72) | ⏳ |
+| 01 | `01_rangement_code_mort.md` — suppression executor, critic, dispatcher, types, plan builder + orphelins (#72) | ✅ (355 verts, non commité) |
 | 02 | `02_troncature_actions.md` — `save_intents` coupe chaque action à 100 car. (#114) | ⏳ |
 | 03 | `03_run_live.md` — run live (Nico), messages dans `run_live_messages.txt` | ⏳ |
 
@@ -52,5 +52,5 @@
 
 ## §REPRISE
 
-Conception figée. Exécution : `/sprint-auto sprint 34` (tronçons 01 puis 02), puis run live
-03 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon en cours.
+Tronçon 01 fait (5 modules supprimés, registre/types/intent/test adaptés, 355 verts ;
+reste à commiter par l'orchestrateur). Suite : tronçon 02, puis run live 03 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon en cours.
