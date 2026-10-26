@@ -18,6 +18,7 @@ passe puis présente à une suivante compte comme présente).
 | 1 | Ouvrir la page | mode sombre : fond et cases sombres, pièces et coordonnées lisibles |
 | 2 | Sections 1, 2 et 5 (pièges) | flèche cyan sur le coup indiqué à au moins une passe ; bloc dans la colonne « Pièges » avec la réponse piégeante et sa probabilité ; mini échiquier au survol |
 | 3 | Section 4 (position très perdante) | flèche rose (ou bleue si confondues) ; bloc dans la colonne « Stratégie » avec le pronostic humain |
+| 3b | Toute la partie | flèche bleue jamais avant le coup 10, au plus 3 par camp, jamais deux coups de suite du même camp ; quand elle est bloquée, le rose peut prendre le meilleur coup |
 | 4 | Section 3 (piège = stratégie) et toute position avec orange | une seule flèche par coup selon la priorité vert > orange > cyan > bleu > rose ; le coup commun figure dans chaque colonne concernée |
 | 5 | Décocher puis recocher « Piège » et « Stratégie » | la flèche correspondante disparaît / revient |
 | 6 | Journal | durée des passes `pass=1` à noter (comparaison #122 : ≈ 4,2 s avant [n=6]) |
