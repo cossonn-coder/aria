@@ -66,6 +66,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         with urllib.request.urlopen(url) as response:
             page = response.read().decode()
         assert "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm" in page
+        # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (rose).
+        assert "show-trap" in page and "show-strategy" in page
     finally:
         server.shutdown()
         server.server_close()
