@@ -7,22 +7,33 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.brown.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.cburnett.css">
 <style>
-  body { font-family: system-ui, sans-serif; background: #f4f1ec; color: #222; margin: 24px; }
+  /* Mode sombre permanent (sprint 37) : color-scheme assombrit boutons, champs et ascenseurs. */
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; background: #1b1c1f; color: #ddd; margin: 24px; }
   main { display: flex; gap: 32px; align-items: flex-start; }
+  /* Cases en tons sombres (grand échiquier et mini) : le SVG du thème brown assombrit
+     de 20 % les cases foncées par-dessus cette couleur ; coordonnées claires. */
+  cg-board { background-color: #7d8796; }
+  .cg-wrap coords coord { color: #eee !important; }
   #board { width: 560px; height: 560px; }
   #controls { display: flex; flex-direction: column; gap: 12px; min-width: 260px; }
   #controls label { display: flex; justify-content: space-between; gap: 8px; }
   #controls input[type=number] { width: 80px; }
   #status { margin-top: 12px; font-size: 1.1em; width: 560px; cursor: default; }
   #replies { display: none; margin-top: 8px; padding: 10px 14px; width: 532px;
-             background: #fff; border: 1px solid #e0a050; border-radius: 6px; }
+             background: #26282c; border: 1px solid #e0a050; border-radius: 6px; }
   #replies.visible { display: block; }
   #replies ul { margin: 4px 0; padding-left: 20px; }
-  #saved { max-height: 480px; overflow-y: auto; border-top: 1px solid #ccc; padding-top: 8px; }
-  #saved .entry { margin-bottom: 10px; }
-  #saved ul { margin: 2px 0; padding-left: 18px; font-size: 0.9em; }
+  /* Trois colonnes de coups sauvegardés sur toute la largeur restante. */
+  #columns { flex: 1; display: flex; gap: 16px; min-width: 0; }
+  .column { flex: 1; min-width: 0; max-height: calc(100vh - 48px); overflow-y: auto;
+            border-left: 1px solid #444; padding-left: 12px; }
+  .column h3 { margin: 0 0 8px; font-size: 1em; }
+  .column .entry { margin-bottom: 10px; }
+  .column ul { margin: 2px 0; padding-left: 18px; font-size: 0.9em; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
   .move { cursor: pointer; padding: 0 1px; border-radius: 3px; }
-  .move:hover { background: #ffd9a8; }
+  .move:hover { background: #6a4a1c; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
 </style>
@@ -45,7 +56,13 @@
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
     <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
-    <div id="saved"><strong>Coups explosifs trouvés</strong></div>
+    <label>Piège <input id="show-trap" type="checkbox" checked></label>
+    <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
+  </div>
+  <div id="columns">
+    <section class="column" id="saved-explosive"><h3><span class="dot" style="background: #ff7f00"></span>Coups explosifs</h3></section>
+    <section class="column" id="saved-trap"><h3><span class="dot" style="background: #00e5ff"></span>Pièges</h3></section>
+    <section class="column" id="saved-strategy"><h3><span class="dot" style="background: #ff5fb0"></span>Stratégie</h3></section>
   </div>
 </main>
 <div id="mini"></div>
@@ -58,10 +75,12 @@ const chess = new Chess();
 // Numéro de la position courante (rendu par POST /position) et dernier état reçu.
 let positionId = null;
 let state = null;
-// FEN de la position analysée, et coups explosifs trouvés par FEN avec le meilleur coup
-// de la même passe : {explosive, best} (gardés jusqu'à « Nouvelle partie »).
+// FEN de la position analysée, et coups trouvés par colonne (explosif, piège, stratégie) :
+// Map FEN → {move, best} avec le meilleur coup de la même passe (gardés jusqu'à « Nouvelle partie »).
 let positionFen = null;
-const saved = new Map();
+const saved = { explosive: new Map(), trap: new Map(), strategy: new Map() };
+// Flèche bleue rationnée : FEN → camp au trait ("w" / "b") des positions où elle a été dessinée.
+const blueDrawn = new Map();
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -76,7 +95,12 @@ function legalDests() {
 const ground = Chessground($("board"), {
   movable: { free: false, color: "both", showDests: true,
              events: { after: (from, to) => { chess.move({ from, to, promotion: "q" }); newPosition(); } } },
-  drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 } } },
+  // Vert et bleu éclaircis pour rester lisibles sur l'échiquier sombre.
+  drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 },
+                         cyan: { key: "c", color: "#00e5ff", opacity: 0.9, lineWidth: 10 },
+                         pink: { key: "p", color: "#ff5fb0", opacity: 0.9, lineWidth: 10 },
+                         green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
+                         blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 } } },
 });
 // Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
 const mini = Chessground($("mini"), { viewOnly: true, coordinates: false });
@@ -109,21 +133,37 @@ async function newPosition() {
   positionId = (await response.json()).id;
 }
 
-// Flèches : bleue = meilleur coup (sous les autres ; remplacée par la verte quand c'est
-// le seul coup), orange = coup explosif, verte = seul coup.
+// Flèche bleue permise dans la position analysée : déjà dessinée ici (passe plus profonde,
+// retour en arrière), ou coup n° ≥ 10, moins de 3 bleues pour ce camp dans la partie et
+// aucune à son coup précédent (position deux demi-coups plus tôt).
+function blueAllowed() {
+  if (blueDrawn.has(positionFen)) return true;
+  const [, turn, , , , number] = positionFen.split(" ");
+  const count = [...blueDrawn.values()].filter((side) => side === turn).length;
+  const history = chess.history({ verbose: true });
+  const previous = history[history.length - 2];
+  return Number(number) >= 10 && count < 3 && !(previous && blueDrawn.has(previous.before));
+}
+
+// Flèches, une par coup, par priorité : seul coup (vert) > explosif (orange) > piège (cyan)
+// > stratégie (rose), un coup déjà dessiné étant sauté ; le meilleur coup (bleu) en dernier
+// recours, seulement si aucune autre flèche n'est dessinée et si le rationnement le permet.
 function drawShapes() {
   const shapes = [];
-  if (state && state.best && !state.forced && $("show-best").checked) {
-    const uci = state.best.uci;
-    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "blue" });
-  }
-  if (state && state.explosive && $("show-explosive").checked) {
-    const uci = state.explosive.uci;
-    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "orange" });
-  }
-  if (state && state.forced && $("show-forced").checked) {
-    const uci = state.forced.uci;
-    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "green" });
+  if (state) {
+    const layers = [[state.forced, "show-forced", "green"], [state.explosive, "show-explosive", "orange"],
+                    [state.trap, "show-trap", "cyan"], [state.strategy, "show-strategy", "pink"]];
+    const drawn = new Set();
+    for (const [move, box, brush] of layers) {
+      if (!move || !$(box).checked || drawn.has(move.uci)) continue;
+      drawn.add(move.uci);
+      shapes.push({ orig: move.uci.slice(0, 2), dest: move.uci.slice(2, 4), brush });
+    }
+    if (!shapes.length && state.best && $("show-best").checked && blueAllowed()) {
+      const uci = state.best.uci;
+      shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "blue" });
+      blueDrawn.set(positionFen, positionFen.split(" ")[1]);
+    }
   }
   ground.setAutoShapes(shapes);
 }
@@ -174,16 +214,21 @@ function showMini(event, fen, lastMove) {
   mini.redrawAll();
 }
 
-// Réponses humaines probables (Maia) et suite du coup explosif joué depuis fen.
-function explosiveDetails(fen, explosive) {
+// Réponses humaines (Maia) au coup move joué depuis fen : « réponse — p % — suite ».
+function replyList(fen, move) {
   const list = document.createElement("ul");
-  for (const reply of explosive.replies) {
+  for (const reply of move.replies) {
     const item = document.createElement("li");
     item.append(`${reply.san} — ${Math.round(reply.p * 100)} % — `,
-                variation(fen, [explosive.san, ...reply.line_san]));
+                variation(fen, [move.san, ...reply.line_san]));
     list.append(item);
   }
-  const parts = [list];
+  return list;
+}
+
+// Réponses humaines probables (Maia) et suite du coup explosif joué depuis fen.
+function explosiveDetails(fen, explosive) {
+  const parts = [replyList(fen, explosive)];
   if (explosive.trap_line_san.length) {
     const trap = document.createElement("div");
     trap.append("Suite : ", variation(fen, [explosive.san, ...explosive.trap_line_san]));
@@ -208,23 +253,52 @@ function fillReplies() {
   panel.append(title, ...explosiveDetails(positionFen, state.explosive));
 }
 
-// Marge droite : un bloc par position où un coup explosif a été trouvé, numéro du coup compris.
-function renderSaved() {
-  const panel = $("saved");
+// Corps d'un bloc de colonne selon sa couleur (le titre est commun).
+const savedDetails = {
+  explosive: (fen, explosive, best) => {
+    const parts = explosiveDetails(fen, explosive);
+    if (best) {
+      const line = document.createElement("div");
+      line.append("Meilleur coup : ", variation(fen, best.pv_san));
+      parts.push(line);
+    }
+    return parts;
+  },
+  trap: (fen, trap) => [replyList(fen, trap)],
+  strategy: (fen, strategy) => {
+    const line = document.createElement("div");
+    line.textContent = `pronostic humain ${Math.round(strategy.value)} % (meilleur coup ${Math.round(strategy.best_value)} %)`;
+    const pv = document.createElement("div");
+    pv.append(variation(fen, strategy.pv_san));
+    return [line, pv];
+  },
+};
+
+// Colonne kind : un bloc par position où le coup a été trouvé, numéro du coup compris ;
+// chaque coup dit quand il est aussi le meilleur coup.
+function renderSaved(kind) {
+  const panel = $(`saved-${kind}`);
   panel.replaceChildren(panel.firstElementChild);
-  for (const [fen, { explosive, best }] of saved) {
+  for (const [fen, { move, best }] of saved[kind]) {
     const [, turn, , , , number] = fen.split(" ");
     const entry = document.createElement("div");
     entry.className = "entry";
     const title = document.createElement("div");
-    title.append(`🟠 ${number}${turn === "w" ? "." : "…"} `, variation(fen, [explosive.san]));
-    entry.append(title, ...explosiveDetails(fen, explosive));
-    if (best) {
-      const line = document.createElement("div");
-      line.append("Meilleur coup : ", variation(fen, best.pv_san));
-      entry.append(line);
-    }
+    title.append(`${kind === "explosive" ? "🟠 " : ""}${number}${turn === "w" ? "." : "…"} `,
+                 variation(fen, [move.san]));
+    if (best && move.uci === best.uci) title.append("(aussi le meilleur coup)");
+    entry.append(title, ...savedDetails[kind](fen, move, best));
     panel.append(entry);
+  }
+}
+
+// Sauvegarde du coup move dans la colonne kind ; une passe plus profonde sur la même
+// position remplace le bloc.
+function save(kind, move) {
+  const found = { move, best: state.best };
+  if (move && JSON.stringify(saved[kind].get(positionFen)) !== JSON.stringify(found)) {
+    saved[kind].set(positionFen, found);
+    renderSaved(kind);
   }
 }
 
@@ -241,13 +315,12 @@ async function poll() {
     const fresh = await (await fetch("/state")).json();
     if (fresh.id === positionId) {
       state = fresh;
-      // Une passe plus profonde sur la même position remplace le coup sauvegardé.
-      const found = { explosive: state.explosive, best: state.best };
-      if (state.explosive && JSON.stringify(saved.get(positionFen)) !== JSON.stringify(found)) {
-        saved.set(positionFen, found);
-        renderSaved();
-      }
       render();
+      save("explosive", state.explosive);
+      save("trap", state.trap);
+      // Le rose n'est jamais dessiné sur le seul coup (flèche verte).
+      const forcedUci = state.forced && state.forced.uci;
+      save("strategy", state.strategy && state.strategy.uci !== forcedUci ? state.strategy : null);
     }
   }
   setTimeout(poll, 1000);
@@ -260,7 +333,12 @@ $("status").addEventListener("mouseenter", () => {
 });
 $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
 
-$("new").addEventListener("click", () => { chess.reset(); saved.clear(); renderSaved(); newPosition(); });
+$("new").addEventListener("click", () => {
+  chess.reset();
+  blueDrawn.clear();
+  for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
+  newPosition();
+});
 $("undo").addEventListener("click", () => { if (chess.undo()) newPosition(); });
 $("flip").addEventListener("click", () => ground.toggleOrientation());
 $("elo-white").addEventListener("change", newPosition);
@@ -268,6 +346,8 @@ $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
 $("show-forced").addEventListener("change", drawShapes);
 $("show-best").addEventListener("change", drawShapes);
+$("show-trap").addEventListener("change", drawShapes);
+$("show-strategy").addEventListener("change", drawShapes);
 
 newPosition();
 poll();

@@ -46,9 +46,11 @@ Lot 3 (Nico, 2026-10-26) :
 - **Mode sombre permanent** (fond et échiquier sombres), sans bouton ni suivi du système.
 
 Lot 4 (Nico, 2026-10-26, en cours de sprint, avant le tronçon 02) :
-- **Flèche bleue rationnée** : seulement à partir du coup n°10, au plus 3 par camp dans la
-  partie, jamais si le même camp l'a eue à son coup précédent. Bleu bloqué → le rose peut
-  apparaître même s'il est le meilleur coup. Détail : `02_page_couleurs_sombre.md` point 4.
+- **Flèche bleue rationnée, en dernier recours** : dessinée seulement si aucune autre flèche
+  cochée (vert, orange, cyan, rose) n'est dessinée ; même coup qu'une autre flèche → l'autre
+  couleur, bleu non décompté. Et seulement à partir du coup n°10, au plus 3 par camp, jamais
+  si le même camp l'a eue à son coup précédent. Remplace « rose masqué s'il est le meilleur
+  coup » (lots 2-3). Détail : `02_page_couleurs_sombre.md` point 4.
 
 Mesure demandée par Nico (crainte orange = rose souvent) : orange = rose dans 1/12
 positions à orange [1 exécution, n=12] ; rose = meilleur coup (masqué) 15/30
@@ -76,10 +78,13 @@ Mesure faite (`audit_retournement.md` §5) : rose ≠ meilleur coup avec écart 
 - 01 piège (cyan) et stratégie (rose) dans l'analyse live (`01_analyse_piege_strategie.md`) ✅
   — `live._human_moves`, `difficulty.position_values`, clés `trap`/`strategy` de l'état.
   Passe réelle ×1 : 18,1 s et 12,7 s [2 positions, pytest en parallèle, orange compris].
-- 02 page : couleurs cyan/rose, colonnes, mode sombre (`02_page_couleurs_sombre.md`) ⏳
+- 02 page : couleurs cyan/rose, colonnes, mode sombre (`02_page_couleurs_sombre.md`) ✅
+  — `interfaces/board/index.html` : flèches vert > orange > cyan > rose puis bleu en dernier
+  recours rationné (`blueAllowed`, `blueDrawn`), trois colonnes `saved-*`, `color-scheme: dark`,
+  cases `#7d8796`, brosses verte/bleue éclaircies. Rendu à valider au run live.
 - 03 run live (`03_run_live.md`) ⏳
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (02). Exécution :
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (03, run live par Nico). Exécution :
 `/sprint-auto sprint 37`.
