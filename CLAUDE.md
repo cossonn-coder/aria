@@ -150,11 +150,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 36 clos (tag `sprint-36`, nouvelle définition du coup explosif, #121 ;
-voir `docs/sprint36/00_etat.md`).
-Prochain : **sprint 37**, cible à choisir.
-Kickoff : `docs/sprint37/context_kickoff_sprint_37.md`.
-Prochaine étape : `/conception sprint 37`.
+Sprint 37 clos (tag `sprint-37`, piège cyan / stratégie rose / mode sombre de l'échiquier ;
+voir `docs/sprint37/00_etat.md`).
+Prochain : **sprint 38**, cible à choisir.
+Kickoff : `docs/sprint38/context_kickoff_sprint_38.md`.
+Prochaine étape : `/conception sprint 38`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

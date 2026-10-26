@@ -1,6 +1,6 @@
 # Sprint 37 — état de conception
 
-**Phase** : B — conception figée (OK Nico 2026-10-26), prêt pour `/sprint-auto sprint 37`.
+**Phase** : CLOS (2026-10-26, run live OK par Nico).
 **Branche** : `feat/sprint37-retournement`.
 **Cible** : échiquier — chercher comment retourner une position perdante (coups humains
 de stratégie, flèche rose ; de tactique, flèche cyan) + mode sombre de la page.
@@ -82,9 +82,15 @@ Mesure faite (`audit_retournement.md` §5) : rose ≠ meilleur coup avec écart 
   — `interfaces/board/index.html` : flèches vert > orange > cyan > rose puis bleu en dernier
   recours rationné (`blueAllowed`, `blueDrawn`), trois colonnes `saved-*`, `color-scheme: dark`,
   cases `#7d8796`, brosses verte/bleue éclaircies. Rendu à valider au run live.
-- 03 run live (`03_run_live.md`) ⏳
+- 03 run live (`03_run_live.md`) ✅ (Nico, 2026-10-26)
+  — Mode sombre OK. Section 1 : orange + cyan Bg5, rose Qe2 ou Be3. Section 2 : cyan g3
+  (attendu h6), rose Qb6, orange Na6 disparu en cours de passes (#108). Section 3 : cyan d5.
+  Section 4 : rose h3, « pronostic humain 24 % » jugé illisible (#124). Section 5 : cyan Kf8.
+  Cases à cocher OK. Scénario 3b (bleu rationné) non testé explicitement.
+  Durées : ×1 1,8-9,5 s, médiane ≈ 6 s [n=24] ; ×4 13-49 s [n=4] (#122).
+  Retour : coups orange « magicien comme Tal », coups roses solides et pédagogiques
+  (« échecs d'école ») ; mention « (aussi le meilleur coup) » appréciée.
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (03, run live par Nico). Exécution :
-`/sprint-auto sprint 37`.
+Sprint clos (tag `sprint-37`). Suite : `docs/sprint38/context_kickoff_sprint_38.md`.
