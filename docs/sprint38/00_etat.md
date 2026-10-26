@@ -1,0 +1,62 @@
+# Sprint 38 — état de conception
+
+**Phase** : B figée (2026-10-26, OK de Nico) — prêt pour `/sprint-auto sprint 38`.
+**Branche** : `feat/sprint38-pgn`.
+**Cible** : #94 — charger un PGN dans l'échiquier pour analyser une partie jouée,
+avec courbe d'évaluation.
+
+## Audit
+
+`audit_pgn.md` : besoin couvert côté page (chess.js `loadPgn` + curseur +
+`newPosition()` à chaque pas) ; le worker n'analyse que la position affichée ;
+colonnes indexées par FEN (persistent en naviguant) ; pas d'outillage de test JS.
+§4 : `analysis.analyze_game` évalue déjà toutes les positions (0,15 s/position) →
+courbe sans code d'analyse nouveau.
+
+## Décisions arrêtées
+
+- Cible = #94 charger un PGN (Nico, 2026-10-26).
+
+Lot 1 (Nico, 2026-10-26) :
+- **Analyse position par position** : seule la position affichée est analysée (worker
+  inchangé) ; les colonnes se remplissent en naviguant. Pas de pré-analyse des flèches.
+- **Coup hors partie = variante** : la suite de la partie chargée est gardée ; un bouton
+  « Revenir à la partie » ramène au coup de la partie où l'on était.
+- **« joué : X »** dans chaque bloc de colonne dont la position appartient à la partie
+  chargée (coup réellement joué à cette position).
+
+Lot 2 (Nico, 2026-10-26) — graphe d'évaluation demandé par Nico :
+- **Courbe du % de gain des blancs** (0-100, ligne des 50 %) sur toute la partie chargée,
+  calculée d'avance côté serveur : `POST /game` {pgn} → `parse_pgn` + `analyze_game` →
+  une valeur par position. ≈ 12 s pour 80 demi-coups [estimation 0,15 s × 80, non mesurée].
+  L'analyse live reste position par position (lot 1 inchangé).
+- **Clic sur la courbe = aller au coup** ; trait vertical sur le coup affiché.
+- **Courbe seule**, pas de points d'erreur.
+
+Recos de conception (Claude, acceptées avec l'OK de Nico) :
+- Elo blancs / noirs pré-remplis depuis `WhiteElo` / `BlackElo` (inchangés si absents).
+- Navigation : ⏮ ◀ ▶ ⏭ + flèches gauche/droite ; charger un PGN vide colonnes et bleu
+  rationné comme « Nouvelle partie » et place au début.
+- Coup joué à la main égal au coup suivant de la partie = on avance (pas de variante).
+- PGN sans en-tête accepté (`parse_pgn` exige un `[` : réessai avec un en-tête minimal).
+- Page + route `/game` ; `live.py`, worker et `analysis.py` inchangés ; SVG inline.
+
+## Questions ouvertes
+
+(aucune)
+
+## Tronçons
+
+- 01 route `POST /game` (`01_route_game.md`) ⏳
+- 02 page : PGN, navigation, variante, « joué : X », courbe (`02_page_pgn_graphe.md`) ⏳
+- 03 run live, Nico (`03_run_live.md`, parties : `run_live_parties.txt`) ⏳
+
+## Dettes
+
+#94 (rejeu PGN) : partiellement fermée par le sprint si le run live est OK.
+Aucune nouvelle à ce stade.
+
+## §REPRISE
+
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
+Prochaine étape : `/sprint-auto sprint 38`.
