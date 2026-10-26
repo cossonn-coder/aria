@@ -18,14 +18,23 @@
              background: #fff; border: 1px solid #e0a050; border-radius: 6px; }
   #replies.visible { display: block; }
   #replies ul { margin: 4px 0; padding-left: 20px; }
+  #saved { max-height: 480px; overflow-y: auto; border-top: 1px solid #ccc; padding-top: 8px; }
+  #saved .entry { margin-bottom: 10px; }
+  #saved ul { margin: 2px 0; padding-left: 18px; font-size: 0.9em; }
+  .move { cursor: pointer; padding: 0 1px; border-radius: 3px; }
+  .move:hover { background: #ffd9a8; }
+  #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
 </style>
 </head>
 <body>
 <main>
   <div>
     <div id="board"></div>
-    <div id="status"></div>
-    <div id="replies"></div>
+    <div id="analysis">
+      <div id="status"></div>
+      <div id="replies"></div>
+    </div>
   </div>
   <div id="controls">
     <button id="new">Nouvelle partie</button>
@@ -35,8 +44,10 @@
     <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
+    <div id="saved"><strong>Coups explosifs trouvés</strong></div>
   </div>
 </main>
+<div id="mini"></div>
 <script type="module">
 import { Chessground } from "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm";
 import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
@@ -46,6 +57,9 @@ const chess = new Chess();
 // Numéro de la position courante (rendu par POST /position) et dernier état reçu.
 let positionId = null;
 let state = null;
+// FEN de la position analysée, et coups explosifs trouvés par FEN (gardés jusqu'à « Nouvelle partie »).
+let positionFen = null;
+const saved = new Map();
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -62,6 +76,8 @@ const ground = Chessground($("board"), {
              events: { after: (from, to) => { chess.move({ from, to, promotion: "q" }); newPosition(); } } },
   drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 } } },
 });
+// Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
+const mini = Chessground($("mini"), { viewOnly: true, coordinates: false });
 
 // Synchronise l'échiquier sur chess.js (la promotion en dame remplace le pion affiché).
 function syncBoard() {
@@ -81,6 +97,7 @@ async function newPosition() {
   syncBoard();
   positionId = null;
   state = null;
+  positionFen = chess.fen();
   render();
   const response = await fetch("/position", {
     method: "POST",
@@ -121,24 +138,81 @@ function statusText() {
   }
 }
 
-// Panneau des réponses humaines probables (Maia), rempli en textContent.
+// Variante cliquable : chaque coup SAN, rejoué depuis fen, montre au survol la position
+// atteinte (coups précédents de la variante compris).
+function variation(fen, sans) {
+  const line = document.createElement("span");
+  const board = new Chess(fen);
+  for (const san of sans) {
+    const move = board.move(san);
+    const span = document.createElement("span");
+    span.className = "move";
+    span.textContent = san;
+    const after = board.fen();
+    span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
+    span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    line.append(span, " ");
+  }
+  return line;
+}
+
+function showMini(event, fen, lastMove) {
+  const box = $("mini");
+  const x = Math.min(event.clientX + 16, window.innerWidth - 230);
+  const y = Math.min(event.clientY + 16, window.innerHeight - 230);
+  box.style.left = `${x}px`;
+  box.style.top = `${y}px`;
+  box.style.visibility = "visible";
+  mini.set({ fen, lastMove, orientation: ground.state.orientation });
+  mini.redrawAll();
+}
+
+// Réponses humaines probables (Maia) et suite du coup explosif joué depuis fen.
+function explosiveDetails(fen, explosive) {
+  const list = document.createElement("ul");
+  for (const reply of explosive.replies) {
+    const item = document.createElement("li");
+    item.append(`${reply.san} — ${Math.round(reply.p * 100)} % — `,
+                variation(fen, [explosive.san, ...reply.line_san]));
+    list.append(item);
+  }
+  const parts = [list];
+  if (explosive.trap_line_san.length) {
+    const trap = document.createElement("div");
+    trap.append("Suite : ", variation(fen, [explosive.san, ...explosive.trap_line_san]));
+    parts.push(trap);
+  }
+  return parts;
+}
+
+// Panneau des réponses humaines probables (Maia), rempli en textContent ; reconstruit
+// seulement si le coup change (sinon le coup survolé disparaîtrait à chaque interrogation).
+let shownReplies = null;
 function fillReplies() {
+  const key = JSON.stringify([positionFen, state && state.explosive]);
+  if (key === shownReplies) return;
+  shownReplies = key;
   const panel = $("replies");
   panel.replaceChildren();
+  $("mini").style.visibility = "hidden";
   if (!state || !state.explosive) return;
   const title = document.createElement("div");
   title.textContent = `Réponses humaines probables à ${state.explosive.san} :`;
-  const list = document.createElement("ul");
-  for (const reply of state.explosive.replies) {
-    const item = document.createElement("li");
-    item.textContent = `${reply.san} — ${Math.round(reply.p * 100)} % — ${reply.line_san.join(" ")}`;
-    list.append(item);
-  }
-  panel.append(title, list);
-  if (state.explosive.trap_line_san.length) {
-    const trap = document.createElement("div");
-    trap.textContent = `Suite : ${state.explosive.trap_line_san.join(" ")}`;
-    panel.append(trap);
+  panel.append(title, ...explosiveDetails(positionFen, state.explosive));
+}
+
+// Marge droite : un bloc par position où un coup explosif a été trouvé, numéro du coup compris.
+function renderSaved() {
+  const panel = $("saved");
+  panel.replaceChildren(panel.firstElementChild);
+  for (const [fen, explosive] of saved) {
+    const [, turn, , , , number] = fen.split(" ");
+    const entry = document.createElement("div");
+    entry.className = "entry";
+    const title = document.createElement("div");
+    title.append(`🟠 ${number}${turn === "w" ? "." : "…"} `, variation(fen, [explosive.san]));
+    entry.append(title, ...explosiveDetails(fen, explosive));
+    panel.append(entry);
   }
 }
 
@@ -155,19 +229,25 @@ async function poll() {
     const fresh = await (await fetch("/state")).json();
     if (fresh.id === positionId) {
       state = fresh;
+      // Une passe plus profonde sur la même position remplace le coup sauvegardé.
+      if (state.explosive && JSON.stringify(saved.get(positionFen)) !== JSON.stringify(state.explosive)) {
+        saved.set(positionFen, state.explosive);
+        renderSaved();
+      }
       render();
     }
   }
   setTimeout(poll, 1000);
 }
 
-// Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG).
+// Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
+// le panneau reste ouvert tant que la souris y est, pour survoler ses coups.
 $("status").addEventListener("mouseenter", () => {
   if (state && state.explosive) $("replies").classList.add("visible");
 });
-$("status").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
+$("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
 
-$("new").addEventListener("click", () => { chess.reset(); newPosition(); });
+$("new").addEventListener("click", () => { chess.reset(); saved.clear(); renderSaved(); newPosition(); });
 $("undo").addEventListener("click", () => { if (chess.undo()) newPosition(); });
 $("flip").addEventListener("click", () => ground.toggleOrientation());
 $("elo-white").addEventListener("change", newPosition);
