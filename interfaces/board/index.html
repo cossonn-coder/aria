@@ -44,6 +44,7 @@
     <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
+    <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
     <div id="saved"><strong>Coups explosifs trouvés</strong></div>
   </div>
 </main>
@@ -108,9 +109,14 @@ async function newPosition() {
   positionId = (await response.json()).id;
 }
 
-// Flèches : orange = coup explosif, verte = seul coup ; jamais le meilleur coup hors « seul coup ».
+// Flèches : bleue = meilleur coup (sous les autres ; remplacée par la verte quand c'est
+// le seul coup), orange = coup explosif, verte = seul coup.
 function drawShapes() {
   const shapes = [];
+  if (state && state.best && !state.forced && $("show-best").checked) {
+    const uci = state.best.uci;
+    shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "blue" });
+  }
   if (state && state.explosive && $("show-explosive").checked) {
     const uci = state.explosive.uci;
     shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "orange" });
@@ -261,6 +267,7 @@ $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
 $("show-forced").addEventListener("change", drawShapes);
+$("show-best").addEventListener("change", drawShapes);
 
 newPosition();
 poll();
