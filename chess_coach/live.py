@@ -11,7 +11,7 @@
 import chess
 import chess.engine
 
-from chess_coach.explosive import _WIN_MAX, _WIN_MIN, _search_position, _win_of
+from chess_coach.explosive import _REPLY_LINE_PLIES, _WIN_MAX, _WIN_MIN, _san_line, _search_position, _win_of
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -53,16 +53,18 @@ def _explosive_dict(move) -> dict:
 
 
 def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
-    """Une passe sur fen pour le camp au trait : {"result", "explosive", "forced"}.
+    """Une passe sur fen pour le camp au trait : {"result", "explosive", "forced", "best"}.
 
     result parmi game_over | decided | explosive | none ; forced = {"uci", "san"}
-    du seul coup (coup légal unique ou 2e coup ≥ _FORCED_GAP derrière), sinon None.
+    du seul coup (coup légal unique ou 2e coup ≥ _FORCED_GAP derrière), sinon None ;
+    best = {"uci", "san", "pv_san"} du meilleur coup moteur (même longueur de suite
+    que les réponses du coup explosif), None en fin de partie.
     elo = Elo de l'adversaire du trait (réponses humaines Maia).
     """
     board = chess.Board(fen)
     # _search_position lit la PV du meilleur coup : inutilisable sur une position terminale.
     if board.is_game_over():
-        return {"result": "game_over", "explosive": None, "forced": None}
+        return {"result": "game_over", "explosive": None, "forced": None, "best": None}
 
     head = proxy.analyse(board, chess.engine.Limit(time=_HEAD_TIME), multipv=2)
     win_best = _win_of(head[0])
@@ -70,11 +72,13 @@ def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
     forced = None
     if len(head) == 1 or win_best - _win_of(head[1]) >= _FORCED_GAP:
         forced = {"uci": best.uci(), "san": board.san(best)}
+    best_dict = {"uci": best.uci(), "san": board.san(best),
+                 "pv_san": _san_line(board, head[0]["pv"][:_REPLY_LINE_PLIES + 1])}
 
     if not _WIN_MIN <= win_best <= _WIN_MAX:
-        return {"result": "decided", "explosive": None, "forced": forced}
+        return {"result": "decided", "explosive": None, "forced": forced, "best": best_dict}
 
     move = _search_position(proxy, board, "", "", elo, models_dir)
     if move is None:
-        return {"result": "none", "explosive": None, "forced": forced}
-    return {"result": "explosive", "explosive": _explosive_dict(move), "forced": forced}
+        return {"result": "none", "explosive": None, "forced": forced, "best": best_dict}
+    return {"result": "explosive", "explosive": _explosive_dict(move), "forced": forced, "best": best_dict}

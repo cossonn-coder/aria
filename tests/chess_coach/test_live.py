@@ -46,7 +46,8 @@ def _pass(infos, monkeypatch):
 
 def test_forced_move_detected(monkeypatch):
     outcome, searched = _pass([_info("e2e4", 0), _info("d2d4", -300)], monkeypatch)
-    assert outcome == {"result": "none", "explosive": None, "forced": {"uci": "e2e4", "san": "e4"}}
+    assert outcome == {"result": "none", "explosive": None, "forced": {"uci": "e2e4", "san": "e4"},
+                       "best": {"uci": "e2e4", "san": "e4", "pv_san": ["e4"]}}
     assert len(searched) == 1
 
 

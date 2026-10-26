@@ -57,7 +57,8 @@ const chess = new Chess();
 // Numéro de la position courante (rendu par POST /position) et dernier état reçu.
 let positionId = null;
 let state = null;
-// FEN de la position analysée, et coups explosifs trouvés par FEN (gardés jusqu'à « Nouvelle partie »).
+// FEN de la position analysée, et coups explosifs trouvés par FEN avec le meilleur coup
+// de la même passe : {explosive, best} (gardés jusqu'à « Nouvelle partie »).
 let positionFen = null;
 const saved = new Map();
 
@@ -205,13 +206,18 @@ function fillReplies() {
 function renderSaved() {
   const panel = $("saved");
   panel.replaceChildren(panel.firstElementChild);
-  for (const [fen, explosive] of saved) {
+  for (const [fen, { explosive, best }] of saved) {
     const [, turn, , , , number] = fen.split(" ");
     const entry = document.createElement("div");
     entry.className = "entry";
     const title = document.createElement("div");
     title.append(`🟠 ${number}${turn === "w" ? "." : "…"} `, variation(fen, [explosive.san]));
     entry.append(title, ...explosiveDetails(fen, explosive));
+    if (best) {
+      const line = document.createElement("div");
+      line.append("Meilleur coup : ", variation(fen, best.pv_san));
+      entry.append(line);
+    }
     panel.append(entry);
   }
 }
@@ -230,8 +236,9 @@ async function poll() {
     if (fresh.id === positionId) {
       state = fresh;
       // Une passe plus profonde sur la même position remplace le coup sauvegardé.
-      if (state.explosive && JSON.stringify(saved.get(positionFen)) !== JSON.stringify(state.explosive)) {
-        saved.set(positionFen, state.explosive);
+      const found = { explosive: state.explosive, best: state.best };
+      if (state.explosive && JSON.stringify(saved.get(positionFen)) !== JSON.stringify(found)) {
+        saved.set(positionFen, found);
         renderSaved();
       }
       render();

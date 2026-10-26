@@ -33,7 +33,7 @@ class BoardWorker:
 
     État : id (numéro de position), pass (passe en cours, ou dernière passe
     quand running est faux), passes, running, result (dernière passe terminée),
-    explosive, forced, error.
+    explosive, forced, best, error.
     """
 
     def __init__(self, open_engine, models_dir: str, run_pass=analyse_pass):
@@ -48,7 +48,7 @@ class BoardWorker:
     @staticmethod
     def _initial(position_id: int) -> dict:
         return {"id": position_id, "pass": 1, "passes": len(FACTORS), "running": position_id > 0,
-                "result": "pending", "explosive": None, "forced": None, "error": None}
+                "result": "pending", "explosive": None, "forced": None, "best": None, "error": None}
 
     def submit(self, fen: str, elo_white: int, elo_black: int) -> int:
         """Nouvelle position : remplace la précédente et réveille le worker."""
