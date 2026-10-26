@@ -71,3 +71,22 @@ def test_index_serves_chessboard_page(monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_game_returns_white_win_curve(monkeypatch):
+    # Sprint 38, tronçon 01 : % de gain des blancs par position, PGN sans en-tête accepté.
+    from types import SimpleNamespace
+
+    import interfaces.board_interface as board_interface
+
+    plies = [SimpleNamespace(color="white", win_before=60, win_after=45),
+             SimpleNamespace(color="black", win_before=55, win_after=30)]
+    monkeypatch.setattr(board_interface, "analyze_game", lambda game, color, path: plies)
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {"wins": [60, 45, 70]}
+    finally:
+        server.shutdown()
+        server.server_close()
