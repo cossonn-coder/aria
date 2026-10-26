@@ -1,0 +1,17 @@
+Sprint 37 — coups du run live (échiquier http://192.168.1.124:5002, Elo 1300 / 1300)
+Coups attendus relevés au prototype (non déterministe) : présence à au moins une passe.
+
+Section 1 — Piège en position égale (nouvelle partie) : attendu flèche cyan sur Bg5 (piège ≈ 32 %), rose sur Qe2
+e4 c6 d4 d5 Nc3 dxe4 Bc4 Nf6 f3 exf3 Nxf3 Bg4 Ne5 Be6 Bxe6 fxe6
+
+Section 2 — Piège en position perdante (suite de la section 1, noirs ≈ 34 %) : attendu flèche cyan sur h6 (≈ 35 %), rose sur Qb6
+O-O Nbd7 Nf3
+
+Section 3 — Piège = stratégie, position perdante (nouvelle partie, noirs ≈ 31 %) : attendu une seule flèche, cyan, sur d5 (≈ 43 %) ; bloc d5 dans les colonnes Pièges et Stratégie
+e4 e5 Nf3 Nc6 d4 exd4 c3 dxc3 Bc4 cxb2 Bxb2 Nf6 O-O h6 e5
+
+Section 4 — Stratégie en position très perdante (nouvelle partie, blancs ≈ 12 %) : attendu flèche rose sur h3 (bleue sur Nf4)
+e4 e5 Nf3 f5 exf5 e4 Ng1 Nf6 d3 exd3 Bxd3 d5 Bg5 Be7 Bxf6 Bxf6 Qh5+ Kf8 c3 Bd7 Ne2 Qe8 O-O Qxh5
+
+Section 5 — Piège en échec (reprendre la section 4 au coup 9 : nouvelle partie) : attendu flèche cyan sur Kf8 (≈ 40 %)
+e4 e5 Nf3 f5 exf5 e4 Ng1 Nf6 d3 exd3 Bxd3 d5 Bg5 Be7 Bxf6 Bxf6 Qh5+
