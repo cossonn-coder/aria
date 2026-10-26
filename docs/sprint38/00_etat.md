@@ -48,7 +48,7 @@ Recos de conception (Claude, acceptées avec l'OK de Nico) :
 ## Tronçons
 
 - 01 route `POST /game` (`01_route_game.md`) ✅ (`game_wins` + `_Handler._game`, 370 tests verts)
-- 02 page : PGN, navigation, variante, « joué : X », courbe (`02_page_pgn_graphe.md`) ⏳
+- 02 page : PGN, navigation, variante, « joué : X », courbe (`02_page_pgn_graphe.md`) ✅ (`index.html` seul, 370 tests verts)
 - 03 run live, Nico (`03_run_live.md`, parties : `run_live_parties.txt`) ⏳
 
 ## Dettes
@@ -58,6 +58,6 @@ Aucune nouvelle à ce stade.
 
 ## §REPRISE
 
-Tronçon 01 fait (non commité par le sous-agent). Lire `CLAUDE.md`, ce fichier,
-puis le kickoff du premier tronçon ⏳ (`02_page_pgn_graphe.md`).
-Prochaine étape : `/sprint-auto sprint 38` (reprend au tronçon 02).
+Tronçons 01 et 02 faits (02 non commité par le sous-agent). Reste le run live (tronçon 03,
+Nico) : lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`.
+Prochaine étape : `/sprint-auto sprint 38` (reprend au tronçon 03, run live).

@@ -68,6 +68,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm" in page
         # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (rose).
         assert "show-trap" in page and "show-strategy" in page
+        # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
+        assert 'id="pgn"' in page and 'id="graph"' in page
     finally:
         server.shutdown()
         server.server_close()
