@@ -133,3 +133,26 @@ def reply_distribution(fens: list, elo: int, models_dir: str) -> list:
                 break
         result.append(replies)
     return result
+
+
+def position_values(fens: list, elo: int, models_dir: str) -> list:
+    """Pronostic Maia-2 (tête de valeur) du camp au trait de chaque fen, en % (0-100).
+
+    Une passe batchée, elo_self = elo_oppo = elo (sprint 37, tronçon 01). La
+    sortie brute est déjà du point de vue du trait : pas de retournement selon
+    la couleur (maia2.inference ne retourne que pour l'exprimer côté blancs).
+    """
+    import torch
+    from maia2 import inference
+
+    net, all_moves_dict, elo_dict = _load(models_dir)
+    boards, elos = [], []
+    for fen in fens:
+        board_in, elo_cat, _, _ = inference.preprocessing(fen, elo, elo, elo_dict, all_moves_dict)
+        boards.append(board_in)
+        elos.append(elo_cat)
+    with torch.no_grad():
+        elo_tensor = torch.tensor(elos)
+        _, _, values = net(torch.stack(boards), elo_tensor, elo_tensor)
+    # Valeur dans [-1 ; 1] → probabilité de résultat du trait, en %.
+    return [100 * v for v in (values / 2 + 0.5).clamp(0, 1).tolist()]
