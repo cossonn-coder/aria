@@ -10,7 +10,7 @@ O-O Nbd7 Nf3
 Section 3 — Piège = stratégie, position perdante (nouvelle partie, noirs ≈ 31 %) : attendu une seule flèche, cyan, sur d5 (≈ 43 %) ; bloc d5 dans les colonnes Pièges et Stratégie
 e4 e5 Nf3 Nc6 d4 exd4 c3 dxc3 Bc4 cxb2 Bxb2 Nf6 O-O h6 e5
 
-Section 4 — Stratégie en position très perdante (nouvelle partie, blancs ≈ 12 %) : attendu flèche rose sur h3 (bleue sur Nf4)
+Section 4 — Stratégie en position très perdante (nouvelle partie, blancs ≈ 12 %) : attendu flèche rose sur h3 (bleu Nf4 seulement si « Stratégie » décochée)
 e4 e5 Nf3 f5 exf5 e4 Ng1 Nf6 d3 exd3 Bxd3 d5 Bg5 Be7 Bxf6 Bxf6 Qh5+ Kf8 c3 Bd7 Ne2 Qe8 O-O Qxh5
 
 Section 5 — Piège en échec (reprendre la section 4 au coup 9 : nouvelle partie) : attendu flèche cyan sur Kf8 (≈ 40 %)
