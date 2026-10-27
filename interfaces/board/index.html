@@ -36,6 +36,7 @@
   .move:hover { background: #6a4a1c; }
   #pgn { width: 100%; box-sizing: border-box; height: 90px; }
   #nav { display: flex; gap: 6px; }
+  #played { margin-top: 8px; font-size: 1.1em; }
   #graph { display: block; margin-top: 12px; cursor: pointer; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
@@ -45,6 +46,7 @@
 <main>
   <div>
     <div id="board"></div>
+    <div id="played"></div>
     <svg id="graph" width="560" height="120" style="display: none"></svg>
     <div id="analysis">
       <div id="status"></div>
@@ -116,7 +118,8 @@ const ground = Chessground($("board"), {
                          cyan: { key: "c", color: "#00e5ff", opacity: 0.9, lineWidth: 10 },
                          pink: { key: "p", color: "#ff5fb0", opacity: 0.9, lineWidth: 10 },
                          green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
-                         blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 } } },
+                         blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 },
+                         white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 } } },
 });
 // Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
 const mini = Chessground($("mini"), { viewOnly: true, coordinates: false });
@@ -181,6 +184,9 @@ function drawShapes() {
       blueDrawn.set(positionFen, positionFen.split(" ")[1]);
     }
   }
+  // Pièce du coup joué dans la partie chargée : cerclée de blanc (après le test du bleu).
+  const played = playedMove();
+  if (played) shapes.push({ orig: played.from, brush: "white" });
   ground.setAutoShapes(shapes);
 }
 
@@ -368,10 +374,19 @@ function goTo(n) {
   newPosition();
 }
 
-// Contrôles de navigation et courbe selon l'état de la partie chargée.
+// Coup de la partie chargée joué depuis la position affichée (coup verbose chess.js),
+// null hors partie, en variante ou en fin de partie.
+function playedMove() {
+  if (!game || variant || game.cursor >= game.sans.length) return null;
+  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[game.cursor]);
+}
+
+// Contrôles de navigation, coup joué sous l'échiquier et courbe selon l'état de la partie chargée.
 function refreshGame() {
   for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
   $("back").style.display = variant ? "" : "none";
+  const played = playedMove();
+  $("played").textContent = played ? `joué : ${played.san}` : "";
   drawGraph();
 }
 

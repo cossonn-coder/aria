@@ -27,3 +27,12 @@ Exécuté par Nico sur la page de l'échiquier. Parties à coller :
 | 12 | Retour libre | lisibilité de la courbe sur fond sombre, confort de navigation |
 
 Échec d'un critère → noter le scénario, la ligne de log et ce que la page affichait.
+
+## Mini-run du correctif « joué : X » (2026-10-27)
+
+| # | Action | Ce qu'on doit voir |
+|---|--------|--------------------|
+| 1 | Charger la partie 1, avancer au coup 7 des blancs | sous l'échiquier « joué : Bxf7+ », fou c4 cerclé de blanc |
+| 2 | ▶ / ◀ sur quelques coups | le texte et le cercle suivent à chaque position |
+| 3 | Jouer un coup hors partie | texte vide, plus de cercle ; « Revenir à la partie » les rétablit |
+| 4 | ⏭ (fin de partie), puis « Nouvelle partie » | texte vide, pas de cercle |

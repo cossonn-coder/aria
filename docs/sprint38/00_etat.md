@@ -51,6 +51,23 @@ Recos de conception (Claude, acceptées avec l'OK de Nico) :
 - 02 page : PGN, navigation, variante, « joué : X », courbe (`02_page_pgn_graphe.md`) ✅ (`index.html` seul, 370 tests verts)
 - 03 run live, Nico (`03_run_live.md`, parties : `run_live_parties.txt`) ⏳
 
+## Run live (Nico, 2026-10-27)
+
+OK : 1 (Elo pré-remplis, courbe), 2, 3, 4, 7, 8, 9, 10 (« PGN illisible »).
+À éclaircir : 5 « joué : X » non vu. Clés FEN vérifiées hors page (chess.js 1.4.0,
+partie 1 : 78 demi-coups, 0 position manquante, coup 7 → `Bxf7+`) : la ligne ne
+s'affiche que dans un bloc de colonne, donc seulement si une flèche orange / cyan / rose
+a été trouvée sur cette position. 6 : absence de « joué » en variante = attendu.
+Correctif (Nico, 2026-10-27) : « joué : X » affiché en permanence sous l'échiquier sur une
+position de la partie chargée (hors variante), et pièce du coup joué cerclée de blanc.
+Reste à valider en live (mini-run, voir 03_run_live.md).
+Suite : nouvelles demandes → `/conception sprint 39`.
+Nouvelles demandes (hors tronçons, à concevoir) :
+- courbe du meilleur coup à chaque position, en comparaison de la courbe jouée ;
+- indication des chances de mat sur la courbe ;
+- courbe visible en permanence, y compris en jeu libre ;
+- partie enregistrée au fil des coups joués, export PGN.
+
 ## Dettes
 
 #94 (rejeu PGN) : partiellement fermée par le sprint si le run live est OK.
