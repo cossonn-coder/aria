@@ -18,7 +18,7 @@ import chess
 import chess.engine
 
 from chess_coach import difficulty
-from chess_coach.analysis import ENGINE_OPTIONS
+from chess_coach.analysis import ENGINE_OPTIONS, analyze_game, parse_pgn
 from chess_coach.live import FACTORS, EngineProxy, Superseded, analyse_pass
 from config import config
 from logger import get_logger
@@ -127,6 +127,19 @@ def _load_maia_in_background():
     threading.Thread(target=difficulty._load, args=(config.maia_models_dir,), daemon=True).start()
 
 
+def game_wins(game) -> list:
+    """% de gain des blancs de chaque position de la partie (N+1 valeurs, sprint 38).
+
+    win_before / win_after sont du point de vue du trait (camp du demi-coup) :
+    on les ramène au point de vue des blancs.
+    """
+    plies = analyze_game(game, "white", config.stockfish_path)
+    wins = [p.win_before if p.color == "white" else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    wins.append(last.win_after if last.color == "white" else 100 - last.win_after)
+    return [round(w, 1) for w in wins]
+
+
 class _Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: bytes, content_type: str):
         self.send_response(status)
@@ -148,12 +161,27 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "text/plain")
 
     def do_POST(self):
-        if self.path != "/position":
+        if self.path not in ("/position", "/game"):
             self._send(404, b"", "text/plain")
             return
         data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path == "/game":
+            self._game(data["pgn"])
+            return
         position_id = self.server.worker.submit(data["fen"], int(data["elo_white"]), int(data["elo_black"]))
         self._json({"id": position_id})
+
+    def _game(self, pgn: str):
+        """Courbe d'évaluation d'une partie PGN ; requête synchrone dans son thread."""
+        # parse_pgn exige une ligne d'en-tête : un PGN réduit aux coups en reçoit une minimale.
+        game = parse_pgn(pgn) or parse_pgn('[Event "?"]\n' + pgn)
+        if game is None:
+            self._send(400, json.dumps({"error": "PGN illisible"}).encode(), "application/json")
+            return
+        start = time.monotonic()
+        wins = game_wins(game)
+        log.info(f"board_game plies={len(wins) - 1} duration={time.monotonic() - start:.1f}s")
+        self._json({"wins": wins})
 
     def log_message(self, format, *args):
         # Requêtes /state toutes les secondes : hors journal du service.

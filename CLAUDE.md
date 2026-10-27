@@ -150,11 +150,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 37 clos (tag `sprint-37`, piège cyan / stratégie rose / mode sombre de l'échiquier ;
-voir `docs/sprint37/00_etat.md`).
-Prochain : **sprint 38**, cible à choisir.
-Kickoff : `docs/sprint38/context_kickoff_sprint_38.md`.
-Prochaine étape : `/conception sprint 38`.
+Sprint 38 clos (tag `sprint-38`, PGN dans l'échiquier, navigation, courbe d'évaluation ;
+voir `docs/sprint38/00_etat.md`).
+Prochain : **sprint 39**, cible choisie : courbe du meilleur coup, chances de mat,
+courbe en jeu libre, enregistrement + export PGN (#127-#130).
+Kickoff : `docs/sprint39/context_kickoff_sprint_39.md`.
+Prochaine étape : `/conception sprint 39`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

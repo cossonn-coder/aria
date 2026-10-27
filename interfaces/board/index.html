@@ -34,6 +34,10 @@
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
   .move { cursor: pointer; padding: 0 1px; border-radius: 3px; }
   .move:hover { background: #6a4a1c; }
+  #pgn { width: 100%; box-sizing: border-box; height: 90px; }
+  #nav { display: flex; gap: 6px; }
+  #played { margin-top: 8px; font-size: 1.1em; }
+  #graph { display: block; margin-top: 12px; cursor: pointer; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
 </style>
@@ -42,6 +46,8 @@
 <main>
   <div>
     <div id="board"></div>
+    <div id="played"></div>
+    <svg id="graph" width="560" height="120" style="display: none"></svg>
     <div id="analysis">
       <div id="status"></div>
       <div id="replies"></div>
@@ -51,6 +57,13 @@
     <button id="new">Nouvelle partie</button>
     <button id="undo">Annuler le dernier coup</button>
     <button id="flip">Retourner l'échiquier</button>
+    <textarea id="pgn" placeholder="Coller une partie PGN"></textarea>
+    <button id="load">Charger la partie</button>
+    <div id="nav">
+      <button id="first">⏮</button><button id="prev">◀</button>
+      <button id="next">▶</button><button id="last">⏭</button>
+    </div>
+    <button id="back" style="display: none">Revenir à la partie</button>
     <label>Elo blancs <input id="elo-white" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
@@ -81,6 +94,11 @@ let positionFen = null;
 const saved = { explosive: new Map(), trap: new Map(), strategy: new Map() };
 // Flèche bleue rationnée : FEN → camp au trait ("w" / "b") des positions où elle a été dessinée.
 const blueDrawn = new Map();
+// Partie chargée depuis un PGN (sprint 38) : FEN de départ, coups SAN, Map FEN → coup joué
+// (mêmes clés que saved), curseur (demi-coups joués depuis le début) et courbe wins du serveur.
+// variant : un coup hors partie a été joué à la main depuis la position du curseur.
+let game = null;
+let variant = false;
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -94,13 +112,14 @@ function legalDests() {
 
 const ground = Chessground($("board"), {
   movable: { free: false, color: "both", showDests: true,
-             events: { after: (from, to) => { chess.move({ from, to, promotion: "q" }); newPosition(); } } },
+             events: { after: (from, to) => { playedOnBoard(chess.move({ from, to, promotion: "q" })); newPosition(); } } },
   // Vert et bleu éclaircis pour rester lisibles sur l'échiquier sombre.
   drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 },
                          cyan: { key: "c", color: "#00e5ff", opacity: 0.9, lineWidth: 10 },
                          pink: { key: "p", color: "#ff5fb0", opacity: 0.9, lineWidth: 10 },
                          green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
-                         blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 } } },
+                         blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 },
+                         white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 } } },
 });
 // Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
 const mini = Chessground($("mini"), { viewOnly: true, coordinates: false });
@@ -165,6 +184,9 @@ function drawShapes() {
       blueDrawn.set(positionFen, positionFen.split(" ")[1]);
     }
   }
+  // Pièce du coup joué dans la partie chargée : cerclée de blanc (après le test du bleu).
+  const played = playedMove();
+  if (played) shapes.push({ orig: played.from, brush: "white" });
   ground.setAutoShapes(shapes);
 }
 
@@ -288,6 +310,11 @@ function renderSaved(kind) {
                  variation(fen, [move.san]));
     if (best && move.uci === best.uci) title.append("(aussi le meilleur coup)");
     entry.append(title, ...savedDetails[kind](fen, move, best));
+    if (game && game.played.has(fen)) {
+      const played = document.createElement("div");
+      played.textContent = `joué : ${game.played.get(fen)}`;
+      entry.append(played);
+    }
     panel.append(entry);
   }
 }
@@ -326,6 +353,93 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
+// Coup joué à la main : le coup suivant de la partie fait avancer le curseur, tout autre
+// coup ouvre (ou prolonge) une variante.
+function playedOnBoard(move) {
+  if (!game) return;
+  if (!variant && move.san === game.sans[game.cursor]) game.cursor++;
+  else variant = true;
+  refreshGame();
+}
+
+// Va à la position n de la partie chargée (quitte la variante) : rejoue depuis le départ
+// pour que chess.history() soit la suite de la partie (rationnement du bleu).
+function goTo(n) {
+  if (!game) return;
+  game.cursor = Math.max(0, Math.min(n, game.sans.length));
+  variant = false;
+  chess.load(game.start);
+  for (const san of game.sans.slice(0, game.cursor)) chess.move(san);
+  refreshGame();
+  newPosition();
+}
+
+// Coup de la partie chargée joué depuis la position affichée (coup verbose chess.js),
+// null hors partie, en variante ou en fin de partie.
+function playedMove() {
+  if (!game || variant || game.cursor >= game.sans.length) return null;
+  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[game.cursor]);
+}
+
+// Contrôles de navigation, coup joué sous l'échiquier et courbe selon l'état de la partie chargée.
+function refreshGame() {
+  for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
+  $("back").style.display = variant ? "" : "none";
+  const played = playedMove();
+  $("played").textContent = played ? `joué : ${played.san}` : "";
+  drawGraph();
+}
+
+// Courbe du % de gain des blancs (0 en bas, 100 en haut, médiane à 50 %), un point par
+// position, trait vertical sur le curseur ; message tant que la courbe n'est pas là.
+const GRAPH_W = 560, GRAPH_H = 120;
+function drawGraph() {
+  const svg = $("graph");
+  svg.style.display = game ? "" : "none";
+  if (!game) return;
+  const step = GRAPH_W / Math.max(1, game.sans.length);
+  const y = (win) => (GRAPH_H - win / 100 * GRAPH_H).toFixed(1);
+  let body = `<rect width="${GRAPH_W}" height="${GRAPH_H}" fill="#26282c"/>`
+    + `<line x1="0" x2="${GRAPH_W}" y1="${GRAPH_H / 2}" y2="${GRAPH_H / 2}" stroke="#666" stroke-dasharray="4 4"/>`;
+  if (game.wins) {
+    const points = game.wins.map((win, i) => `${(i * step).toFixed(1)},${y(win)}`).join(" ");
+    body += `<polyline points="${points}" fill="none" stroke="#eee" stroke-width="2"/>`;
+  } else {
+    body += `<text x="${GRAPH_W / 2}" y="${GRAPH_H / 2 - 8}" fill="#ddd" text-anchor="middle">${game.message}</text>`;
+  }
+  const x = (game.cursor * step).toFixed(1);
+  body += `<line x1="${x}" x2="${x}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
+  svg.innerHTML = body;
+}
+
+// Charge une partie PGN : comme « Nouvelle partie » (colonnes et bleu vidés), Elo depuis
+// les en-têtes, position de départ ; la courbe est demandée au serveur (POST /game).
+async function loadGame() {
+  const pgn = $("pgn").value;
+  const reader = new Chess();
+  // loadPgn lève une erreur sur un PGN illisible : on repart alors d'une partie vide.
+  try { reader.loadPgn(pgn); } catch (error) { reader.reset(); }
+  const sans = reader.history();
+  if (!sans.length) { $("status").textContent = "PGN illisible"; return; }
+  const headers = reader.getHeaders();
+  while (reader.undo());
+  const start = reader.fen();
+  const played = new Map();
+  for (const san of sans) { played.set(reader.fen(), san); reader.move(san); }
+  if (Number(headers.WhiteElo)) $("elo-white").value = headers.WhiteElo;
+  if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
+  blueDrawn.clear();
+  game = { start, sans, played, cursor: 0, wins: null, message: "courbe en calcul…" };
+  for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
+  goTo(0);
+  const loaded = game;
+  const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn }) });
+  if (loaded !== game) return;
+  if (response.ok) game.wins = (await response.json()).wins;
+  else game.message = "courbe indisponible";
+  drawGraph();
+}
+
 // Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
 // le panneau reste ouvert tant que la souris y est, pour survoler ses coups.
 $("status").addEventListener("mouseenter", () => {
@@ -335,11 +449,39 @@ $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove
 
 $("new").addEventListener("click", () => {
   chess.reset();
+  game = null;
+  variant = false;
+  refreshGame();
   blueDrawn.clear();
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   newPosition();
 });
-$("undo").addEventListener("click", () => { if (chess.undo()) newPosition(); });
+// Annuler : sur la partie chargée, équivaut à ◀ ; en variante, annule le dernier coup de la
+// variante (revenu à la position du curseur → fin de la variante).
+$("undo").addEventListener("click", () => {
+  if (game && !variant) { goTo(game.cursor - 1); return; }
+  if (!chess.undo()) return;
+  if (game && chess.history().length === game.cursor) variant = false;
+  refreshGame();
+  newPosition();
+});
+$("load").addEventListener("click", loadGame);
+$("first").addEventListener("click", () => goTo(0));
+$("prev").addEventListener("click", () => goTo(game.cursor - 1));
+$("next").addEventListener("click", () => goTo(game.cursor + 1));
+$("last").addEventListener("click", () => goTo(game.sans.length));
+$("back").addEventListener("click", () => goTo(game.cursor));
+// Flèches du clavier : navigation dans la partie, sauf pendant une saisie.
+document.addEventListener("keydown", (event) => {
+  if (!game || ["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
+  if (event.key === "ArrowLeft") goTo(game.cursor - 1);
+  if (event.key === "ArrowRight") goTo(game.cursor + 1);
+});
+// Clic sur la courbe : va à la position la plus proche.
+$("graph").addEventListener("click", (event) => {
+  const x = event.clientX - $("graph").getBoundingClientRect().left;
+  goTo(Math.round(x / (GRAPH_W / Math.max(1, game.sans.length))));
+});
 $("flip").addEventListener("click", () => ground.toggleOrientation());
 $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
@@ -349,6 +491,7 @@ $("show-best").addEventListener("change", drawShapes);
 $("show-trap").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
 
+refreshGame();
 newPosition();
 poll();
 </script>
