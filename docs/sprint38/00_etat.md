@@ -1,6 +1,6 @@
 # Sprint 38 — état de conception
 
-**Phase** : B figée (2026-10-26, OK de Nico) — prêt pour `/sprint-auto sprint 38`.
+**Phase** : CLOS (2026-10-27, run live OK de Nico, tag `sprint-38`).
 **Branche** : `feat/sprint38-pgn`.
 **Cible** : #94 — charger un PGN dans l'échiquier pour analyser une partie jouée,
 avec courbe d'évaluation.
@@ -49,7 +49,7 @@ Recos de conception (Claude, acceptées avec l'OK de Nico) :
 
 - 01 route `POST /game` (`01_route_game.md`) ✅ (`game_wins` + `_Handler._game`, 370 tests verts)
 - 02 page : PGN, navigation, variante, « joué : X », courbe (`02_page_pgn_graphe.md`) ✅ (`index.html` seul, 370 tests verts)
-- 03 run live, Nico (`03_run_live.md`, parties : `run_live_parties.txt`) ⏳
+- 03 run live, Nico (`03_run_live.md`, parties : `run_live_parties.txt`) ✅ (+ correctif « joué : X »)
 
 ## Run live (Nico, 2026-10-27)
 
@@ -60,7 +60,7 @@ s'affiche que dans un bloc de colonne, donc seulement si une flèche orange / cy
 a été trouvée sur cette position. 6 : absence de « joué » en variante = attendu.
 Correctif (Nico, 2026-10-27) : « joué : X » affiché en permanence sous l'échiquier sur une
 position de la partie chargée (hors variante), et pièce du coup joué cerclée de blanc.
-Reste à valider en live (mini-run, voir 03_run_live.md).
+Mini-run validé par Nico (2026-10-27).
 Suite : nouvelles demandes → `/conception sprint 39`.
 Nouvelles demandes (hors tronçons, à concevoir) :
 - courbe du meilleur coup à chaque position, en comparaison de la courbe jouée ;
@@ -70,11 +70,8 @@ Nouvelles demandes (hors tronçons, à concevoir) :
 
 ## Dettes
 
-#94 (rejeu PGN) : partiellement fermée par le sprint si le run live est OK.
-Aucune nouvelle à ce stade.
+#94 résolue. Nouvelles : #127-#130 (demandes du run live, cible sprint 39).
 
 ## §REPRISE
 
-Tronçons 01 et 02 faits (02 non commité par le sous-agent). Reste le run live (tronçon 03,
-Nico) : lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`.
-Prochaine étape : `/sprint-auto sprint 38` (reprend au tronçon 03, run live).
+Sprint clos. Suite : `docs/sprint39/context_kickoff_sprint_39.md`, `/conception sprint 39`.
