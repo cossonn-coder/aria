@@ -47,7 +47,7 @@
   <div>
     <div id="board"></div>
     <div id="played"></div>
-    <svg id="graph" width="560" height="120" style="display: none"></svg>
+    <svg id="graph" width="560" height="120"></svg>
     <div id="analysis">
       <div id="status"></div>
       <div id="replies"></div>
@@ -66,6 +66,10 @@
     <button id="back" style="display: none">Revenir à la partie</button>
     <label>Elo blancs <input id="elo-white" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
+    <label>Je joue <select id="playing"><option value="">aucun</option><option value="white">blancs</option><option value="black">noirs</option></select></label>
+    <button id="export">Exporter PGN</button>
+    <button id="send">Envoyer à ARIA</button>
+    <div id="pgn-status"></div>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
     <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
@@ -99,6 +103,16 @@ const blueDrawn = new Map();
 // variant : un coup hors partie a été joué à la main depuis la position du curseur.
 let game = null;
 let variant = false;
+// Valeurs par position (sprint 39) : Map FEN → {win, mate, best} (% de gain des blancs, mat
+// signé côté blancs, meilleur coup SAN) ; partie chargée depuis /game, jeu libre par /eval.
+// evalAsked : FEN déjà demandées à /eval ; evalChain : une requête /eval à la fois.
+const evals = new Map();
+const evalAsked = new Set();
+let evalChain = Promise.resolve();
+// Pseudo d'échecs de Nico, remplacé par le serveur au service de la page (export PGN).
+const CHESS_USERNAME = "__CHESS_USERNAME__";
+// Clé localStorage de la partie conservée au rechargement de la page.
+const STORAGE_KEY = "aria-board";
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -144,6 +158,9 @@ async function newPosition() {
   state = null;
   positionFen = chess.fen();
   render();
+  saveState();
+  evalLine();
+  refreshGame();
   const response = await fetch("/position", {
     method: "POST",
     body: JSON.stringify({ fen: chess.fen(), elo_white: Number($("elo-white").value),
@@ -385,36 +402,152 @@ function playedMove() {
 function refreshGame() {
   for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
   $("back").style.display = variant ? "" : "none";
-  const played = playedMove();
-  $("played").textContent = played ? `joué : ${played.san}` : "";
+  $("played").textContent = playedText();
   drawGraph();
 }
 
+// Positions de la courbe (sprint 39) : celles de la partie chargée (variante comprise),
+// sinon la ligne de l'échiquier depuis le départ ; cursor = position marquée d'un trait.
+function curve() {
+  if (game) return { fens: game.fens, cursor: game.cursor };
+  const history = chess.history({ verbose: true });
+  const fens = history.length ? [history[0].before, ...history.map((move) => move.after)] : [chess.fen()];
+  return { fens, cursor: fens.length - 1 };
+}
+
+// Perte (points de % de gain) du coup joué depuis fen pour le camp au trait :
+// before / after = valeurs des positions avant et après le coup.
+function loss(fen, before, after) {
+  const delta = before.win - after.win;
+  return fen.split(" ")[1] === "w" ? delta : -delta;
+}
+
+// Ligne sous l'échiquier : coup joué depuis la position affichée (partie chargée hors
+// variante) ou dernier coup joué (jeu libre), comparé au meilleur coup, puis mat éventuel.
+function playedText() {
+  const { fens, cursor } = curve();
+  let i = null;
+  let san = null;
+  if (game && !variant) { i = cursor; san = game.sans[i]; }
+  if (!game) { i = cursor - 1; san = chess.history()[i]; }
+  const parts = [];
+  if (san) {
+    const before = evals.get(fens[i]);
+    const after = evals.get(fens[i + 1]);
+    let text = `joué : ${san}`;
+    if (before && after && before.best) {
+      const lost = loss(fens[i], before, after);
+      text += ` — meilleur : ${before.best} `
+        + (san === before.best || lost < 1 ? "(meilleur coup)" : `(−${Math.round(lost)} pts)`);
+    }
+    parts.push(text);
+  }
+  const shown = evals.get(chess.fen());
+  if (shown && shown.mate) parts.push(`mat en ${Math.abs(shown.mate)} pour les ${shown.mate > 0 ? "blancs" : "noirs"}`);
+  return parts.join(" — ");
+}
+
+// Jeu libre : chaque position de la ligne absente de la Map est évaluée par POST /eval,
+// une requête à la fois ; la courbe est redessinée à chaque réponse. Une requête en échec
+// est oubliée, donc redemandée au prochain changement de position.
+function evalLine() {
+  if (game) return;
+  for (const fen of curve().fens) {
+    if (evals.has(fen) || evalAsked.has(fen)) continue;
+    evalAsked.add(fen);
+    evalChain = evalChain.then(async () => {
+      const response = await fetch("/eval", { method: "POST", body: JSON.stringify({ fen }) });
+      evals.set(fen, await response.json());
+      refreshGame();
+    }).catch(() => evalAsked.delete(fen));
+  }
+}
+
 // Courbe du % de gain des blancs (0 en bas, 100 en haut, médiane à 50 %), un point par
-// position, trait vertical sur le curseur ; message tant que la courbe n'est pas là.
+// position connue, trait vertical sur le curseur ; message tant que la courbe d'une partie
+// chargée n'est pas là. Écart ombré quand le coup perd ≥ 10 pts au camp qui joue (entre
+// « si meilleur coup » = valeur avant le coup et le segment joué), repères « #N » de mat.
 const GRAPH_W = 560, GRAPH_H = 120;
 function drawGraph() {
-  const svg = $("graph");
-  svg.style.display = game ? "" : "none";
-  if (!game) return;
-  const step = GRAPH_W / Math.max(1, game.sans.length);
+  const { fens, cursor } = curve();
+  const values = fens.map((fen) => evals.get(fen));
+  const step = GRAPH_W / Math.max(1, fens.length - 1);
+  const x = (i) => (i * step).toFixed(1);
   const y = (win) => (GRAPH_H - win / 100 * GRAPH_H).toFixed(1);
   let body = `<rect width="${GRAPH_W}" height="${GRAPH_H}" fill="#26282c"/>`
     + `<line x1="0" x2="${GRAPH_W}" y1="${GRAPH_H / 2}" y2="${GRAPH_H / 2}" stroke="#666" stroke-dasharray="4 4"/>`;
-  if (game.wins) {
-    const points = game.wins.map((win, i) => `${(i * step).toFixed(1)},${y(win)}`).join(" ");
-    body += `<polyline points="${points}" fill="none" stroke="#eee" stroke-width="2"/>`;
-  } else {
+  if (game && !game.wins) {
     body += `<text x="${GRAPH_W / 2}" y="${GRAPH_H / 2 - 8}" fill="#ddd" text-anchor="middle">${game.message}</text>`;
   }
-  const x = (game.cursor * step).toFixed(1);
-  body += `<line x1="${x}" x2="${x}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
-  svg.innerHTML = body;
+  for (let i = 0; i + 1 < fens.length; i++) {
+    const [before, after] = [values[i], values[i + 1]];
+    if (!before || !after || loss(fens[i], before, after) < 10) continue;
+    body += `<polygon points="${x(i)},${y(before.win)} ${x(i + 1)},${y(before.win)} ${x(i + 1)},${y(after.win)}"`
+      + ` fill="#e0a050" fill-opacity="0.35"/>`;
+  }
+  const points = values.map((value, i) => value ? `${x(i)},${y(value.win)}` : null).filter(Boolean).join(" ");
+  body += `<polyline points="${points}" fill="none" stroke="#eee" stroke-width="2"/>`;
+  values.forEach((value, i) => {
+    if (!value || !value.mate) return;
+    body += `<text x="${x(i)}" y="${value.mate > 0 ? 12 : GRAPH_H - 4}" fill="#ff5fb0" font-size="11"`
+      + ` text-anchor="middle">#${Math.abs(value.mate)}</text>`;
+  });
+  body += `<line x1="${x(cursor)}" x2="${x(cursor)}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
+  $("graph").innerHTML = body;
+}
+
+// PGN exporté / envoyé à ARIA (sprint 39) : partie chargée hors variante → toute la partie
+// avec ses en-têtes ; sinon la ligne de l'échiquier. Puis toujours Date du jour, Elo des
+// champs et pseudo de Nico selon « Je joue » (White / Black valent "?" par défaut chez chess.js).
+function exportPgn() {
+  const whole = game && !variant;
+  const board = new Chess(game ? game.start : undefined);
+  for (const san of whole ? game.sans : chess.history()) board.move(san);
+  const headers = whole ? { ...game.headers } : { Event: "Échiquier ARIA" };
+  if (!headers.Result || headers.Result === "*") {
+    headers.Result = board.isCheckmate() ? (board.turn() === "w" ? "0-1" : "1-0")
+      : board.isGameOver() ? "1/2-1/2" : "*";
+  }
+  const today = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  headers.Date = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(today.getDate())}`;
+  headers.WhiteElo = $("elo-white").value;
+  headers.BlackElo = $("elo-black").value;
+  if ($("playing").value === "white") headers.White = CHESS_USERNAME;
+  if ($("playing").value === "black") headers.Black = CHESS_USERNAME;
+  for (const [key, value] of Object.entries(headers)) board.setHeader(key, value);
+  return board.pgn();
+}
+
+// Conservation au rechargement : PGN chargé et curseur, ou ligne libre ; Elo et « Je joue ».
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    pgn: game ? game.pgn : null, cursor: game ? game.cursor : 0, line: game ? [] : chess.history(),
+    eloWhite: $("elo-white").value, eloBlack: $("elo-black").value, playing: $("playing").value,
+  }));
+}
+
+// Au chargement de la page : partie chargée rechargée (courbe redemandée, curseur rétabli,
+// variante perdue) ou ligne libre rejouée ; Elo sauvés appliqués après ceux des en-têtes.
+function restoreState() {
+  const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if (!stored) { newPosition(); return; }
+  $("playing").value = stored.playing;
+  if (stored.pgn) {
+    $("pgn").value = stored.pgn;
+    loadGame(stored.cursor);
+  } else {
+    for (const san of stored.line) chess.move(san);
+  }
+  $("elo-white").value = stored.eloWhite;
+  $("elo-black").value = stored.eloBlack;
+  newPosition();
 }
 
 // Charge une partie PGN : comme « Nouvelle partie » (colonnes et bleu vidés), Elo depuis
-// les en-têtes, position de départ ; la courbe est demandée au serveur (POST /game).
-async function loadGame() {
+// les en-têtes, position cursor (départ par défaut) ; la courbe, les mats et les meilleurs
+// coups sont demandés au serveur (POST /game) et rangés par FEN dans evals.
+async function loadGame(cursor = 0) {
   const pgn = $("pgn").value;
   const reader = new Chess();
   // loadPgn lève une erreur sur un PGN illisible : on repart alors d'une partie vide.
@@ -425,19 +558,28 @@ async function loadGame() {
   while (reader.undo());
   const start = reader.fen();
   const played = new Map();
-  for (const san of sans) { played.set(reader.fen(), san); reader.move(san); }
+  const fens = [];
+  for (const san of sans) { fens.push(reader.fen()); played.set(reader.fen(), san); reader.move(san); }
+  fens.push(reader.fen());
   if (Number(headers.WhiteElo)) $("elo-white").value = headers.WhiteElo;
   if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
   blueDrawn.clear();
-  game = { start, sans, played, cursor: 0, wins: null, message: "courbe en calcul…" };
+  evals.clear();
+  evalAsked.clear();
+  game = { start, sans, fens, played, headers, pgn, cursor: 0, wins: null, message: "courbe en calcul…" };
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
-  goTo(0);
+  goTo(cursor);
   const loaded = game;
   const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn }) });
   if (loaded !== game) return;
-  if (response.ok) game.wins = (await response.json()).wins;
-  else game.message = "courbe indisponible";
-  drawGraph();
+  if (response.ok) {
+    const { wins, mates, best } = await response.json();
+    wins.forEach((win, i) => evals.set(game.fens[i], { win, mate: mates[i], best: best[i] }));
+    game.wins = wins;
+  } else {
+    game.message = "courbe indisponible";
+  }
+  refreshGame();
 }
 
 // Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
@@ -451,6 +593,8 @@ $("new").addEventListener("click", () => {
   chess.reset();
   game = null;
   variant = false;
+  evals.clear();
+  evalAsked.clear();
   refreshGame();
   blueDrawn.clear();
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
@@ -465,7 +609,7 @@ $("undo").addEventListener("click", () => {
   refreshGame();
   newPosition();
 });
-$("load").addEventListener("click", loadGame);
+$("load").addEventListener("click", () => loadGame());
 $("first").addEventListener("click", () => goTo(0));
 $("prev").addEventListener("click", () => goTo(game.cursor - 1));
 $("next").addEventListener("click", () => goTo(game.cursor + 1));
@@ -477,8 +621,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") goTo(game.cursor - 1);
   if (event.key === "ArrowRight") goTo(game.cursor + 1);
 });
-// Clic sur la courbe : va à la position la plus proche.
+// Clic sur la courbe : va à la position la plus proche (sans effet en jeu libre).
 $("graph").addEventListener("click", (event) => {
+  if (!game) return;
   const x = event.clientX - $("graph").getBoundingClientRect().left;
   goTo(Math.round(x / (GRAPH_W / Math.max(1, game.sans.length))));
 });
@@ -490,9 +635,24 @@ $("show-forced").addEventListener("change", drawShapes);
 $("show-best").addEventListener("change", drawShapes);
 $("show-trap").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
+$("playing").addEventListener("change", saveState);
+// Export : téléchargement d'un .pgn, et copie dans le presse-papier quand le navigateur
+// l'expose (contexte sécurisé : localhost ou https).
+$("export").addEventListener("click", async () => {
+  const pgn = exportPgn();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([pgn], { type: "application/x-chess-pgn" }));
+  link.download = "partie_aria.pgn";
+  link.click();
+  if (navigator.clipboard) await navigator.clipboard.writeText(pgn);
+  $("pgn-status").textContent = navigator.clipboard ? "PGN téléchargé et copié" : "PGN téléchargé (presse-papier indisponible)";
+});
+$("send").addEventListener("click", async () => {
+  const response = await fetch("/send", { method: "POST", body: JSON.stringify({ pgn: exportPgn() }) });
+  $("pgn-status").textContent = response.ok ? "envoyée à ARIA, réponse sur Telegram" : "ARIA pas prêt";
+});
 
-refreshGame();
-newPosition();
+restoreState();
 poll();
 </script>
 </body>
