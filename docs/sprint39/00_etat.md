@@ -1,7 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 05-06 figés (2026-10-28), prêts pour `/sprint-auto`.
-(Tronçons 01-04 faits.)
+**Phase** : B — tronçons 01-05 faits, run live 06 à faire par Nico.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -117,7 +116,10 @@ Recos de conception (Claude, figées avec l'OK) :
   « Nouvelle partie » et au chargement d'un PGN.
 - 05 retours du live : variante cyan superposée, numéros de coups, « meilleur » selon
   la case, courbe 200 px / ombrage rouge / pastille de mat, champs de noms + nom de
-  fichier (`05_retours_live.md`) ⏳
+  fichier (`05_retours_live.md`) ✅ (375 tests verts ; seul `index.html` + test de la page ;
+  vérifié VM sous node avec DOM simulé ; helpers `variantFens()` / `graphLength()` /
+  `graphSeries()` ; le trait bleu marque la fin de la variante (au lieu du curseur) ;
+  état sauvé avant le tronçon 05 sans noms → champs laissés tels quels)
 - 06 run live des retours, Nico (`06_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
 
 ## Dettes
@@ -128,5 +130,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-04 faits, 05-06 figés. Prochaine étape : `/sprint-auto sprint 39`
-(tronçon 05), puis run live 06 par Nico. Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Tronçons 01-05 faits. Prochaine étape : run live 06 par Nico (`06_run_live.md`, partie 1
+de `run_live_parties.txt`). Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce
+fichier, le kickoff du tronçon.

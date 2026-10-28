@@ -76,6 +76,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue », pseudo injecté.
         assert 'id="export"' in page and 'id="send"' in page and 'id="playing"' in page
         assert f'"{config.chess_username}"' in page and "__CHESS_USERNAME__" not in page
+        # Sprint 39, tronçon 05 : champs des noms des joueurs.
+        assert 'id="name-white"' in page and 'id="name-black"' in page
     finally:
         server.shutdown()
         server.server_close()
