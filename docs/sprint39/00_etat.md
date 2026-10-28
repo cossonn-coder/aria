@@ -83,7 +83,19 @@ Recos de conception (Claude, figées avec l'OK) :
 - 01 serveur : `/game` + mates / best, `POST /eval`, pseudo dans la page (`01_serveur_courbe.md`) ✅ (372 tests verts ; `game_wins` rend un dict `{wins, mates, best}`, `position_eval(fen)` ; vérifié VM sur Stockfish réel : mat en 1 → `mate 1`, `win 97.5` [cp borné à 1000 par `_win`])
 - 02 envoi à ARIA : `TelegramInterface.submit_text`, `POST /send`, `bot.py` (`02_envoi_aria.md`) ✅ (375 tests verts ; `_handle_message` factorisé en `_process_text(user_id, chat_id, text)` partagé avec `submit_text` ; exception du traitement journalisée par callback du future ; `tests/test_bot.py` adapté à `start_board_server(submit_text)`)
 - 03 page : ombrage, « meilleur : Y », « #N », jeu libre, « Je joue », export, envoi, rechargement (`03_page.md`) ✅ (375 tests verts ; seul `index.html` + test de la page ; logique vérifiée VM sous node avec DOM simulé ; `/eval` enchaînés un par un côté page (toute la ligne libre est évaluée, utile au rechargement) ; presse-papier seulement si le navigateur l'expose (contexte sécurisé), sinon téléchargement seul ; « Nouvelle partie » réécrit un état vide au lieu d'effacer la clé)
-- 04 run live, Nico (`04_run_live.md`, parties : `run_live_parties.txt`) ⏳
+- 04 run live, Nico (`04_run_live.md`, parties : `run_live_parties.txt`) ✅ 2026-10-28 :
+  scénarios 1-10 OK (mat affiché par un petit cercle rouge ; « joué : Nf6 — meilleur : g6
+  (−50 pts) — mat en 1 pour les blancs » ; export conforme ; envoi à ARIA : `board_send`,
+  `telegram_external source=board`, `chess_game_write OK hash=ebeb5dae122d4cef plies=78`).
+  Correctif immédiat `44efccc` : « Meilleur coup » décoché au chargement de la page, à
+  « Nouvelle partie » et au chargement d'un PGN.
+- 05 retours du run live (à concevoir, `/conception sprint 39`) ⏳ — Nico choisit de les
+  garder dans le sprint 39 :
+  - variante hors partie : la courbe explore la variante, dans une autre couleur ;
+  - numéros de coups à côté de « joué » ;
+  - courbe plus grande, zone ombrée et repère de mat plus lisibles (scénario 11) ;
+  - export : noms des joueurs affichés et éditables à la main (aujourd'hui fichier
+    `partie_aria.pgn`, `[Black "?"]`).
 
 ## Dettes
 
@@ -93,5 +105,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01, 02 (commités) et 03 faits (03 non commité). Prochaine étape : run live 04
-par Nico (`04_run_live.md`). Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Tronçons 01-03 commités, run live 04 OK. Prochaine étape : `/conception sprint 39`
+pour concevoir le tronçon 05 (retours du live), puis `/sprint-auto sprint 39` et un
+nouveau run live. Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
