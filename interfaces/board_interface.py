@@ -195,10 +195,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "text/plain")
 
     def do_POST(self):
-        if self.path not in ("/position", "/game", "/eval"):
+        if self.path not in ("/position", "/game", "/eval", "/send"):
             self._send(404, b"", "text/plain")
             return
         data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path == "/send":
+            self._send_to_aria(data["pgn"])
+            return
         if self.path == "/game":
             self._game(data["pgn"])
             return
@@ -223,15 +226,29 @@ class _Handler(BaseHTTPRequestHandler):
         log.info(f"board_game plies={len(curve['wins']) - 1} duration={time.monotonic() - start:.1f}s")
         self._json(curve)
 
+    def _send_to_aria(self, pgn: str):
+        """Remet le PGN à ARIA comme un message de Nico (sprint 39) ; 503 si ARIA pas prêt."""
+        log.info(f"board_send chars={len(pgn)}")
+        submit_text = self.server.submit_text
+        if submit_text is not None and submit_text(pgn):
+            self._json({"sent": True})
+        else:
+            self._send(503, json.dumps({"error": "ARIA pas prêt"}).encode(), "application/json")
+
     def log_message(self, format, *args):
         # Requêtes /state toutes les secondes : hors journal du service.
         log.debug(format % args)
 
 
-def make_server(port: int, worker: BoardWorker) -> ThreadingHTTPServer:
-    """Serveur HTTP lié à 0.0.0.0:port, adossé à worker."""
+def make_server(port: int, worker: BoardWorker, submit_text=None) -> ThreadingHTTPServer:
+    """Serveur HTTP lié à 0.0.0.0:port, adossé à worker.
+
+    submit_text(texte) -> bool : fonction d'envoi à ARIA (route /send), injectée
+    par bot.py ; l'échiquier ne voit ni le kernel ni la mémoire.
+    """
     server = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
     server.worker = worker
+    server.submit_text = submit_text
     return server
 
 
@@ -241,10 +258,10 @@ def _open_engine():
     return engine
 
 
-def start_board_server():
+def start_board_server(submit_text=None):
     """Lance le worker et le serveur de l'échiquier dans des threads daemon."""
     worker = BoardWorker(_open_engine, config.maia_models_dir)
-    server = make_server(config.board_port, worker)
+    server = make_server(config.board_port, worker, submit_text)
     threading.Thread(target=worker.run, daemon=True, name="board-worker").start()
     threading.Thread(target=server.serve_forever, daemon=True, name="board-server").start()
     log.info(f"Échiquier ARIA à l'écoute sur le port {config.board_port}")

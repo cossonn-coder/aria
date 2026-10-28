@@ -3,9 +3,11 @@
 import json
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import chess
+import pytest
 
 from interfaces.board_interface import BoardWorker, make_server
 
@@ -120,3 +122,22 @@ def test_position_eval_checkmated_skips_engine():
 
     fools_mate = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
     assert position_eval(fools_mate) == {"win": 0, "mate": None, "best": None}
+
+
+def test_send_hands_pgn_to_aria_or_503():
+    # Sprint 39, tronçon 02 : /send remet le PGN à la fonction d'envoi injectée.
+    received = []
+    server = make_server(0, BoardWorker(lambda: object(), ""), submit_text=lambda t: received.append(t) or True)
+    bare = make_server(0, BoardWorker(lambda: object(), ""))
+    for s in (server, bare):
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        assert _request(f"http://127.0.0.1:{server.server_address[1]}", "/send", {"pgn": "1. e4 *"}) == {"sent": True}
+        assert received == ["1. e4 *"]
+        with pytest.raises(urllib.error.HTTPError) as err:
+            _request(f"http://127.0.0.1:{bare.server_address[1]}", "/send", {"pgn": "1. e4 *"})
+        assert err.value.code == 503
+    finally:
+        for s in (server, bare):
+            s.shutdown()
+            s.server_close()

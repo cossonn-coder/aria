@@ -81,7 +81,7 @@ Recos de conception (Claude, figées avec l'OK) :
 ## Tronçons
 
 - 01 serveur : `/game` + mates / best, `POST /eval`, pseudo dans la page (`01_serveur_courbe.md`) ✅ (372 tests verts ; `game_wins` rend un dict `{wins, mates, best}`, `position_eval(fen)` ; vérifié VM sur Stockfish réel : mat en 1 → `mate 1`, `win 97.5` [cp borné à 1000 par `_win`])
-- 02 envoi à ARIA : `TelegramInterface.submit_text`, `POST /send`, `bot.py` (`02_envoi_aria.md`) ⏳
+- 02 envoi à ARIA : `TelegramInterface.submit_text`, `POST /send`, `bot.py` (`02_envoi_aria.md`) ✅ (375 tests verts ; `_handle_message` factorisé en `_process_text(user_id, chat_id, text)` partagé avec `submit_text` ; exception du traitement journalisée par callback du future ; `tests/test_bot.py` adapté à `start_board_server(submit_text)`)
 - 03 page : ombrage, « meilleur : Y », « #N », jeu libre, « Je joue », export, envoi, rechargement (`03_page.md`) ⏳
 - 04 run live, Nico (`04_run_live.md`, parties : `run_live_parties.txt`) ⏳
 
@@ -93,5 +93,5 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçon 01 fait (non commité). Prochaine étape : tronçon 02 (envoi à ARIA), puis 03,
-puis run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Tronçons 01 (commité) et 02 faits (02 non commité). Prochaine étape : tronçon 03
+(page), puis run live 04 par Nico. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

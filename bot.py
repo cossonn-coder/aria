@@ -28,7 +28,9 @@ def main():
     )
     log.info("Telegram interface prête")
     # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
-    start_board_server()
+    # Sprint 39 : « Envoyer à ARIA » passe par telegram.submit_text (503 avant
+    # que la boucle PTB tourne).
+    start_board_server(telegram.submit_text)
     telegram.start()
 
     # Sortie immédiate, sans finalisation Python : sous swap, le ramasse-miettes

@@ -50,6 +50,13 @@ WAIT_NOTICE_SECONDS = 20
 WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
 
 
+def _log_external_failure(future):
+    """Journalise l'exception d'un traitement lancé par submit_text."""
+    exc = future.exception()
+    if exc is not None:
+        log.error("telegram_external failed: %s", type(exc).__name__, exc_info=exc)
+
+
 class TelegramInterface(BaseInterface):
 
     def __init__(self, kernel, token: str):
@@ -60,9 +67,12 @@ class TelegramInterface(BaseInterface):
         # Dernière réponse non livrée par chat_id, en RAM (perdue au
         # redémarrage, accepté). Livrée avant la réponse suivante.
         self.undelivered = {}
+        # Boucle asyncio de PTB, connue une fois start() lancé (sprint 39) :
+        # submit_text s'en sert pour traiter un texte venu d'un autre thread.
+        self.loop = None
 
     def start(self):
-        self.app = ApplicationBuilder().token(self.token).build()
+        self.app = ApplicationBuilder().token(self.token).post_init(self._remember_loop).build()
 
         # Messages texte
         self.app.add_handler(
@@ -81,6 +91,10 @@ class TelegramInterface(BaseInterface):
         # Retries de bootstrap infinis : PTB réessaie indéfiniment l'initialisation
         # (get_me) au lieu de lever et de tuer le process au démarrage.
         self.app.run_polling(bootstrap_retries=-1)
+
+    async def _remember_loop(self, application):
+        """post_init PTB : mémorise la boucle qui fait tourner le bot."""
+        self.loop = asyncio.get_running_loop()
 
     async def _on_error(self, update, context: ContextTypes.DEFAULT_TYPE):
         """Error handler PTB : journalise l'erreur en une ligne, sans trace."""
@@ -101,19 +115,43 @@ class TelegramInterface(BaseInterface):
             update.update_id, update.message.message_id,
         )
 
-        user_id = str(update.effective_user.id)
-        chat_id = update.effective_chat.id
+        await self._process_text(str(update.effective_user.id), update.effective_chat.id, update.message.text)
 
+    async def _process_text(self, user_id: str, chat_id: int, text: str):
+        """Traite un texte de l'utilisateur : kernel sous verrou, puis envoi de la réponse."""
         async with self.user_locks[user_id]:
             event = Event.create(
                 event_type=EventType.TEXT,
                 user_id=user_id,
-                content=update.message.text,
+                content=text,
                 metadata={"chat_id": chat_id},
             )
             result = await self._handle_with_waiting(chat_id, event)
 
         await self.send(chat_id, result)
+
+    # =========================================================
+    # ENTRÉE EXTERNE (échiquier, sprint 39)
+    # =========================================================
+
+    def submit_text(self, text: str) -> bool:
+        """
+        Fait traiter un texte comme un message de Nico, depuis un autre thread.
+
+        Même chemin qu'un message Telegram (verrou, kernel, envoi) dans le chat
+        privé de Nico (chat_id = user_id = ALLOWED_USER_ID). N'attend pas la
+        fin du traitement. False si la boucle PTB n'est pas encore lancée.
+        """
+        log.info("telegram_external source=board chars=%d", len(text))
+        if self.loop is None:
+            return False
+        chat_id = config.allowed_user_id
+        future = asyncio.run_coroutine_threadsafe(
+            self._process_text(str(chat_id), chat_id, text), self.loop,
+        )
+        # Sans ce callback, une exception du traitement resterait dans le future, muette.
+        future.add_done_callback(_log_external_failure)
+        return True
 
     async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
