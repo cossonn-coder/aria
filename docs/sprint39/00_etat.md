@@ -1,6 +1,7 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — conception figée (2026-10-28), prête pour `/sprint-auto`.
+**Phase** : B — tronçons 05-06 figés (2026-10-28), prêts pour `/sprint-auto`.
+(Tronçons 01-04 faits.)
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -62,6 +63,19 @@ Lot 3 (Nico, 2026-10-28) :
 - **Envoi permis avec « Je joue : aucun »** (ARIA prend alors les blancs par défaut).
 - **OK pour figer** le découpage ci-dessous, branche `feat/sprint39-courbe-pgn`.
 
+Lot 4 (Nico, 2026-10-28, tronçon 05) :
+- **Variante superposée** : courbe de la partie entière en blanc ; variante en cyan
+  depuis le curseur, positions évaluées par `/eval`, ombrage et repères de mat compris ;
+  ligne « joué » = dernier coup de la variante ; clic sur la courbe = navigation partie.
+- **Lisibilité** : courbe 200 px de haut (largeur 560) ; ombrage rouge opacité 0,5 +
+  pointillé au niveau « si meilleur coup » ; mat « #N » 14 px gras sur pastille sombre.
+- **Noms** : champs « Blancs » / « Noirs » (en-têtes du PGN chargé, vides sinon,
+  éditables, conservés au rechargement) ; « Je joue » y écrit le pseudo ; champ vide →
+  `"?"` ; fichier `Blancs-Noirs-AAAA.MM.JJ.pgn`.
+- **Numéro de coup** (reco Claude, sans arbitrage) : « joué : 12. Nf6 » / « 12… Nf6 ».
+- **« meilleur : Y » masqué si « Meilleur coup » décoché** (Nico, avec l'OK) ; la perte
+  « (−Z pts) » reste affichée (choix Claude : elle ne nomme pas le coup).
+
 Recos de conception (Claude, figées avec l'OK) :
 - Mat côté blancs signé (+N blancs, −N noirs) tiré de `eval_before_cp` /
   `eval_after_cp` (cp non bornés) ; position déjà matée → pas de repère.
@@ -73,6 +87,18 @@ Recos de conception (Claude, figées avec l'OK) :
   `config.chess_username`), pas de route dédiée.
 - Conservation au rechargement par `localStorage` ; une variante en cours est perdue.
 - `submit_text` : boucle PTB mémorisée par `post_init` ; avant elle, `/send` → 503.
+
+## Audit tronçon 05 (page seule, `interfaces/board/index.html`)
+
+- Variante : `curve()` rend `game.fens` dès qu'une partie est chargée ; `evalLine()` sort
+  si `game` → aucune position de variante évaluée ; `playedText()` n'affiche rien en
+  variante (`game && !variant` / `!game`).
+- « joué : X » sans numéro (`playedText`, l. ~437) ; numéro tirable du FEN (champ 6 + trait).
+- Courbe `GRAPH_W = 560`, `GRAPH_H = 120` (+ `<svg height="120">`) ; ombrage
+  `#e0a050` opacité 0,35 ; mat = texte `#N` rose 11 px.
+- Export : `White` / `Black` = en-têtes du PGN chargé ou `"?"`, pseudo seulement via
+  « Je joue » ; fichier toujours `partie_aria.pgn` ; aucun champ de nom.
+- Clic sur la courbe : `goTo(round(x / (GRAPH_W / sans.length)))` (échelle de la partie).
 
 ## Questions ouvertes
 
@@ -89,13 +115,10 @@ Recos de conception (Claude, figées avec l'OK) :
   `telegram_external source=board`, `chess_game_write OK hash=ebeb5dae122d4cef plies=78`).
   Correctif immédiat `44efccc` : « Meilleur coup » décoché au chargement de la page, à
   « Nouvelle partie » et au chargement d'un PGN.
-- 05 retours du run live (à concevoir, `/conception sprint 39`) ⏳ — Nico choisit de les
-  garder dans le sprint 39 :
-  - variante hors partie : la courbe explore la variante, dans une autre couleur ;
-  - numéros de coups à côté de « joué » ;
-  - courbe plus grande, zone ombrée et repère de mat plus lisibles (scénario 11) ;
-  - export : noms des joueurs affichés et éditables à la main (aujourd'hui fichier
-    `partie_aria.pgn`, `[Black "?"]`).
+- 05 retours du live : variante cyan superposée, numéros de coups, « meilleur » selon
+  la case, courbe 200 px / ombrage rouge / pastille de mat, champs de noms + nom de
+  fichier (`05_retours_live.md`) ⏳
+- 06 run live des retours, Nico (`06_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
 
 ## Dettes
 
@@ -105,6 +128,5 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-03 commités, run live 04 OK. Prochaine étape : `/conception sprint 39`
-pour concevoir le tronçon 05 (retours du live), puis `/sprint-auto sprint 39` et un
-nouveau run live. Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Tronçons 01-04 faits, 05-06 figés. Prochaine étape : `/sprint-auto sprint 39`
+(tronçon 05), puis run live 06 par Nico. Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
