@@ -77,18 +77,46 @@ def test_index_serves_chessboard_page(monkeypatch):
 
 def test_game_returns_white_win_curve(monkeypatch):
     # Sprint 38, tronçon 01 : % de gain des blancs par position, PGN sans en-tête accepté.
+    # Sprint 39, tronçon 01 : mat forcé côté blancs et meilleur coup par position.
     from types import SimpleNamespace
 
     import interfaces.board_interface as board_interface
 
-    plies = [SimpleNamespace(color="white", win_before=60, win_after=45),
-             SimpleNamespace(color="black", win_before=55, win_after=30)]
+    plies = [SimpleNamespace(color="white", win_before=60, win_after=45, eval_before_cp=99997,
+                             eval_after_cp=-40, best_san="Qh5"),
+             SimpleNamespace(color="black", win_before=55, win_after=30, eval_before_cp=-40,
+                             eval_after_cp=-99999, best_san="Nf6")]
     monkeypatch.setattr(board_interface, "analyze_game", lambda game, color, path: plies)
     server = make_server(0, BoardWorker(lambda: object(), ""))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {"wins": [60, 45, 70]}
+        assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {
+            "wins": [60, 45, 70], "mates": [3, None, -1], "best": ["Qh5", "Nf6", None]}
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_eval_returns_position_eval(monkeypatch):
+    # Sprint 39, tronçon 01 : une position seule (jeu libre), évaluation factice.
+    import interfaces.board_interface as board_interface
+
+    monkeypatch.setattr(board_interface, "position_eval",
+                        lambda fen: {"win": 52.3, "mate": None, "best": fen.split()[1]})
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert _request(base, "/eval", {"fen": _AFTER_E4}) == {"win": 52.3, "mate": None, "best": "b"}
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_position_eval_checkmated_skips_engine():
+    # Sprint 39, tronçon 01 : position matée → pas de Stockfish, blancs matés = 0 %.
+    from interfaces.board_interface import position_eval
+
+    fools_mate = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+    assert position_eval(fools_mate) == {"win": 0, "mate": None, "best": None}
