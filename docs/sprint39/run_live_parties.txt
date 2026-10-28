@@ -1,0 +1,14 @@
+===== Coups à jouer à la main (scénario 1, ne pas envoyer à ARIA) =====
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6
+
+===== Partie 1 — contre Falestinhurra (scénarios 6-10) =====
+[Event "Live Chess"]
+[Site "Chess.com"]
+[White "staroflexeur"]
+[Black "Falestinhurra"]
+[Result "0-1"]
+[WhiteElo "1307"]
+[BlackElo "1352"]
+[TimeControl "600"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. c3 dxc3 5. Bc4 h6 6. O-O Bc5 7. Bxf7+ Kxf7 8. Qd5+ Kf8 9. Qxc5+ d6 10. Qxc3 Nf6 11. Re1 Kf7 12. e5 Nd5 13. Qb3 Be6 14. Qxb7 Nce7 15. exd6 Qxd6 16. Ne5+ Kf6 17. Qb3 Rab8 18. Qf3+ Nf5 19. Nd2 g5 20. Ne4+ Kxe5 21. Nxd6+ Kxd6 22. b3 Nd4 23. Ba3+ c5 24. Qg3+ Nf4 25. Rad1 Bd5 26. Qc3 Rhc8 27. Kf1 Bxg2+ 28. Kg1 Bf3 29. Rxd4+ Bd5 30. Rxd5+ Nxd5 31. Qg3+ Nf4 32. Rd1+ Kc6 33. Qf3+ Kb6 34. Rd6+ Kb5 35. Kf1 Rb6 36. Rxb6+ axb6 37. Qe4 Rd8 38. Qc4+ Kc6 39. Bb2 Rd1# 0-1
