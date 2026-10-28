@@ -72,7 +72,7 @@
     <div id="pgn-status"></div>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
-    <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
+    <label>Meilleur coup <input id="show-best" type="checkbox"></label>
     <label>Piège <input id="show-trap" type="checkbox" checked></label>
     <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
   </div>
@@ -564,6 +564,7 @@ async function loadGame(cursor = 0) {
   if (Number(headers.WhiteElo)) $("elo-white").value = headers.WhiteElo;
   if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
   blueDrawn.clear();
+  $("show-best").checked = false;
   evals.clear();
   evalAsked.clear();
   game = { start, sans, fens, played, headers, pgn, cursor: 0, wins: null, message: "courbe en calcul…" };
@@ -590,6 +591,8 @@ $("status").addEventListener("mouseenter", () => {
 $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
 
 $("new").addEventListener("click", () => {
+  // Meilleur coup masqué en début de partie (retour live sprint 39).
+  $("show-best").checked = false;
   chess.reset();
   game = null;
   variant = false;
