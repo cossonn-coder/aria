@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 01-05 faits, run live 06 à faire par Nico.
+**Phase** : B — tronçons 07-09 figés (2026-10-29), prêts pour `/sprint-auto`. Tronçons 01-06 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -99,6 +99,31 @@ Recos de conception (Claude, figées avec l'OK) :
   « Je joue » ; fichier toujours `partie_aria.pgn` ; aucun champ de nom.
 - Clic sur la courbe : `goTo(round(x / (GRAPH_W / sans.length)))` (échelle de la partie).
 
+## Lot 5 (Nico, 2026-10-29, OK pour figer)
+
+- **Plus de pseudo d'échecs** : `chess_username` / `CHESS_USERNAME` et l'injection dans la
+  page supprimés ; « Je joue » écrit `Nico` dans le camp choisi ; ARIA reconnaît `Nico`
+  dans White / Black (sinon message, sinon blancs). Choix du nom fixe `Nico` : Claude.
+- Liste des coups : **seulement la variante en cours** entre parenthèses (reco acceptée).
+- **Coups cliquables** en partie chargée, pas en jeu libre (reco acceptée).
+- **Export / envoi inchangés**, sans variantes (reco acceptée).
+
+## Audit tronçon 08 (page seule, `interfaces/board/index.html`)
+
+- « Nouvelle partie » (handler `#new`, l. ~640) : remet échiquier, partie, evals, colonnes,
+  mais ne touche pas `#pgn` ; `saveState` (via `newPosition`) écrit déjà `pgn: null`.
+- Aucune liste de coups affichée aujourd'hui (seulement `#played` et la courbe).
+- Modèle de variante : **une seule variante vivante** = `chess.history().slice(game.cursor)`
+  (`variantFens`) ; `goTo` la jette ; perdue au rechargement. Pas d'arbre de variantes.
+- Jeu libre : la ligne = `chess.history()`.
+- Numéros de coup : déjà tirés du FEN (champ 6 + trait) pour `playedText`.
+
+## Hors périmètre (refusé)
+
+- Alerte « plus de 5 meilleurs coups d'affilée, puis aucun pendant 3 coups » : refusée
+  par Claude (sert à échapper à la détection anti-triche en partie en ligne).
+- Compteur de « meilleurs coups d'affilée » (2026-10-29) : refusé pour la même raison.
+
 ## Questions ouvertes
 
 (aucune)
@@ -120,7 +145,14 @@ Recos de conception (Claude, figées avec l'OK) :
   vérifié VM sous node avec DOM simulé ; helpers `variantFens()` / `graphLength()` /
   `graphSeries()` ; le trait bleu marque la fin de la variante (au lieu du curseur) ;
   état sauvé avant le tronçon 05 sans noms → champs laissés tels quels)
-- 06 run live des retours, Nico (`06_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
+- 06 run live des retours, Nico (`06_run_live.md`, partie 1 de `run_live_parties.txt`) ✅ 2026-10-29 :
+  10 scénarios OK ; trait bleu en fin de variante accepté « pour le moment ».
+  Hors tronçon : `91271c5` pseudo surchargeable par `CHESS_USERNAME` (.env = TardoScoped).
+- 07 « moi » au lieu d'un pseudo : config, `detect_color` / `analyze`, `chess_router`,
+  page et serveur de page (`07_moi_sans_pseudo.md`) ⏳
+- 08 page : « Nouvelle partie » vide la zone PGN, liste des coups sous la courbe,
+  variante entre parenthèses, coups cliquables (`08_liste_coups.md`) ⏳
+- 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
 
 ## Dettes
 
@@ -130,6 +162,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-05 faits. Prochaine étape : run live 06 par Nico (`06_run_live.md`, partie 1
-de `run_live_parties.txt`). Clôture (merge, tag `sprint-39`) après. Lire `CLAUDE.md`, ce
-fichier, le kickoff du tronçon.
+Tronçons 01-06 faits, 07-09 figés. Prochaine étape : `/sprint-auto sprint 39`
+(tronçons 07 puis 08), puis run live 09 par Nico. Clôture (merge, tag `sprint-39`) après.
+Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
