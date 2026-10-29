@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Échiquier ARIA</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.base.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.brown.css">
@@ -43,15 +44,65 @@
   #moves .current { background: #6a4a1c; border-radius: 3px; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
+  /* Éléments propres au téléphone (sprint 41) : masqués sur PC. */
+  #evalbar, #tabs, #bottombar, #menu-close { display: none; }
+  /* Téléphone (sprint 41) : disposition façon lichess, une colonne. La colonne de gauche
+     s'efface (display: contents) pour que ses blocs soient réordonnés avec les onglets :
+     échiquier + barre d'évaluation, statut, coup joué, précision, onglets, panneau actif.
+     Les contrôles passent dans le menu ☰, la navigation dans la barre fixe du bas. */
+  @media (max-width: 700px) {
+    body { margin: 8px 8px 64px; }
+    main { flex-direction: column; gap: 8px; align-items: stretch; }
+    main > div:first-child { display: contents; }
+    #board-row { order: 1; display: flex; gap: 4px; }
+    #evalbar { display: flex; flex-direction: column; justify-content: flex-end; width: 10px;
+               background: #333; border-radius: 2px; overflow: hidden; }
+    #evalbar-white { height: 50%; background: #eee; }
+    /* Carré : largeur d'écran moins les marges (16 px) et la barre d'évaluation (10 + 4 px). */
+    #board { width: calc(100vw - 30px); height: calc(100vw - 30px); }
+    #analysis { order: 2; }
+    #status { width: auto; margin-top: 0; cursor: pointer; }
+    #replies { width: auto; }
+    #played { order: 3; margin-top: 0; }
+    #accuracy { order: 4; }
+    #tabs { order: 5; display: flex; gap: 4px; }
+    #tabs button { flex: 1; padding: 8px 0; }
+    #tabs button.active { background: #6a4a1c; }
+    #tabs .dot { margin: 0; }
+    #moves, #graph, #columns { order: 6; }
+    #moves { width: auto; margin-top: 0; }
+    #graph { width: 100%; height: auto; margin-top: 0; }
+    #columns { display: block; }
+    .column { max-height: none; border-left: none; padding-left: 0; }
+    /* Un seul panneau visible : celui de l'onglet actif. */
+    #moves:not(.shown), #graph:not(.shown), .column:not(.shown) { display: none; }
+    #controls, #nav { display: none; }
+    body.menu-open #controls { display: flex; position: fixed; inset: 0 0 56px 0; z-index: 20;
+                               overflow-y: auto; padding: 16px; background: #1b1c1f; min-width: 0; }
+    #menu-close { display: block; }
+    #bottombar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 56px;
+                 z-index: 30; background: #26282c; }
+    #bottombar button { flex: 1; font-size: 1.5em; background: none; border: none; color: #ddd; }
+  }
 </style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 <main>
   <div>
-    <div id="board"></div>
+    <div id="board-row">
+      <div id="evalbar"><div id="evalbar-white"></div></div>
+      <div id="board"></div>
+    </div>
     <div id="played"></div>
     <div id="accuracy"></div>
-    <svg id="graph" width="560" height="200"></svg>
+    <nav id="tabs">
+      <button data-panel="moves">Coups</button><button data-panel="graph">Courbe</button>
+      <button data-panel="saved-explosive"><span class="dot" style="background: #ff7f00"></span></button>
+      <button data-panel="saved-trap"><span class="dot" style="background: #00e5ff"></span></button>
+      <button data-panel="saved-strategy"><span class="dot" style="background: #ff5fb0"></span></button>
+    </nav>
+    <svg id="graph" width="560" height="200" viewBox="0 0 560 200"></svg>
     <div id="moves"></div>
     <div id="analysis">
       <div id="status"></div>
@@ -59,6 +110,7 @@
     </div>
   </div>
   <div id="controls">
+    <button id="menu-close">Fermer le menu</button>
     <button id="new">Nouvelle partie</button>
     <button id="undo">Annuler le dernier coup</button>
     <button id="flip">Retourner l'échiquier</button>
@@ -89,6 +141,10 @@
     <section class="column" id="saved-strategy"><h3><span class="dot" style="background: #ff5fb0"></span>Stratégie</h3></section>
   </div>
 </main>
+<div id="bottombar">
+  <button id="menu">☰</button><button id="to-start">⏮</button><button id="step-back">◀</button>
+  <button id="step-forward">▶</button><button id="to-end">⏭</button>
+</div>
 <div id="mini"></div>
 <script type="module">
 import { Chessground } from "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm";
@@ -125,6 +181,8 @@ const accuracies = new Map();
 const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
 const STORAGE_KEY = "aria-board";
+// Écran sans survol (téléphone, sprint 41) : le tap remplace le survol (mini échiquier, réponses).
+const TOUCH = matchMedia("(hover: none)").matches;
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -247,8 +305,13 @@ function variation(fen, sans) {
     span.className = "move";
     span.textContent = san;
     const after = board.fen();
-    span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
-    span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    if (TOUCH) {
+      // Tap : mini échiquier à côté du doigt ; le clic ne remonte pas au document (qui le masque).
+      span.addEventListener("click", (event) => { event.stopPropagation(); showMini(event, after, [move.from, move.to]); });
+    } else {
+      span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
+      span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    }
     line.append(span, " ");
   }
   return line;
@@ -440,6 +503,25 @@ function stepForward() {
   newPosition();
 }
 
+// ⏮ de la barre du bas (sprint 41) : partie chargée hors variante → départ de la partie ;
+// sinon tous les coups défaits vers les coups devant, un seul newPosition à la fin.
+function toStart() {
+  if (game && !inVariant()) { goTo(0); return; }
+  if (!chess.history().length) return;
+  let move;
+  while ((move = chess.undo())) ahead.push(move.san);
+  newPosition();
+}
+
+// ⏭ de la barre du bas : partie chargée hors variante → fin de la partie ; sinon tous les
+// coups devant rejoués, un seul newPosition à la fin.
+function toEnd() {
+  if (game && !inVariant()) { goTo(game.sans.length); return; }
+  if (!ahead.length) return;
+  while (ahead.length) chess.move(ahead.pop());
+  newPosition();
+}
+
 // Va à la position n de la partie chargée : rejoue depuis le départ pour que chess.history()
 // soit la suite de la partie (rationnement du bleu), puis les coups line d'une variante
 // (tronçon 08, clic dans la liste) ; sans line, quitte la variante. Vide les coups devant.
@@ -470,6 +552,16 @@ function refreshGame() {
   $("accuracy").textContent = acc ? `Précision : blancs ${pct(acc.white)} · noirs ${pct(acc.black)}` : "";
   drawGraph();
   renderMoves();
+  drawEvalbar();
+}
+
+// Barre d'évaluation du téléphone (sprint 41) : part blanche = % de gain des blancs de la
+// position affichée (mat → barre pleine du camp qui mate), côté blanc en bas sauf échiquier
+// retourné ; valeur inconnue → hauteur inchangée. Aucun appel serveur : lit evals.
+function drawEvalbar() {
+  const value = evals.get(chess.fen());
+  if (value) $("evalbar-white").style.height = `${value.mate ? (value.mate > 0 ? 100 : 0) : value.win}%`;
+  $("evalbar").style.justifyContent = ground.state.orientation === "white" ? "flex-end" : "flex-start";
 }
 
 // Liste des coups sous la courbe (tronçon 08), numérotée façon PGN : partie chargée, avec la
@@ -492,12 +584,15 @@ function renderMoves() {
     span.textContent = san;
     if (onClick) { span.className = "move"; span.addEventListener("click", onClick); }
     if (current) span.classList.add("current");
-    // Survol : mini échiquier de la position atteinte, comme pour les lignes du moteur.
+    // Survol : mini échiquier de la position atteinte, comme pour les lignes du moteur ;
+    // au doigt, pas de mini (le tap garde son goTo).
     const board = new Chess(fen);
     const move = board.move(san);
     const after = board.fen();
-    span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
-    span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    if (!TOUCH) {
+      span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
+      span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    }
     box.append(span);
     glued = false;
   };
@@ -786,11 +881,20 @@ async function loadGame(cursor = 0) {
 }
 
 // Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
-// le panneau reste ouvert tant que la souris y est, pour survoler ses coups.
-$("status").addEventListener("mouseenter", () => {
-  if (state && state.explosive) $("replies").classList.add("visible");
-});
-$("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
+// le panneau reste ouvert tant que la souris y est, pour survoler ses coups. Au doigt
+// (sprint 41) : tap sur la ligne d'état → ouvre / ferme le panneau.
+if (TOUCH) {
+  $("status").addEventListener("click", () => {
+    if (state && state.explosive) $("replies").classList.toggle("visible");
+  });
+  // Tap ailleurs que sur un coup de variante : mini échiquier masqué.
+  document.addEventListener("click", () => { $("mini").style.visibility = "hidden"; });
+} else {
+  $("status").addEventListener("mouseenter", () => {
+    if (state && state.explosive) $("replies").classList.add("visible");
+  });
+  $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
+}
 
 $("new").addEventListener("click", () => {
   // Meilleur coup masqué en début de partie (retour live sprint 39).
@@ -840,10 +944,12 @@ for (const id of ["board", "graph", "moves"]) {
 // tracé (variante comprise ; borné par goTo) ; sans effet en jeu libre.
 $("graph").addEventListener("click", (event) => {
   if (!game) return;
-  const x = event.clientX - $("graph").getBoundingClientRect().left;
+  // Position du clic ramenée à l'échelle du tracé (courbe mise à l'échelle sur téléphone).
+  const rect = $("graph").getBoundingClientRect();
+  const x = (event.clientX - rect.left) * GRAPH_W / rect.width;
   goTo(Math.round(x / (GRAPH_W / Math.max(1, graphLength() - 1))));
 });
-$("flip").addEventListener("click", () => ground.toggleOrientation());
+$("flip").addEventListener("click", () => { ground.toggleOrientation(); drawEvalbar(); });
 $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
@@ -885,6 +991,35 @@ $("send").addEventListener("click", async () => {
   const response = await fetch("/send", { method: "POST", body: JSON.stringify({ pgn: exportPgn() }) });
   $("pgn-status").textContent = response.ok ? "envoyée à ARIA, réponse sur Telegram" : "ARIA pas prêt";
 });
+
+// Téléphone (sprint 41) : onglets sous l'échiquier, un seul panneau visible (classe shown,
+// lue seulement sous la media query ; sur PC tous les panneaux restent affichés), Coups par défaut.
+function showTab(button) {
+  for (const tab of $("tabs").children) {
+    tab.classList.toggle("active", tab === button);
+    $(tab.dataset.panel).classList.toggle("shown", tab === button);
+  }
+}
+for (const tab of $("tabs").children) tab.addEventListener("click", () => showTab(tab));
+showTab($("tabs").firstElementChild);
+// Barre du bas : menu ☰ (contrôles en panneau), début / coup précédent / suivant / fin de ligne.
+const toggleMenu = () => document.body.classList.toggle("menu-open");
+$("menu").addEventListener("click", toggleMenu);
+$("menu-close").addEventListener("click", toggleMenu);
+$("to-start").addEventListener("click", toStart);
+$("step-back").addEventListener("click", stepBack);
+$("step-forward").addEventListener("click", stepForward);
+$("to-end").addEventListener("click", toEnd);
+// Échiquier redessiné au format de la fenêtre (rotation du téléphone, ouverture de la Mini App).
+window.addEventListener("resize", () => ground.redrawAll());
+// Mini App Telegram : page prête, plein écran, et glisser une pièce vers le bas ne réduit pas
+// la Mini App. Hors Telegram (initData vide ou script absent), rien.
+const telegram = window.Telegram?.WebApp;
+if (telegram?.initData) {
+  telegram.ready();
+  telegram.expand();
+  telegram.disableVerticalSwipes();
+}
 
 restoreState();
 poll();
