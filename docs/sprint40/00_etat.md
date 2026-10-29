@@ -1,6 +1,6 @@
 # Sprint 40 — état de conception
 
-**Phase** : B figée (2026-10-29, OK de Nico) — prêt pour `/sprint-auto sprint 40`.
+**Phase** : CLOS (2026-10-29, run live 04 OK de Nico, tag `sprint-40`).
 **Branche** : `feat/sprint40-metacommandes`.
 **Cible** : #131 — métacommandes Telegram, toutes celles proposées à la clôture 39 :
 `/help`, `/reboot`, `/status`, `/logs`, `/errors`, `/llm`, `/board`, `/again`,
@@ -50,15 +50,16 @@ suppression.
   (396 tests verts ; `write_conversation_reset` (avec `extra` écrasé, W4) ; coupure dans
   `load_conversation_history` au marqueur le plus récent, avant les n derniers ; aucun marqueur =
   comportement inchangé ; `/status` compte les marqueurs dans `aria_conversation`)
-- 04 run live, Nico (`04_run_live.md`) ⏳
+- 04 run live, Nico (`04_run_live.md`) ✅
+  (2026-10-29 : critères 1-10 OK ; menu `/` visible après réouverture du chat (cache client) ;
+  `/oublie` → `messages=0` ; `/reboot` → un seul redémarrage, ≈ 38 s [n=1] ; 3 tracebacks
+  de l'échiquier à l'ouverture via `/board` → #132)
 
 ## Dettes
 
-Visée : #131. Fermée par le filtre utilisateur : exposition du bot à tout compte Telegram
-(constat d'audit, sans numéro).
+Visée : #131, **résolue**. Fermée par le filtre utilisateur : exposition du bot à tout compte
+Telegram (constat d'audit, sans numéro). Ouvertes : #132-#134 (voir kickoff sprint 41).
 
 ## §REPRISE
 
-Tronçons 01 (ca132e1), 02 (8c0cda7) et 03 (`/oublie`, non commité à la livraison du sous-agent)
-implémentés. Prochaine étape : tronçon 04, run live par Nico (`04_run_live.md`).
-Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Sprint clos. Suite : `docs/sprint41/context_kickoff_sprint_41.md`, `/conception sprint 41`.
