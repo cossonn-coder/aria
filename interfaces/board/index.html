@@ -422,6 +422,8 @@ function refreshGame() {
 function renderMoves() {
   const box = $("moves");
   box.replaceChildren();
+  // Le coup survolé disparaît (clic → goTo → nouvelle liste) sans mouseleave.
+  $("mini").style.visibility = "hidden";
   let glued = true;
   // Un coup joué depuis fen ; numéro des noirs seulement si force.
   const add = (fen, san, force, current, onClick) => {
@@ -432,6 +434,12 @@ function renderMoves() {
     span.textContent = san;
     if (onClick) { span.className = "move"; span.addEventListener("click", onClick); }
     if (current) span.classList.add("current");
+    // Survol : mini échiquier de la position atteinte, comme pour les lignes du moteur.
+    const board = new Chess(fen);
+    const move = board.move(san);
+    const after = board.fen();
+    span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
+    span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
     box.append(span);
     glued = false;
   };
