@@ -51,6 +51,10 @@
      échiquier + barre d'évaluation, statut, coup joué, précision, onglets, panneau actif.
      Les contrôles passent dans le menu ☰, la navigation dans la barre fixe du bas. */
   @media (max-width: 700px) {
+    /* Page jamais plus large que l'écran, sans rebond : sinon la webview Telegram
+       se décale au moindre débordement (arrondi de l'échiquier, long mot d'analyse). */
+    html, body { overflow-x: hidden; overscroll-behavior: none; }
+    #analysis, #played, #moves, .column { overflow-wrap: anywhere; }
     body { margin: 8px 8px 64px; }
     main { flex-direction: column; gap: 8px; align-items: stretch; }
     main > div:first-child { display: contents; }
@@ -74,6 +78,8 @@
     #graph { width: 100%; height: auto; margin-top: 0; }
     #columns { display: block; }
     .column { max-height: none; border-left: none; padding-left: 0; }
+    /* Téléphone : seulement le coup proposé pour la position affichée. */
+    .column .entry.other { display: none; }
     /* Un seul panneau visible : celui de l'onglet actif. */
     #moves:not(.shown), #graph:not(.shown), .column:not(.shown) { display: none; }
     #controls, #nav { display: none; }
@@ -177,6 +183,9 @@ let evalChain = Promise.resolve();
 // Précision (tronçon 10) : réponses de POST /accuracy par ligne envoyée (clé = corps JSON
 // de la requête), null tant que la réponse n'est pas arrivée.
 const accuracies = new Map();
+// Dernière précision reçue, affichée pendant qu'une nouvelle est en route : sans elle la
+// ligne s'efface à chaque nouvelle évaluation et tout ce qui est dessous saute (sprint 41).
+let lastAccuracy = null;
 // Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
 const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
@@ -227,6 +236,7 @@ async function newPosition() {
   positionId = null;
   state = null;
   positionFen = chess.fen();
+  for (const kind in saved) renderSaved(kind);
   render();
   saveState();
   evalLine();
@@ -389,14 +399,18 @@ const savedDetails = {
 };
 
 // Colonne kind : un bloc par position où le coup a été trouvé, numéro du coup compris ;
-// chaque coup dit quand il est aussi le meilleur coup.
+// chaque coup dit quand il est aussi le meilleur coup. Coups les plus avancés en haut
+// (demi-coup décroissant) ; les blocs d'une autre position que celle affichée portent la
+// classe other, masquée sur téléphone (sprint 41).
 function renderSaved(kind) {
   const panel = $(`saved-${kind}`);
   panel.replaceChildren(panel.firstElementChild);
-  for (const [fen, { move, best }] of saved[kind]) {
+  const ply = (fen) => { const [, turn, , , , number] = fen.split(" "); return 2 * number + (turn === "b"); };
+  const entries = [...saved[kind]].sort(([a], [b]) => ply(b) - ply(a));
+  for (const [fen, { move, best }] of entries) {
     const [, turn, , , , number] = fen.split(" ");
     const entry = document.createElement("div");
-    entry.className = "entry";
+    entry.className = fen === positionFen ? "entry" : "entry other";
     const title = document.createElement("div");
     title.append(`${kind === "explosive" ? "🟠 " : ""}${number}${turn === "w" ? "." : "…"} `,
                  variation(fen, [move.san]));
@@ -703,10 +717,10 @@ function accuracy() {
     accuracies.set(body, null);
     fetch("/accuracy", { method: "POST", body })
       .then((response) => response.json())
-      .then((result) => { accuracies.set(body, result); refreshGame(); })
+      .then((result) => { accuracies.set(body, result); lastAccuracy = result; refreshGame(); })
       .catch(() => accuracies.delete(body));
   }
-  const result = accuracies.get(body);
+  const result = accuracies.get(body) ?? lastAccuracy;
   if (!result) return null;
   const last = result.moves.length - 1;
   const at = k === null ? last : Math.min(k, last);
