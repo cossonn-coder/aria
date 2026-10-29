@@ -38,6 +38,9 @@
   #nav { display: flex; gap: 6px; }
   #played { margin-top: 8px; font-size: 1.1em; }
   #graph { display: block; margin-top: 12px; cursor: pointer; }
+  /* Liste des coups sous la courbe (tronçon 08), même largeur ; coup de la position affichée surligné. */
+  #moves { width: 560px; margin-top: 8px; line-height: 1.6; }
+  #moves .current { background: #6a4a1c; border-radius: 3px; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
 </style>
@@ -47,7 +50,9 @@
   <div>
     <div id="board"></div>
     <div id="played"></div>
-    <svg id="graph" width="560" height="120" style="display: none"></svg>
+    <div id="accuracy"></div>
+    <svg id="graph" width="560" height="200"></svg>
+    <div id="moves"></div>
     <div id="analysis">
       <div id="status"></div>
       <div id="replies"></div>
@@ -66,9 +71,15 @@
     <button id="back" style="display: none">Revenir à la partie</button>
     <label>Elo blancs <input id="elo-white" type="number" value="1300" min="400" max="3000" step="50"></label>
     <label>Elo noirs <input id="elo-black" type="number" value="1300" min="400" max="3000" step="50"></label>
+    <label>Je joue <select id="playing"><option value="">aucun</option><option value="white">blancs</option><option value="black">noirs</option></select></label>
+    <label>Blancs <input id="name-white" type="text"></label>
+    <label>Noirs <input id="name-black" type="text"></label>
+    <button id="export">Exporter PGN</button>
+    <button id="send">Envoyer à ARIA</button>
+    <div id="pgn-status"></div>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
-    <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
+    <label>Meilleur coup <input id="show-best" type="checkbox"></label>
     <label>Piège <input id="show-trap" type="checkbox" checked></label>
     <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
   </div>
@@ -95,10 +106,25 @@ const saved = { explosive: new Map(), trap: new Map(), strategy: new Map() };
 // Flèche bleue rationnée : FEN → camp au trait ("w" / "b") des positions où elle a été dessinée.
 const blueDrawn = new Map();
 // Partie chargée depuis un PGN (sprint 38) : FEN de départ, coups SAN, Map FEN → coup joué
-// (mêmes clés que saved), curseur (demi-coups joués depuis le début) et courbe wins du serveur.
-// variant : un coup hors partie a été joué à la main depuis la position du curseur.
+// (mêmes clés que saved) et courbe wins du serveur.
 let game = null;
-let variant = false;
+// Coups « devant » (tronçon 12) : SAN défaits par ← (sommet = dernier élément = coup suivant).
+// Ligne affichée = chess.history() puis ahead dans l'ordre de rejeu ; position affichée = fin
+// de chess.history(). En partie chargée, la variante part de l'ancrage (anchor()).
+const ahead = [];
+// Valeurs par position (sprint 39) : Map FEN → {win, mate, best} (% de gain des blancs, mat
+// signé côté blancs, meilleur coup SAN) ; partie chargée depuis /game, jeu libre par /eval.
+// evalAsked : FEN déjà demandées à /eval ; evalChain : une requête /eval à la fois.
+const evals = new Map();
+const evalAsked = new Set();
+let evalChain = Promise.resolve();
+// Précision (tronçon 10) : réponses de POST /accuracy par ligne envoyée (clé = corps JSON
+// de la requête), null tant que la réponse n'est pas arrivée.
+const accuracies = new Map();
+// Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
+const NICO_NAME = "Nico";
+// Clé localStorage de la partie conservée au rechargement de la page.
+const STORAGE_KEY = "aria-board";
 
 // Destinations légales au format chessground : Map(case de départ → [cases d'arrivée]).
 function legalDests() {
@@ -144,6 +170,9 @@ async function newPosition() {
   state = null;
   positionFen = chess.fen();
   render();
+  saveState();
+  evalLine();
+  refreshGame();
   const response = await fetch("/position", {
     method: "POST",
     body: JSON.stringify({ fen: chess.fen(), elo_white: Number($("elo-white").value),
@@ -353,23 +382,72 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
-// Coup joué à la main : le coup suivant de la partie fait avancer le curseur, tout autre
-// coup ouvre (ou prolonge) une variante.
+// Ligne affichée (tronçon 12) : coups joués jusqu'à la position affichée, puis coups devant.
+function displayedLine() {
+  return [...chess.history(), ...[...ahead].reverse()];
+}
+
+// Positions de la ligne affichée, du départ à la fin des coups devant.
+function lineFens() {
+  const history = chess.history({ verbose: true });
+  const fens = history.length ? [history[0].before, ...history.map((move) => move.after)] : [chess.fen()];
+  const board = new Chess(chess.fen());
+  for (const san of [...ahead].reverse()) { board.move(san); fens.push(board.fen()); }
+  return fens;
+}
+
+// Ancrage de la variante en partie chargée : premier indice où la ligne affichée s'écarte de
+// la partie (au-delà de sa fin compris) ; null sans partie ou sans écart.
+function anchor() {
+  if (!game) return null;
+  const i = displayedLine().findIndex((san, k) => san !== game.sans[k]);
+  return i === -1 ? null : i;
+}
+
+// Position affichée au-delà de l'ancrage : on est dans la variante (sinon dans la partie).
+function inVariant() {
+  const a = anchor();
+  return a !== null && chess.history().length > a;
+}
+
+// Position de la partie : position affichée dans la partie, ancrage dans la variante.
+function gameCursor() {
+  return inVariant() ? anchor() : chess.history().length;
+}
+
+// Coup joué à la main : égal au coup suivant de la pile, il la dépile (comme →) ; sinon la
+// suite est coupée. Partie, variante et ancrage se déduisent ensuite de la ligne affichée.
 function playedOnBoard(move) {
-  if (!game) return;
-  if (!variant && move.san === game.sans[game.cursor]) game.cursor++;
-  else variant = true;
+  if (ahead.length && ahead[ahead.length - 1] === move.san) ahead.pop();
+  else ahead.length = 0;
   refreshGame();
 }
 
-// Va à la position n de la partie chargée (quitte la variante) : rejoue depuis le départ
-// pour que chess.history() soit la suite de la partie (rationnement du bleu).
-function goTo(n) {
+// ← : défait le dernier coup et l'empile devant (rien au départ de la ligne).
+function stepBack() {
+  if (!chess.history().length) return;
+  ahead.push(chess.undo().san);
+  newPosition();
+}
+
+// → : rejoue le coup suivant de la pile ; pile vide, en partie chargée sur la ligne de la
+// partie, joue le coup suivant de la partie (comme ▶).
+function stepForward() {
+  const shown = chess.history().length;
+  if (ahead.length) chess.move(ahead.pop());
+  else if (game && anchor() === null && shown < game.sans.length) chess.move(game.sans[shown]);
+  else return;
+  newPosition();
+}
+
+// Va à la position n de la partie chargée : rejoue depuis le départ pour que chess.history()
+// soit la suite de la partie (rationnement du bleu), puis les coups line d'une variante
+// (tronçon 08, clic dans la liste) ; sans line, quitte la variante. Vide les coups devant.
+function goTo(n, line = []) {
   if (!game) return;
-  game.cursor = Math.max(0, Math.min(n, game.sans.length));
-  variant = false;
+  ahead.length = 0;
   chess.load(game.start);
-  for (const san of game.sans.slice(0, game.cursor)) chess.move(san);
+  for (const san of [...game.sans.slice(0, Math.max(0, Math.min(n, game.sans.length))), ...line]) chess.move(san);
   refreshGame();
   newPosition();
 }
@@ -377,44 +455,299 @@ function goTo(n) {
 // Coup de la partie chargée joué depuis la position affichée (coup verbose chess.js),
 // null hors partie, en variante ou en fin de partie.
 function playedMove() {
-  if (!game || variant || game.cursor >= game.sans.length) return null;
-  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[game.cursor]);
+  const shown = chess.history().length;
+  if (!game || inVariant() || shown >= game.sans.length) return null;
+  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[shown]);
 }
 
 // Contrôles de navigation, coup joué sous l'échiquier et courbe selon l'état de la partie chargée.
 function refreshGame() {
   for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
-  $("back").style.display = variant ? "" : "none";
-  const played = playedMove();
-  $("played").textContent = played ? `joué : ${played.san}` : "";
+  $("back").style.display = anchor() !== null ? "" : "none";
+  const acc = accuracy();
+  const pct = (value) => (value === null ? "—" : `${Math.round(value)} %`);
+  $("played").textContent = playedText() + (acc && acc.move !== null ? ` — précision ${pct(acc.move)}` : "");
+  $("accuracy").textContent = acc ? `Précision : blancs ${pct(acc.white)} · noirs ${pct(acc.black)}` : "";
   drawGraph();
+  renderMoves();
 }
 
-// Courbe du % de gain des blancs (0 en bas, 100 en haut, médiane à 50 %), un point par
-// position, trait vertical sur le curseur ; message tant que la courbe n'est pas là.
-const GRAPH_W = 560, GRAPH_H = 120;
+// Liste des coups sous la courbe (tronçon 08), numérotée façon PGN : partie chargée, avec la
+// variante en cours entre parenthèses juste après le coup de la partie qu'elle remplace (en
+// fin de liste si elle part de la fin de partie) ; sinon la ligne du jeu libre (coups devant
+// compris). Un coup noir en tête de liste ou de parenthèse, ou juste après elle, porte « N… ».
+// Coup menant à la position affichée surligné ; coups cliquables seulement en partie chargée.
+function renderMoves() {
+  const box = $("moves");
+  box.replaceChildren();
+  // Le coup survolé disparaît (clic → goTo → nouvelle liste) sans mouseleave.
+  $("mini").style.visibility = "hidden";
+  let glued = true;
+  // Un coup joué depuis fen ; numéro des noirs seulement si force.
+  const add = (fen, san, force, current, onClick) => {
+    const [, turn, , , , number] = fen.split(" ");
+    if (!glued) box.append(" ");
+    if (turn === "w" || force) box.append(`${number}${turn === "w" ? "." : "…"} `);
+    const span = document.createElement("span");
+    span.textContent = san;
+    if (onClick) { span.className = "move"; span.addEventListener("click", onClick); }
+    if (current) span.classList.add("current");
+    // Survol : mini échiquier de la position atteinte, comme pour les lignes du moteur.
+    const board = new Chess(fen);
+    const move = board.move(san);
+    const after = board.fen();
+    span.addEventListener("mouseenter", (event) => showMini(event, after, [move.from, move.to]));
+    span.addEventListener("mouseleave", () => { $("mini").style.visibility = "hidden"; });
+    box.append(span);
+    glued = false;
+  };
+  const shown = chess.history().length;
+  if (!game) {
+    const fens = lineFens();
+    displayedLine().forEach((san, i) => add(fens[i], san, i === 0, i === shown - 1, null));
+    return;
+  }
+  const start = anchor();
+  const line = start === null ? [] : displayedLine().slice(start);
+  const fens = variantFens();
+  const variant = inVariant();
+  const addVariant = () => {
+    box.append(glued ? "(" : " (");
+    glued = true;
+    line.forEach((san, k) => add(fens[k], san, k === 0, variant && start + k === shown - 1,
+                                 () => goTo(start, line.slice(0, k + 1))));
+    box.append(")");
+  };
+  game.sans.forEach((san, i) => {
+    add(game.fens[i], san, i === 0 || (line.length > 0 && i === start + 1),
+        !variant && i === shown - 1, () => goTo(i + 1));
+    if (line.length && i === start) addVariant();
+  });
+  if (line.length && start === game.sans.length) addVariant();
+}
+
+// Positions de la courbe (sprint 39) : celles de la partie chargée (sans la variante),
+// sinon la ligne affichée depuis le départ (coups devant compris).
+function curveFens() {
+  return game ? game.fens : lineFens();
+}
+
+// Positions de la variante (tronçon 05) : de l'ancrage à la fin de la ligne affichée (goTo
+// rejoue la partie depuis game.start, donc la ligne au-delà de l'ancrage est la variante) ;
+// vide sans variante.
+function variantFens() {
+  const start = anchor();
+  return start === null ? [] : lineFens().slice(start);
+}
+
+// Perte (points de % de gain) du coup joué depuis fen pour le camp au trait :
+// before / after = valeurs des positions avant et après le coup.
+function loss(fen, before, after) {
+  const delta = before.win - after.win;
+  return fen.split(" ")[1] === "w" ? delta : -delta;
+}
+
+// Ligne sous l'échiquier : coup joué depuis la position affichée (partie chargée hors
+// variante) ou coup menant à elle (jeu libre, variante), numéro de coup tiré du FEN d'avant
+// le coup, perte comparée au meilleur coup (nommé seulement si « Meilleur coup » est
+// cochée), puis mat éventuel.
+function playedText() {
+  let fens, i, san;
+  if (game && !inVariant()) {
+    fens = game.fens; i = chess.history().length; san = game.sans[i];
+  } else {
+    fens = lineFens();
+    i = chess.history().length - 1;
+    san = displayedLine()[i];
+  }
+  const parts = [];
+  if (san) {
+    const before = evals.get(fens[i]);
+    const after = evals.get(fens[i + 1]);
+    const [, turn, , , , number] = fens[i].split(" ");
+    let text = `joué : ${number}${turn === "w" ? "." : "…"} ${san}`;
+    if (before && after && before.best) {
+      const lost = loss(fens[i], before, after);
+      const verdict = san === before.best || lost < 1 ? "(meilleur coup)" : `(−${Math.round(lost)} pts)`;
+      text += $("show-best").checked ? ` — meilleur : ${before.best} ${verdict}` : ` ${verdict}`;
+    }
+    parts.push(text);
+  }
+  const shown = evals.get(chess.fen());
+  if (shown && shown.mate) parts.push(`mat en ${Math.abs(shown.mate)} pour les ${shown.mate > 0 ? "blancs" : "noirs"}`);
+  return parts.join(" — ");
+}
+
+// Ligne de calcul de la précision (tronçon 10) : positions, coups SAN et indice du coup
+// décrit par « joué » (null s'il n'y en a pas). Partie chargée hors variante : la partie ;
+// variante : la partie jusqu'à l'ancrage puis la variante (la ligne affichée rejoue depuis le
+// départ, donc couvre les deux) ; jeu libre : la ligne affichée.
+function accuracyLine() {
+  const shown = chess.history().length;
+  if (game && !inVariant()) {
+    return { fens: game.fens, sans: game.sans, k: shown < game.sans.length ? shown : null };
+  }
+  return { fens: lineFens(), sans: displayedLine(), k: shown >= 1 ? shown - 1 : null };
+}
+
+// Précision du coup décrit et totale de chaque camp jusqu'à lui (sur tous les coups évalués
+// s'il n'y a pas de coup décrit), calculées par le serveur (POST /accuracy, formule du bilan
+// Telegram) sur le plus long préfixe de positions déjà évaluées. Une requête par ligne
+// envoyée ; refreshGame est rappelé à la réponse. null tant que rien n'est connu.
+function accuracy() {
+  const { fens, sans, k } = accuracyLine();
+  let n = 0;
+  while (n < fens.length && evals.has(fens[n])) n++;
+  if (n < 2) return null;
+  const body = JSON.stringify({
+    wins: fens.slice(0, n).map((fen) => evals.get(fen).win),
+    best: sans.slice(0, n - 1).map((san, i) => san === evals.get(fens[i]).best),
+    first: fens[0].split(" ")[1] === "w" ? "white" : "black",
+  });
+  if (!accuracies.has(body)) {
+    accuracies.set(body, null);
+    fetch("/accuracy", { method: "POST", body })
+      .then((response) => response.json())
+      .then((result) => { accuracies.set(body, result); refreshGame(); })
+      .catch(() => accuracies.delete(body));
+  }
+  const result = accuracies.get(body);
+  if (!result) return null;
+  const last = result.moves.length - 1;
+  const at = k === null ? last : Math.min(k, last);
+  return { move: k !== null && k <= last ? result.moves[k] : null, white: result.white[at], black: result.black[at] };
+}
+
+// Jeu libre et variante : chaque position de la ligne (ou de la variante) absente de la Map
+// est évaluée par POST /eval, une requête à la fois ; la courbe est redessinée à chaque
+// réponse. Une requête en échec est oubliée, donc redemandée au prochain changement de position.
+// Partie chargée hors variante : rien à demander, les valeurs viennent de /game.
+function evalLine() {
+  for (const fen of game ? variantFens() : curveFens()) {
+    if (evals.has(fen) || evalAsked.has(fen)) continue;
+    evalAsked.add(fen);
+    evalChain = evalChain.then(async () => {
+      const response = await fetch("/eval", { method: "POST", body: JSON.stringify({ fen }) });
+      evals.set(fen, await response.json());
+      refreshGame();
+    }).catch(() => evalAsked.delete(fen));
+  }
+}
+
+// Nombre de positions de l'échelle horizontale de la courbe : partie (ou ligne libre),
+// prolongée par la variante quand elle dépasse la fin de la partie.
+function graphLength() {
+  const extra = variantFens();
+  return Math.max(curveFens().length, extra.length ? anchor() + extra.length : 0);
+}
+
+// Une série de la courbe : positions fens tracées à partir de l'indice offset, en color.
+// Écart ombré quand le coup perd ≥ 10 pts au camp qui joue (entre « si meilleur coup » =
+// valeur avant le coup, pointillée, et le segment joué), repères « #N » de mat sur pastille.
+function graphSeries(fens, offset, color, x, y) {
+  const values = fens.map((fen) => evals.get(fen));
+  let body = "";
+  for (let i = 0; i + 1 < fens.length; i++) {
+    const [before, after] = [values[i], values[i + 1]];
+    if (!before || !after || loss(fens[i], before, after) < 10) continue;
+    const [x1, x2, yBest] = [x(offset + i), x(offset + i + 1), y(before.win)];
+    body += `<polygon points="${x1},${yBest} ${x2},${yBest} ${x2},${y(after.win)}" fill="#ff4040" fill-opacity="0.5"/>`
+      + `<line x1="${x1}" x2="${x2}" y1="${yBest}" y2="${yBest}" stroke="#ff4040" stroke-dasharray="3 3"/>`;
+  }
+  const points = values.map((value, i) => value ? `${x(offset + i)},${y(value.win)}` : null).filter(Boolean).join(" ");
+  body += `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/>`;
+  values.forEach((value, i) => {
+    if (!value || !value.mate) return;
+    const label = `#${Math.abs(value.mate)}`;
+    const width = 10 + 9 * label.length;
+    // Pastille gardée dans le cadre, en haut (mat des blancs) ou en bas (mat des noirs).
+    const cx = Math.min(Math.max(Number(x(offset + i)), width / 2), GRAPH_W - width / 2);
+    const top = value.mate > 0 ? 2 : GRAPH_H - 20;
+    body += `<rect x="${cx - width / 2}" y="${top}" width="${width}" height="18" rx="5" fill="#111" fill-opacity="0.85"/>`
+      + `<text x="${cx}" y="${top + 14}" fill="#ff5fb0" font-size="14" font-weight="bold" text-anchor="middle">${label}</text>`;
+  });
+  return body;
+}
+
+// Courbe du % de gain des blancs (0 en bas, 100 en haut, médiane à 50 %) : partie chargée
+// (ou ligne libre) en blanc, variante superposée en cyan depuis l'ancrage ; trait vertical
+// sur la position affichée ; message tant que la courbe d'une partie chargée n'est pas là.
+const GRAPH_W = 560, GRAPH_H = 200;
 function drawGraph() {
-  const svg = $("graph");
-  svg.style.display = game ? "" : "none";
-  if (!game) return;
-  const step = GRAPH_W / Math.max(1, game.sans.length);
+  const fens = curveFens();
+  const extra = variantFens();
+  const step = GRAPH_W / Math.max(1, graphLength() - 1);
+  const x = (i) => (i * step).toFixed(1);
   const y = (win) => (GRAPH_H - win / 100 * GRAPH_H).toFixed(1);
   let body = `<rect width="${GRAPH_W}" height="${GRAPH_H}" fill="#26282c"/>`
     + `<line x1="0" x2="${GRAPH_W}" y1="${GRAPH_H / 2}" y2="${GRAPH_H / 2}" stroke="#666" stroke-dasharray="4 4"/>`;
-  if (game.wins) {
-    const points = game.wins.map((win, i) => `${(i * step).toFixed(1)},${y(win)}`).join(" ");
-    body += `<polyline points="${points}" fill="none" stroke="#eee" stroke-width="2"/>`;
-  } else {
+  if (game && !game.wins) {
     body += `<text x="${GRAPH_W / 2}" y="${GRAPH_H / 2 - 8}" fill="#ddd" text-anchor="middle">${game.message}</text>`;
   }
-  const x = (game.cursor * step).toFixed(1);
-  body += `<line x1="${x}" x2="${x}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
-  svg.innerHTML = body;
+  body += graphSeries(fens, 0, "#eee", x, y);
+  if (extra.length) body += graphSeries(extra, anchor(), "#00e5ff", x, y);
+  const marker = chess.history().length;
+  body += `<line x1="${x(marker)}" x2="${x(marker)}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
+  $("graph").innerHTML = body;
 }
 
-// Charge une partie PGN : comme « Nouvelle partie » (colonnes et bleu vidés), Elo depuis
-// les en-têtes, position de départ ; la courbe est demandée au serveur (POST /game).
-async function loadGame() {
+// PGN exporté / envoyé à ARIA (sprint 39) : partie chargée hors variante → toute la partie
+// avec ses en-têtes ; sinon la ligne affichée (coups devant compris). Puis Date du jour, Elo et noms
+// des champs (nom vide → "?" : White / Black toujours présents, exigés par detect_pgn).
+function exportPgn() {
+  const whole = game && anchor() === null;
+  const board = new Chess(game ? game.start : undefined);
+  for (const san of whole ? game.sans : displayedLine()) board.move(san);
+  const headers = whole ? { ...game.headers } : { Event: "Échiquier ARIA" };
+  if (!headers.Result || headers.Result === "*") {
+    headers.Result = board.isCheckmate() ? (board.turn() === "w" ? "0-1" : "1-0")
+      : board.isGameOver() ? "1/2-1/2" : "*";
+  }
+  const today = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  headers.Date = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(today.getDate())}`;
+  headers.WhiteElo = $("elo-white").value;
+  headers.BlackElo = $("elo-black").value;
+  headers.White = $("name-white").value.trim() || "?";
+  headers.Black = $("name-black").value.trim() || "?";
+  for (const [key, value] of Object.entries(headers)) board.setHeader(key, value);
+  return board.pgn();
+}
+
+// Conservation au rechargement : PGN chargé et position de la partie, ou ligne libre affichée
+// entière ; Elo, « Je joue » et noms.
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    pgn: game ? game.pgn : null, cursor: game ? gameCursor() : 0, line: game ? [] : displayedLine(),
+    eloWhite: $("elo-white").value, eloBlack: $("elo-black").value, playing: $("playing").value,
+    nameWhite: $("name-white").value, nameBlack: $("name-black").value,
+  }));
+}
+
+// Au chargement de la page : partie chargée rechargée (courbe redemandée, curseur rétabli,
+// variante perdue) ou ligne libre rejouée ; Elo et noms sauvés appliqués après ceux des
+// en-têtes (un état sauvé avant le tronçon 05 n'a pas de noms : champs laissés tels quels).
+function restoreState() {
+  const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if (!stored) { newPosition(); return; }
+  $("playing").value = stored.playing;
+  if (stored.pgn) {
+    $("pgn").value = stored.pgn;
+    loadGame(stored.cursor);
+  } else {
+    for (const san of stored.line) chess.move(san);
+  }
+  $("elo-white").value = stored.eloWhite;
+  $("elo-black").value = stored.eloBlack;
+  $("name-white").value = stored.nameWhite ?? $("name-white").value;
+  $("name-black").value = stored.nameBlack ?? $("name-black").value;
+  newPosition();
+}
+
+// Charge une partie PGN : comme « Nouvelle partie » (colonnes et bleu vidés), Elo et noms
+// depuis les en-têtes ("?" ou absent → champ vide), position cursor (départ par défaut) ; la courbe, les mats et les meilleurs
+// coups sont demandés au serveur (POST /game) et rangés par FEN dans evals.
+async function loadGame(cursor = 0) {
   const pgn = $("pgn").value;
   const reader = new Chess();
   // loadPgn lève une erreur sur un PGN illisible : on repart alors d'une partie vide.
@@ -425,19 +758,31 @@ async function loadGame() {
   while (reader.undo());
   const start = reader.fen();
   const played = new Map();
-  for (const san of sans) { played.set(reader.fen(), san); reader.move(san); }
+  const fens = [];
+  for (const san of sans) { fens.push(reader.fen()); played.set(reader.fen(), san); reader.move(san); }
+  fens.push(reader.fen());
   if (Number(headers.WhiteElo)) $("elo-white").value = headers.WhiteElo;
   if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
+  $("name-white").value = headers.White && headers.White !== "?" ? headers.White : "";
+  $("name-black").value = headers.Black && headers.Black !== "?" ? headers.Black : "";
   blueDrawn.clear();
-  game = { start, sans, played, cursor: 0, wins: null, message: "courbe en calcul…" };
+  $("show-best").checked = false;
+  evals.clear();
+  evalAsked.clear();
+  game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…" };
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
-  goTo(0);
+  goTo(cursor);
   const loaded = game;
   const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn }) });
   if (loaded !== game) return;
-  if (response.ok) game.wins = (await response.json()).wins;
-  else game.message = "courbe indisponible";
-  drawGraph();
+  if (response.ok) {
+    const { wins, mates, best } = await response.json();
+    wins.forEach((win, i) => evals.set(game.fens[i], { win, mate: mates[i], best: best[i] }));
+    game.wins = wins;
+  } else {
+    game.message = "courbe indisponible";
+  }
+  refreshGame();
 }
 
 // Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
@@ -448,51 +793,100 @@ $("status").addEventListener("mouseenter", () => {
 $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
 
 $("new").addEventListener("click", () => {
+  // Meilleur coup masqué en début de partie (retour live sprint 39).
+  $("show-best").checked = false;
+  $("pgn").value = "";
   chess.reset();
   game = null;
-  variant = false;
+  ahead.length = 0;
+  evals.clear();
+  evalAsked.clear();
   refreshGame();
   blueDrawn.clear();
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   newPosition();
 });
-// Annuler : sur la partie chargée, équivaut à ◀ ; en variante, annule le dernier coup de la
-// variante (revenu à la position du curseur → fin de la variante).
+// Annuler : vide les coups devant ; sur la partie chargée, équivaut à ◀ ; en variante, annule
+// le dernier coup de la variante (revenu à l'ancrage → fin de la variante).
 $("undo").addEventListener("click", () => {
-  if (game && !variant) { goTo(game.cursor - 1); return; }
+  ahead.length = 0;
+  if (game && !inVariant()) { goTo(gameCursor() - 1); return; }
   if (!chess.undo()) return;
-  if (game && chess.history().length === game.cursor) variant = false;
   refreshGame();
   newPosition();
 });
-$("load").addEventListener("click", loadGame);
+$("load").addEventListener("click", () => loadGame());
 $("first").addEventListener("click", () => goTo(0));
-$("prev").addEventListener("click", () => goTo(game.cursor - 1));
-$("next").addEventListener("click", () => goTo(game.cursor + 1));
+$("prev").addEventListener("click", () => goTo(gameCursor() - 1));
+$("next").addEventListener("click", () => goTo(gameCursor() + 1));
 $("last").addEventListener("click", () => goTo(game.sans.length));
-$("back").addEventListener("click", () => goTo(game.cursor));
-// Flèches du clavier : navigation dans la partie, sauf pendant une saisie.
+$("back").addEventListener("click", () => goTo(gameCursor()));
+// Flèches du clavier (tronçon 12) : pas dans la ligne affichée, partout, sauf pendant une saisie.
 document.addEventListener("keydown", (event) => {
-  if (!game || ["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
-  if (event.key === "ArrowLeft") goTo(game.cursor - 1);
-  if (event.key === "ArrowRight") goTo(game.cursor + 1);
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) return;
+  if (event.key === "ArrowLeft") stepBack();
+  if (event.key === "ArrowRight") stepForward();
 });
-// Clic sur la courbe : va à la position la plus proche.
+// Molette au-dessus de l'échiquier, de la courbe et de la liste : bas = →, haut = ← ; un pas
+// par événement, la page ne défile pas (ailleurs, défilement normal).
+for (const id of ["board", "graph", "moves"]) {
+  $(id).addEventListener("wheel", (event) => {
+    event.preventDefault();
+    if (event.deltaY > 0) stepForward();
+    else if (event.deltaY < 0) stepBack();
+  }, { passive: false });
+}
+// Clic sur la courbe : va à la position de la partie la plus proche, même échelle que le
+// tracé (variante comprise ; borné par goTo) ; sans effet en jeu libre.
 $("graph").addEventListener("click", (event) => {
+  if (!game) return;
   const x = event.clientX - $("graph").getBoundingClientRect().left;
-  goTo(Math.round(x / (GRAPH_W / Math.max(1, game.sans.length))));
+  goTo(Math.round(x / (GRAPH_W / Math.max(1, graphLength() - 1))));
 });
 $("flip").addEventListener("click", () => ground.toggleOrientation());
 $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
 $("show-forced").addEventListener("change", drawShapes);
-$("show-best").addEventListener("change", drawShapes);
+// « Meilleur coup » décide aussi si la ligne « joué » nomme le meilleur coup.
+$("show-best").addEventListener("change", () => { drawShapes(); refreshGame(); });
 $("show-trap").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
+// « Je joue » écrit le nom de Nico dans le champ du camp choisi et l'ôte de l'autre ; « aucun »
+// ne touche pas aux noms.
+$("playing").addEventListener("change", () => {
+  const side = $("playing").value;
+  if (side) {
+    const other = side === "white" ? "name-black" : "name-white";
+    $(`name-${side}`).value = NICO_NAME;
+    if ($(other).value === NICO_NAME) $(other).value = "";
+  }
+  saveState();
+});
+$("name-white").addEventListener("input", saveState);
+$("name-black").addEventListener("input", saveState);
+// Nom du fichier exporté : Blancs-Noirs-AAAA.MM.JJ.pgn (date de l'en-tête Date).
+function pgnFileName(pgn) {
+  const name = (id) => $(id).value.trim().replace(/[^A-Za-z0-9_-]/g, "_") || "inconnu";
+  return `${name("name-white")}-${name("name-black")}-${pgn.match(/\[Date "([^"]*)"\]/)[1]}.pgn`;
+}
+// Export : téléchargement d'un .pgn, et copie dans le presse-papier quand le navigateur
+// l'expose (contexte sécurisé : localhost ou https).
+$("export").addEventListener("click", async () => {
+  const pgn = exportPgn();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([pgn], { type: "application/x-chess-pgn" }));
+  link.download = pgnFileName(pgn);
+  link.click();
+  if (navigator.clipboard) await navigator.clipboard.writeText(pgn);
+  $("pgn-status").textContent = navigator.clipboard ? "PGN téléchargé et copié" : "PGN téléchargé (presse-papier indisponible)";
+});
+$("send").addEventListener("click", async () => {
+  const response = await fetch("/send", { method: "POST", body: JSON.stringify({ pgn: exportPgn() }) });
+  $("pgn-status").textContent = response.ok ? "envoyée à ARIA, réponse sur Telegram" : "ARIA pas prêt";
+});
 
-refreshGame();
-newPosition();
+restoreState();
 poll();
 </script>
 </body>

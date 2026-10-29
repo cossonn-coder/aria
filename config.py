@@ -79,8 +79,6 @@ class Config:
     # ── Coach d'échecs (sprint 26) ────────────────────────────────────────────
     # Chemin absolu : /usr/games n'est pas dans le PATH du service systemd.
     stockfish_path: str = "/usr/games/stockfish"
-    # Pseudo Chess.com de Nico, comparé aux en-têtes White/Black du PGN.
-    chess_username: str = "staroflexeur"
     # Poids Maia-2 (rapid_model.pt + config.yaml), hors Nextcloud : 280 Mo (sprint 28).
     maia_models_dir: str = "/home/nico/.cache/aria-maia"
     # Port du serveur de l'échiquier ARIA (sprint 35), vérifié libre sur la VM.

@@ -136,3 +136,33 @@ async def test_images_text_failed_photo_is_skipped_text_still_sent(tmp_path):
         })
 
     iface.app.bot.send_message.assert_awaited_once_with(chat_id=42, text="explication")
+
+
+@pytest.mark.asyncio
+async def test_submit_text_from_thread_goes_through_kernel_and_send(monkeypatch):
+    # Sprint 39, tronçon 02 : l'échiquier envoie un PGN comme un message de Nico.
+    monkeypatch.setattr(telegram_interface.config, "allowed_user_id", 777)
+    kernel = MagicMock()
+    kernel.handle_event = AsyncMock(return_value="analyse")
+    iface = TelegramInterface(kernel=kernel, token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_chat_action = AsyncMock()
+    iface.send = AsyncMock()
+    iface.loop = asyncio.get_running_loop()
+
+    pgn = '[White "nico"]\n\n1. e4 e5 *'
+    assert await asyncio.to_thread(iface.submit_text, pgn) is True
+    for _ in range(100):
+        if iface.send.await_count:
+            break
+        await asyncio.sleep(0.01)
+
+    event = kernel.handle_event.await_args.args[0]
+    assert event.content == pgn
+    assert event.user_id == "777"
+    iface.send.assert_awaited_once_with(777, "analyse")
+
+
+def test_submit_text_without_loop_returns_false():
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    assert iface.submit_text("1. e4 *") is False

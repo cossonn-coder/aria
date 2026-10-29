@@ -19,11 +19,14 @@ def test_main_exits_immediately_after_start(monkeypatch):
         def start(self):
             calls.append("start")
 
+        def submit_text(self, text):
+            return False
+
     monkeypatch.setenv("ARIA_BOT_TOKEN", "x")
     monkeypatch.setattr(bot, "AriaKernel", lambda: object())
     monkeypatch.setattr(bot, "TelegramInterface", FakeTelegram)
     # Le serveur de l'échiquier lierait un port réel.
-    monkeypatch.setattr(bot, "start_board_server", lambda: calls.append("board"))
+    monkeypatch.setattr(bot, "start_board_server", lambda submit_text: calls.append("board"))
     monkeypatch.setattr(bot.logging, "shutdown", lambda: calls.append("shutdown"))
     monkeypatch.setattr(bot.os, "_exit", lambda code: calls.append(("exit", code)))
 

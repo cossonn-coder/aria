@@ -3,9 +3,11 @@
 import json
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import chess
+import pytest
 
 from interfaces.board_interface import BoardWorker, make_server
 
@@ -70,6 +72,15 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert "show-trap" in page and "show-strategy" in page
         # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
         assert 'id="pgn"' in page and 'id="graph"' in page
+        # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue » ; tronçon 07 : plus de pseudo injecté.
+        assert 'id="export"' in page and 'id="send"' in page and 'id="playing"' in page
+        assert 'const NICO_NAME = "Nico"' in page and "USERNAME" not in page
+        # Sprint 39, tronçon 05 : champs des noms des joueurs.
+        assert 'id="name-white"' in page and 'id="name-black"' in page
+        # Tronçon 08 : liste des coups sous la courbe.
+        assert 'id="moves"' in page
+        # Tronçon 10 : ligne de précision sous le coup joué.
+        assert 'id="accuracy"' in page
     finally:
         server.shutdown()
         server.server_close()
@@ -77,18 +88,88 @@ def test_index_serves_chessboard_page(monkeypatch):
 
 def test_game_returns_white_win_curve(monkeypatch):
     # Sprint 38, tronçon 01 : % de gain des blancs par position, PGN sans en-tête accepté.
+    # Sprint 39, tronçon 01 : mat forcé côté blancs et meilleur coup par position.
     from types import SimpleNamespace
 
     import interfaces.board_interface as board_interface
 
-    plies = [SimpleNamespace(color="white", win_before=60, win_after=45),
-             SimpleNamespace(color="black", win_before=55, win_after=30)]
+    plies = [SimpleNamespace(color="white", win_before=60, win_after=45, eval_before_cp=99997,
+                             eval_after_cp=-40, best_san="Qh5"),
+             SimpleNamespace(color="black", win_before=55, win_after=30, eval_before_cp=-40,
+                             eval_after_cp=-99999, best_san="Nf6")]
     monkeypatch.setattr(board_interface, "analyze_game", lambda game, color, path: plies)
     server = make_server(0, BoardWorker(lambda: object(), ""))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {"wins": [60, 45, 70]}
+        assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {
+            "wins": [60, 45, 70], "mates": [3, None, -1], "best": ["Qh5", "Nf6", None]}
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_eval_returns_position_eval(monkeypatch):
+    # Sprint 39, tronçon 01 : une position seule (jeu libre), évaluation factice.
+    import interfaces.board_interface as board_interface
+
+    monkeypatch.setattr(board_interface, "position_eval",
+                        lambda fen: {"win": 52.3, "mate": None, "best": fen.split()[1]})
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert _request(base, "/eval", {"fen": _AFTER_E4}) == {"win": 52.3, "mate": None, "best": "b"}
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_position_eval_checkmated_skips_engine():
+    # Sprint 39, tronçon 01 : position matée → pas de Stockfish, blancs matés = 0 %.
+    from interfaces.board_interface import position_eval
+
+    fools_mate = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+    assert position_eval(fools_mate) == {"win": 0, "mate": None, "best": None}
+
+
+def test_send_hands_pgn_to_aria_or_503():
+    # Sprint 39, tronçon 02 : /send remet le PGN à la fonction d'envoi injectée.
+    received = []
+    server = make_server(0, BoardWorker(lambda: object(), ""), submit_text=lambda t: received.append(t) or True)
+    bare = make_server(0, BoardWorker(lambda: object(), ""))
+    for s in (server, bare):
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        assert _request(f"http://127.0.0.1:{server.server_address[1]}", "/send", {"pgn": "1. e4 *"}) == {"sent": True}
+        assert received == ["1. e4 *"]
+        with pytest.raises(urllib.error.HTTPError) as err:
+            _request(f"http://127.0.0.1:{bare.server_address[1]}", "/send", {"pgn": "1. e4 *"})
+        assert err.value.code == 503
+    finally:
+        for s in (server, bare):
+            s.shutdown()
+            s.server_close()
+
+
+def test_line_accuracy_per_move_and_per_side():
+    # Sprint 39, tronçon 10 : meilleur coup → 100, perte → < 100, camp sans coup → None.
+    from interfaces.board_interface import line_accuracy
+
+    result = line_accuracy([50, 50, 80], [True, False], "white")
+    assert result["moves"][0] == 100 and result["moves"][1] < 100
+    assert result["white"] == [100, 100] and result["black"][0] is None
+    assert result["black"][1] == result["moves"][1]
+
+
+def test_accuracy_route_serves_line_accuracy():
+    # Sprint 39, tronçon 10 : /accuracy calcule sans Stockfish, premier coup noir.
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        result = _request(base, "/accuracy", {"wins": [50, 50], "best": [True], "first": "black"})
+        assert result == {"moves": [100.0], "white": [None], "black": [100.0]}
     finally:
         server.shutdown()
         server.server_close()

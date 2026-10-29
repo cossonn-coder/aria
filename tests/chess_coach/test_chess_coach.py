@@ -23,14 +23,15 @@ SCHOLAR_PGN = """je joue les noirs
 
 
 def test_detect_color():
-    assert detect_color({"White": "Ami", "Black": "StarOflexeur"}, "", "staroflexeur") == ("black", "header")
-    assert detect_color({"White": "Ami", "Black": "Moi"}, "je joue les noirs", "staroflexeur") == ("black", "message")
-    assert detect_color({"White": "Ami", "Black": "Moi"}, "", "staroflexeur") == ("white", "default")
+    # Sprint 39, tronçon 07 : Nico reconnu par son nom, plus de pseudo d'échecs.
+    assert detect_color({"White": "Ami", "Black": "Nico"}, "") == ("black", "header")
+    assert detect_color({"White": "Ami", "Black": "Moi"}, "je joue les noirs") == ("black", "message")
+    assert detect_color({"White": "Ami", "Black": "staroflexeur"}, "") == ("white", "default")
 
 
 @pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
 def test_analyze_detects_blunder():
-    game = analyze(SCHOLAR_PGN, SCHOLAR_PGN, "staroflexeur", STOCKFISH)
+    game = analyze(SCHOLAR_PGN, SCHOLAR_PGN, STOCKFISH)
     assert game.nico_color == "black"
     blunder = game.plies[5]
     assert blunder.san == "Nf6"

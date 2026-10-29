@@ -1,0 +1,208 @@
+# Sprint 39 — état de conception
+
+**Phase** : CLOS (2026-10-29, runs live 09, 11, 13 OK de Nico, tag `sprint-39`).
+**Branche** : `feat/sprint39-courbe-pgn`.
+**Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
+libre, enregistrement + export PGN.
+
+## Audit
+
+`audit_courbe_pgn.md` : la courbe du meilleur coup = courbe jouée décalée d'un
+demi-coup, l'écart = perte du coup (rien à recalculer, manque `best_san`) ; mat en N
+récupérable depuis `eval_before_cp` sans toucher `analyze_game` ; courbe absente en jeu
+libre (`drawGraph`) ; aucune persistance ni export ; écriture palace = contournement
+du kernel.
+
+## Décisions arrêtées
+
+- Cible = #127-#130 (Nico, run live 38).
+
+Lot 1 (Nico, 2026-10-27) :
+- **#127 écart ombré + meilleur coup** : sur la courbe, la perte de chaque coup est
+  ombrée entre « si meilleur coup » (valeur de la position avant) et « coup joué »
+  (position après), seulement si perte ≥ 10 pts ; sous l'échiquier « joué : X —
+  meilleur : Y (−Z pts) ». Rien à recalculer : `best_san` à renvoyer par position.
+- **#129 une position par coup** : en jeu libre, chaque nouvelle position est évaluée
+  seule (route une-FEN, ≈ 0,15 s), valeurs gardées côté page ; en variante d'une
+  partie chargée, la courbe reste celle de la partie.
+- **#130 navigateur + bouton export**, et Nico veut **alimenter le palace** avec ces
+  parties (historique des parties).
+
+Lot 2 (Nico, 2026-10-27) :
+- **#130 bouton « Envoyer à ARIA »** : la page envoie le PGN au serveur de l'échiquier,
+  qui le remet à `TelegramInterface` comme un message texte de Nico (même chemin que
+  `_handle_message` : verrou utilisateur, `kernel.handle_event`, `send`) ; la réponse
+  (analyse + fiche `chess_game` + progression) arrive sur Telegram. Kernel non
+  contourné, écriture par `chess_router` → `write_chess_game` (règle 1 intacte).
+  **Palace prod touché** par ce nouveau point d'entrée (chemin d'écriture existant).
+- **#130 « Je joue »** sur la page : blancs / noirs / aucun ; l'export met
+  `config.chess_username` dans White ou Black, WhiteElo / BlackElo des champs, Date.
+- **#128 marque « #N »** aux positions où Stockfish voit un mat forcé (0,15 s), en haut
+  (mat blanc) ou en bas (mat noir), et « mat en N » sous l'échiquier.
+
+## Audit complémentaire (lot 2, envoi à ARIA)
+
+- `bot.py` : `kernel`, puis `TelegramInterface(kernel, token)`, puis
+  `start_board_server()` (threads daemon), puis `telegram.start()` (bloquant,
+  `run_polling`) : la boucle asyncio PTB n'existe qu'une fois `start()` lancé.
+- `TelegramInterface._handle_message` (l. 94) : `user_locks[user_id]`,
+  `Event.create(TEXT, user_id, content, {"chat_id"})`, `_handle_with_waiting`
+  (écrit… + ⏳), `send(chat_id, result)`. Rien n'expose la boucle ni un point
+  d'entrée hors update Telegram.
+- `config.allowed_user_id` (`ALLOWED_USER_ID`, renseigné dans `.env`) : sans caller
+  aujourd'hui ; en chat privé, chat_id = user_id.
+- `detect_pgn` (`cognitive_classifier.py:128`) exige `[White "` ou `[Black "` **et**
+  `1.` : le PGN exporté doit porter ces en-têtes pour partir vers `chess_router`.
+- `chess_router` : fiche identifiée par le hash des coups → renvoyer la même partie
+  remplace la fiche ; couleur par en-tête (`detect_color`, `chess_username`).
+
+Lot 3 (Nico, 2026-10-28) :
+- **Contenu exporté / envoyé** : partie chargée hors variante → toute la partie (avec
+  ses en-têtes) ; en variante ou en jeu libre → la ligne de l'échiquier.
+- **Envoi permis avec « Je joue : aucun »** (ARIA prend alors les blancs par défaut).
+- **OK pour figer** le découpage ci-dessous, branche `feat/sprint39-courbe-pgn`.
+
+Lot 4 (Nico, 2026-10-28, tronçon 05) :
+- **Variante superposée** : courbe de la partie entière en blanc ; variante en cyan
+  depuis le curseur, positions évaluées par `/eval`, ombrage et repères de mat compris ;
+  ligne « joué » = dernier coup de la variante ; clic sur la courbe = navigation partie.
+- **Lisibilité** : courbe 200 px de haut (largeur 560) ; ombrage rouge opacité 0,5 +
+  pointillé au niveau « si meilleur coup » ; mat « #N » 14 px gras sur pastille sombre.
+- **Noms** : champs « Blancs » / « Noirs » (en-têtes du PGN chargé, vides sinon,
+  éditables, conservés au rechargement) ; « Je joue » y écrit le pseudo ; champ vide →
+  `"?"` ; fichier `Blancs-Noirs-AAAA.MM.JJ.pgn`.
+- **Numéro de coup** (reco Claude, sans arbitrage) : « joué : 12. Nf6 » / « 12… Nf6 ».
+- **« meilleur : Y » masqué si « Meilleur coup » décoché** (Nico, avec l'OK) ; la perte
+  « (−Z pts) » reste affichée (choix Claude : elle ne nomme pas le coup).
+
+Recos de conception (Claude, figées avec l'OK) :
+- Mat côté blancs signé (+N blancs, −N noirs) tiré de `eval_before_cp` /
+  `eval_after_cp` (cp non bornés) ; position déjà matée → pas de repère.
+- Route `POST /eval {fen}` : un Stockfish par requête, 0,15 s, pas de file ni de cache
+  serveur ; la page garde une Map FEN → `{win, mate, best}`.
+- Jeu libre : la ligne sous l'échiquier parle du **dernier coup joué** (pas de coup
+  suivant) ; partie chargée : du coup joué depuis la position affichée (inchangé).
+- Pseudo d'échecs injecté dans la page par le serveur (`__CHESS_USERNAME__` →
+  `config.chess_username`), pas de route dédiée.
+- Conservation au rechargement par `localStorage` ; une variante en cours est perdue.
+- `submit_text` : boucle PTB mémorisée par `post_init` ; avant elle, `/send` → 503.
+
+## Audit tronçon 05 (page seule, `interfaces/board/index.html`)
+
+- Variante : `curve()` rend `game.fens` dès qu'une partie est chargée ; `evalLine()` sort
+  si `game` → aucune position de variante évaluée ; `playedText()` n'affiche rien en
+  variante (`game && !variant` / `!game`).
+- « joué : X » sans numéro (`playedText`, l. ~437) ; numéro tirable du FEN (champ 6 + trait).
+- Courbe `GRAPH_W = 560`, `GRAPH_H = 120` (+ `<svg height="120">`) ; ombrage
+  `#e0a050` opacité 0,35 ; mat = texte `#N` rose 11 px.
+- Export : `White` / `Black` = en-têtes du PGN chargé ou `"?"`, pseudo seulement via
+  « Je joue » ; fichier toujours `partie_aria.pgn` ; aucun champ de nom.
+- Clic sur la courbe : `goTo(round(x / (GRAPH_W / sans.length)))` (échelle de la partie).
+
+## Lot 5 (Nico, 2026-10-29, OK pour figer)
+
+- **Plus de pseudo d'échecs** : `chess_username` / `CHESS_USERNAME` et l'injection dans la
+  page supprimés ; « Je joue » écrit `Nico` dans le camp choisi ; ARIA reconnaît `Nico`
+  dans White / Black (sinon message, sinon blancs). Choix du nom fixe `Nico` : Claude.
+- Liste des coups : **seulement la variante en cours** entre parenthèses (reco acceptée).
+- **Coups cliquables** en partie chargée, pas en jeu libre (reco acceptée).
+- **Export / envoi inchangés**, sans variantes (reco acceptée).
+
+## Audit tronçon 08 (page seule, `interfaces/board/index.html`)
+
+- « Nouvelle partie » (handler `#new`, l. ~640) : remet échiquier, partie, evals, colonnes,
+  mais ne touche pas `#pgn` ; `saveState` (via `newPosition`) écrit déjà `pgn: null`.
+- Aucune liste de coups affichée aujourd'hui (seulement `#played` et la courbe).
+- Modèle de variante : **une seule variante vivante** = `chess.history().slice(game.cursor)`
+  (`variantFens`) ; `goTo` la jette ; perdue au rechargement. Pas d'arbre de variantes.
+- Jeu libre : la ligne = `chess.history()`.
+- Numéros de coup : déjà tirés du FEN (champ 6 + trait) pour `playedText`.
+
+## Lot 6 (Nico, 2026-10-29, OK pour figer)
+
+- Hors tronçon pendant le live 09 : `395d4c8` mini échiquier au survol des coups de la liste.
+- **Précision du coup + précision totale de chaque joueur** sous l'échiquier :
+  ` — précision 74 %` sur la ligne « joué », puis `Précision : blancs 88 % · noirs 81 %`.
+- Calcul **serveur, une seule formule** (celle du bilan Telegram, `summary.py`) ; affichage
+  **partout** (partie chargée, variante, jeu libre) → nouvelle route `POST /accuracy` qui
+  reçoit la série des % de gain de la ligne + « meilleur coup » par coup (reco Claude
+  conciliant les deux réponses, OK Nico).
+- Totaux sur les coups jusqu'à celui décrit par « joué » compris (reco Claude, OK Nico).
+
+## Lot 7 (Nico, 2026-10-29)
+
+- **Flèches ← → et molette** pour naviguer : portée **partout, dans la ligne** (partie,
+  variante, jeu libre, sans rien perdre ; jouer un coup depuis une position passée coupe la
+  suite) ; molette au-dessus de l'échiquier, de la courbe et de la liste, bas = suivant.
+- Recos Claude figées sans arbitrage : pile `ahead` des coups devant ; ancrage de la variante
+  déduit de l'écart à la partie (← au-delà de son départ ne la perd plus) ; boutons ⏮ ◀ ▶ ⏭
+  inchangés ; `SELECT` exclu des flèches.
+
+## Hors périmètre (refusé)
+
+- Alerte « plus de 5 meilleurs coups d'affilée, puis aucun pendant 3 coups » : refusée
+  par Claude (sert à échapper à la détection anti-triche en partie en ligne).
+- Compteur de « meilleurs coups d'affilée » (2026-10-29) : refusé pour la même raison.
+
+## Questions ouvertes
+
+(aucune)
+
+## Tronçons
+
+- 01 serveur : `/game` + mates / best, `POST /eval`, pseudo dans la page (`01_serveur_courbe.md`) ✅ (372 tests verts ; `game_wins` rend un dict `{wins, mates, best}`, `position_eval(fen)` ; vérifié VM sur Stockfish réel : mat en 1 → `mate 1`, `win 97.5` [cp borné à 1000 par `_win`])
+- 02 envoi à ARIA : `TelegramInterface.submit_text`, `POST /send`, `bot.py` (`02_envoi_aria.md`) ✅ (375 tests verts ; `_handle_message` factorisé en `_process_text(user_id, chat_id, text)` partagé avec `submit_text` ; exception du traitement journalisée par callback du future ; `tests/test_bot.py` adapté à `start_board_server(submit_text)`)
+- 03 page : ombrage, « meilleur : Y », « #N », jeu libre, « Je joue », export, envoi, rechargement (`03_page.md`) ✅ (375 tests verts ; seul `index.html` + test de la page ; logique vérifiée VM sous node avec DOM simulé ; `/eval` enchaînés un par un côté page (toute la ligne libre est évaluée, utile au rechargement) ; presse-papier seulement si le navigateur l'expose (contexte sécurisé), sinon téléchargement seul ; « Nouvelle partie » réécrit un état vide au lieu d'effacer la clé)
+- 04 run live, Nico (`04_run_live.md`, parties : `run_live_parties.txt`) ✅ 2026-10-28 :
+  scénarios 1-10 OK (mat affiché par un petit cercle rouge ; « joué : Nf6 — meilleur : g6
+  (−50 pts) — mat en 1 pour les blancs » ; export conforme ; envoi à ARIA : `board_send`,
+  `telegram_external source=board`, `chess_game_write OK hash=ebeb5dae122d4cef plies=78`).
+  Correctif immédiat `44efccc` : « Meilleur coup » décoché au chargement de la page, à
+  « Nouvelle partie » et au chargement d'un PGN.
+- 05 retours du live : variante cyan superposée, numéros de coups, « meilleur » selon
+  la case, courbe 200 px / ombrage rouge / pastille de mat, champs de noms + nom de
+  fichier (`05_retours_live.md`) ✅ (375 tests verts ; seul `index.html` + test de la page ;
+  vérifié VM sous node avec DOM simulé ; helpers `variantFens()` / `graphLength()` /
+  `graphSeries()` ; le trait bleu marque la fin de la variante (au lieu du curseur) ;
+  état sauvé avant le tronçon 05 sans noms → champs laissés tels quels)
+- 06 run live des retours, Nico (`06_run_live.md`, partie 1 de `run_live_parties.txt`) ✅ 2026-10-29 :
+  10 scénarios OK ; trait bleu en fin de variante accepté « pour le moment ».
+  Hors tronçon : `91271c5` pseudo surchargeable par `CHESS_USERNAME` (.env = TardoScoped).
+- 07 « moi » au lieu d'un pseudo : config, `detect_color` / `analyze`, `chess_router`,
+  page et serveur de page (`07_moi_sans_pseudo.md`) ✅ (375 tests verts ; constante
+  `NICO_NAME = "Nico"` dans `analysis.py` et la page ; page servie telle quelle
+  (`read_bytes`) ; ligne `CHESS_USERNAME` ôtée du `.env` ; test de la page : `"USERNAME"`
+  absent (au lieu de `__CHESS_USERNAME__`, pour que le grep du critère de fin reste vide))
+- 08 page : « Nouvelle partie » vide la zone PGN, liste des coups sous la courbe,
+  variante entre parenthèses, coups cliquables (`08_liste_coups.md`) ✅ (375 tests verts ;
+  seul `index.html` + assertion `id="moves"` ; `renderMoves()` appelé par `refreshGame()` ;
+  vérifié VM sous node avec DOM simulé (jeu libre, variante noire / blanche / en fin de partie,
+  clics) ; clic sur un coup de variante = `goTo(cursor, line)` (paramètre ajouté à `goTo`)
+  au lieu de `goTo` + rejeu + `newPosition`, pour n'envoyer qu'un seul `/position`)
+- 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ✅ 2026-10-29
+- 10 précision du coup et totale : `line_accuracy` + `POST /accuracy`, ligne sous l'échiquier
+  (`10_precision.md`) ✅ (377 tests verts ; `line_accuracy` rebâtit des demi-coups minimaux
+  (`SimpleNamespace`, qualité `"best"` / `"other"`) lus par `_move_accuracy` / `_effective_loss` /
+  `_game_accuracy` de `summary.py`, inchangé ; page : `accuracyLine()` + `accuracy()` appelés par
+  `refreshGame`, cache `accuracies` clé = corps JSON ; logique vérifiée VM sous node avec stubs
+  (jeu libre, partie chargée au curseur et en fin) ; coup décrit au-delà du préfixe évalué →
+  pas de précision du coup, totaux sur les coups évalués)
+- 11 run live de la précision, Nico (`11_run_live.md`) ✅ 2026-10-29
+- 12 navigation aux flèches et à la molette, pile des coups devant (`12_navigation.md`) ✅ (377 tests verts ;
+  seul `index.html` ; `variant` et `game.cursor` supprimés, déduits de la ligne affichée : helpers
+  `displayedLine()` / `lineFens()` / `anchor()` / `inVariant()` / `gameCursor()` (ancien sens du curseur),
+  `stepBack()` / `stepForward()` ; `curve()` → `curveFens()` ; vérifié VM sous node avec DOM simulé
+  (jeu libre ← ← →, variante puis ← ×5 / → ×5, coup égal / différent du sommet, molette, `SELECT`, ◀) ;
+  export en partie chargée : toute la partie seulement sans variante, sinon la ligne affichée entière)
+- 13 run live de la navigation, Nico (`13_run_live.md`) ✅ 2026-10-29
+
+## Dettes
+
+#127, #128, #129, #130 résolues. Nouvelle : #131 (métacommandes Telegram, demande de Nico
+à la clôture, cible sprint 40).
+Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écriture
+`chess_router` → `write_chess_game` inchangé).
+
+## §REPRISE
+
+Sprint clos. Suite : `docs/sprint40/context_kickoff_sprint_40.md`, `/conception sprint 40`.
