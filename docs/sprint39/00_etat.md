@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 07-09 figés (2026-10-29). Tronçons 01-08 faits.
+**Phase** : B — tronçons 10-11 figés (2026-10-29). Tronçons 01-08 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -118,6 +118,17 @@ Recos de conception (Claude, figées avec l'OK) :
 - Jeu libre : la ligne = `chess.history()`.
 - Numéros de coup : déjà tirés du FEN (champ 6 + trait) pour `playedText`.
 
+## Lot 6 (Nico, 2026-10-29, OK pour figer)
+
+- Hors tronçon pendant le live 09 : `395d4c8` mini échiquier au survol des coups de la liste.
+- **Précision du coup + précision totale de chaque joueur** sous l'échiquier :
+  ` — précision 74 %` sur la ligne « joué », puis `Précision : blancs 88 % · noirs 81 %`.
+- Calcul **serveur, une seule formule** (celle du bilan Telegram, `summary.py`) ; affichage
+  **partout** (partie chargée, variante, jeu libre) → nouvelle route `POST /accuracy` qui
+  reçoit la série des % de gain de la ligne + « meilleur coup » par coup (reco Claude
+  conciliant les deux réponses, OK Nico).
+- Totaux sur les coups jusqu'à celui décrit par « joué » compris (reco Claude, OK Nico).
+
 ## Hors périmètre (refusé)
 
 - Alerte « plus de 5 meilleurs coups d'affilée, puis aucun pendant 3 coups » : refusée
@@ -160,6 +171,9 @@ Recos de conception (Claude, figées avec l'OK) :
   clics) ; clic sur un coup de variante = `goTo(cursor, line)` (paramètre ajouté à `goTo`)
   au lieu de `goTo` + rejeu + `newPosition`, pour n'envoyer qu'un seul `/position`)
 - 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
+- 10 précision du coup et totale : `line_accuracy` + `POST /accuracy`, ligne sous l'échiquier
+  (`10_precision.md`) ⏳
+- 11 run live de la précision, Nico (`11_run_live.md`) ⏳
 
 ## Dettes
 
@@ -169,5 +183,5 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-08 faits, 09 figé. Prochaine étape : run live 09 par Nico (redémarrer `aria.service` : `.env` modifié). Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-08 faits, 09-11 figés. Prochaine étape : `/sprint-auto sprint 39` (tronçon 10), puis runs live 09 et 11 par Nico (redémarrer `aria.service`). Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
