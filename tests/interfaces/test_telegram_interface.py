@@ -214,6 +214,38 @@ async def test_help_command_lists_commands():
 
 
 @pytest.mark.asyncio
+async def test_board_https_sends_web_app_button(monkeypatch):
+    # Sprint 41 : URL https → bouton Mini App vers l'échiquier.
+    url = "https://aria.example.ts.net"
+    monkeypatch.setattr(telegram_interface.config, "board_url", url)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_board(_command_update(), None)
+
+    kwargs = iface.app.bot.send_message.await_args.kwargs
+    button = kwargs["reply_markup"].inline_keyboard[0][0]
+    assert button.web_app.url == url
+
+
+@pytest.mark.asyncio
+async def test_board_http_sends_plain_link(monkeypatch):
+    # Sprint 41 : URL http → lien texte, pas de bouton (refusé par Telegram).
+    url = "http://192.168.1.124:5002"
+    monkeypatch.setattr(telegram_interface.config, "board_url", url)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_board(_command_update(), None)
+
+    kwargs = iface.app.bot.send_message.await_args.kwargs
+    assert kwargs["text"] == url
+    assert "reply_markup" not in kwargs
+
+
+@pytest.mark.asyncio
 async def test_reboot_writes_marker_and_stops(monkeypatch, tmp_path):
     marker = tmp_path / "aria" / "reboot_pending"
     monkeypatch.setattr(telegram_interface, "REBOOT_MARKER", marker)

@@ -81,6 +81,9 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="moves"' in page
         # Tronçon 10 : ligne de précision sous le coup joué.
         assert 'id="accuracy"' in page
+        # Sprint 41, tronçon 01 : page mobile (viewport, Mini App, barre d'éval, onglets, barre du bas).
+        assert 'name="viewport"' in page and "telegram-web-app.js" in page
+        assert 'id="evalbar"' in page and 'id="tabs"' in page and 'id="bottombar"' in page
     finally:
         server.shutdown()
         server.server_close()

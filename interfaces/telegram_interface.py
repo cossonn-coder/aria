@@ -12,7 +12,7 @@
 # Gestion de la concurrence : un Lock par user_id évite les
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
-from telegram import BotCommand, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ChatAction
 from telegram.error import NetworkError, TelegramError
 from telegram.ext import (
@@ -249,7 +249,21 @@ class TelegramInterface(BaseInterface):
 
     async def _cmd_board(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=board")
-        await self._deliver(update.effective_chat.id, meta_commands.board_text())
+        chat_id = update.effective_chat.id
+        url = meta_commands.board_text()
+        # Sprint 41 : en HTTPS (tailscale serve), bouton Mini App qui ouvre
+        # l'échiquier dans Telegram. En http, Telegram refuse un bouton
+        # web_app : on garde le lien texte.
+        if not url.startswith("https://"):
+            await self._deliver(chat_id, url)
+            return
+        markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("♟ Ouvrir l'échiquier", web_app=WebAppInfo(url=url))]]
+        )
+        await self._send_with_retry(
+            chat_id,
+            lambda: self.app.bot.send_message(chat_id=chat_id, text=url, reply_markup=markup),
+        )
 
     async def _cmd_again(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=again")
