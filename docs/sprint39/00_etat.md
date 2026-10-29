@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 10-11 figés (2026-10-29). Tronçons 01-08 faits.
+**Phase** : B — tronçons 12-13 figés (2026-10-29). Tronçons 01-08 et 10 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -129,6 +129,15 @@ Recos de conception (Claude, figées avec l'OK) :
   conciliant les deux réponses, OK Nico).
 - Totaux sur les coups jusqu'à celui décrit par « joué » compris (reco Claude, OK Nico).
 
+## Lot 7 (Nico, 2026-10-29)
+
+- **Flèches ← → et molette** pour naviguer : portée **partout, dans la ligne** (partie,
+  variante, jeu libre, sans rien perdre ; jouer un coup depuis une position passée coupe la
+  suite) ; molette au-dessus de l'échiquier, de la courbe et de la liste, bas = suivant.
+- Recos Claude figées sans arbitrage : pile `ahead` des coups devant ; ancrage de la variante
+  déduit de l'écart à la partie (← au-delà de son départ ne la perd plus) ; boutons ⏮ ◀ ▶ ⏭
+  inchangés ; `SELECT` exclu des flèches.
+
 ## Hors périmètre (refusé)
 
 - Alerte « plus de 5 meilleurs coups d'affilée, puis aucun pendant 3 coups » : refusée
@@ -179,6 +188,8 @@ Recos de conception (Claude, figées avec l'OK) :
   (jeu libre, partie chargée au curseur et en fin) ; coup décrit au-delà du préfixe évalué →
   pas de précision du coup, totaux sur les coups évalués)
 - 11 run live de la précision, Nico (`11_run_live.md`) ⏳
+- 12 navigation aux flèches et à la molette, pile des coups devant (`12_navigation.md`) ⏳
+- 13 run live de la navigation, Nico (`13_run_live.md`) ⏳
 
 ## Dettes
 
@@ -188,6 +199,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-08 et 10 faits ; 09 et 11 = runs live par Nico (redémarrer `aria.service`), à
-enchaîner. Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-08 et 10 faits, 12 figé. Prochaine étape : `/sprint-auto sprint 39` (tronçon 12),
+puis runs live 09, 11 et 13 par Nico (redémarrer `aria.service`), à enchaîner. Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
