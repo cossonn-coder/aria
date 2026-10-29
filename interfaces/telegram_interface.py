@@ -12,11 +12,12 @@
 # Gestion de la concurrence : un Lock par user_id évite les
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.constants import ChatAction
 from telegram.error import NetworkError, TelegramError
 from telegram.ext import (
     ApplicationBuilder,
+    CommandHandler,
     MessageHandler,
     ContextTypes,
     filters,
@@ -27,7 +28,9 @@ import asyncio
 from pathlib import Path
 
 from config import config
+from interfaces import meta_commands
 from interfaces.base_interface import BaseInterface
+from memory.writer import write_conversation_reset
 from core.event import Event, EventType
 from logger import get_logger
 
@@ -49,6 +52,10 @@ TYPING_REFRESH_SECONDS = 4
 WAIT_NOTICE_SECONDS = 20
 WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
 
+# Marqueur posé par /reboot, lu au démarrage suivant pour annoncer le retour
+# (sprint 40). Constante module : surchargée en test.
+REBOOT_MARKER = Path.home() / ".aria" / "reboot_pending"
+
 
 def _log_external_failure(future):
     """Journalise l'exception d'un traitement lancé par submit_text."""
@@ -59,9 +66,12 @@ def _log_external_failure(future):
 
 class TelegramInterface(BaseInterface):
 
-    def __init__(self, kernel, token: str):
+    def __init__(self, kernel, token: str, bridge=None):
         super().__init__(kernel)
         self.token = token
+        # MempalaceBridge dédié aux métacommandes /status et /parties
+        # (sprint 40), en lecture seule, construit par bot.py.
+        self.bridge = bridge
         # Un lock par user_id — sérialise les messages d'un même utilisateur
         self.user_locks = defaultdict(asyncio.Lock)
         # Dernière réponse non livrée par chat_id, en RAM (perdue au
@@ -70,19 +80,15 @@ class TelegramInterface(BaseInterface):
         # Boucle asyncio de PTB, connue une fois start() lancé (sprint 39) :
         # submit_text s'en sert pour traiter un texte venu d'un autre thread.
         self.loop = None
+        # Dernière réponse du kernel livrée, par chat_id, en RAM : /again la
+        # renvoie (sprint 40). Les sorties de métacommandes n'y passent pas.
+        self.last_reply = {}
+        # Posé par /reboot : bot.py sort alors en code 1, systemd relance.
+        self.restart_requested = False
 
     def start(self):
-        self.app = ApplicationBuilder().token(self.token).post_init(self._remember_loop).build()
-
-        # Messages texte
-        self.app.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message)
-        )
-
-        # Photos envoyées par l'utilisateur
-        self.app.add_handler(
-            MessageHandler(filters.PHOTO, self._handle_photo)
-        )
+        self.app = ApplicationBuilder().token(self.token).post_init(self._post_init).build()
+        self._add_handlers()
 
         # Erreurs non rattrapées (getUpdates en échec, envoi définitivement
         # échoué) : une ligne WARNING au lieu d'une trace ERROR complète.
@@ -91,6 +97,43 @@ class TelegramInterface(BaseInterface):
         # Retries de bootstrap infinis : PTB réessaie indéfiniment l'initialisation
         # (get_me) au lieu de lever et de tuer le process au démarrage.
         self.app.run_polling(bootstrap_retries=-1)
+
+    def _add_handlers(self):
+        """Branche messages, photos et métacommandes, filtrés sur Nico seul."""
+        # Le bot n'est pas public : tout autre compte est ignoré (sprint 40).
+        only_nico = filters.User(user_id=config.allowed_user_id)
+
+        # Messages texte
+        self.app.add_handler(
+            MessageHandler(only_nico & filters.TEXT & ~filters.COMMAND, self._handle_message)
+        )
+
+        # Photos envoyées par l'utilisateur
+        self.app.add_handler(
+            MessageHandler(only_nico & filters.PHOTO, self._handle_photo)
+        )
+
+        # Métacommandes : une méthode _cmd_<nom> par entrée de COMMANDS.
+        for name in meta_commands.COMMANDS:
+            self.app.add_handler(
+                CommandHandler(name, getattr(self, f"_cmd_{name}"), filters=only_nico)
+            )
+
+    async def _post_init(self, application):
+        """
+        post_init PTB : boucle mémorisée, commandes déclarées à Telegram,
+        annonce du retour si le démarrage fait suite à un /reboot.
+        """
+        await self._remember_loop(application)
+        await application.bot.set_my_commands(
+            [BotCommand(name, description) for name, description in meta_commands.COMMANDS.items()]
+        )
+        if REBOOT_MARKER.exists():
+            await application.bot.send_message(
+                chat_id=config.allowed_user_id, text=meta_commands.BACK_TEXT,
+            )
+            REBOOT_MARKER.unlink()
+            log.info("meta_reboot back")
 
     async def _remember_loop(self, application):
         """post_init PTB : mémorise la boucle qui fait tourner le bot."""
@@ -195,6 +238,83 @@ class TelegramInterface(BaseInterface):
         await self.send(chat_id, result)
 
     # =========================================================
+    # MÉTACOMMANDES (sprint 40)
+    # =========================================================
+    # Hors kernel et hors historique : réponse livrée par _deliver, sans
+    # toucher last_reply (/again ne renvoie jamais une sortie de commande).
+
+    async def _cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=help")
+        await self._deliver(update.effective_chat.id, meta_commands.help_text())
+
+    async def _cmd_board(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=board")
+        await self._deliver(update.effective_chat.id, meta_commands.board_text())
+
+    async def _cmd_again(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=again")
+        chat_id = update.effective_chat.id
+        await self._deliver(chat_id, self.last_reply.get(chat_id, meta_commands.NOTHING_TO_RESEND))
+
+    async def _cmd_reboot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Réponse, marqueur, arrêt du polling. bot.py sort ensuite en code 1
+        et systemd (Restart=on-failure) relance le service.
+        """
+        log.info("meta_command name=reboot")
+        await self._deliver(update.effective_chat.id, meta_commands.REBOOT_TEXT)
+        REBOOT_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        REBOOT_MARKER.touch()
+        self.restart_requested = True
+        log.info("meta_reboot requested")
+        self.app.stop_running()
+
+    # Consultations (tronçon 02) : lectures bloquantes courtes via to_thread.
+
+    async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=status")
+        status = await asyncio.to_thread(meta_commands.read_status, self.bridge)
+        await self._deliver(update.effective_chat.id, meta_commands.status_text(status))
+
+    async def _cmd_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=logs")
+        n = meta_commands.logs_count(context.args)
+        lines = await asyncio.to_thread(meta_commands.journal_lines, n)
+        await self._deliver(update.effective_chat.id, meta_commands.logs_text(lines))
+
+    async def _cmd_errors(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=errors")
+        lines = await asyncio.to_thread(meta_commands.journal_lines, meta_commands.JOURNAL_SCAN)
+        await self._deliver(update.effective_chat.id, meta_commands.errors_text(lines))
+
+    async def _cmd_llm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=llm")
+        lines = await asyncio.to_thread(meta_commands.journal_lines, meta_commands.JOURNAL_SCAN)
+        await self._deliver(update.effective_chat.id, meta_commands.llm_text(lines))
+
+    async def _cmd_intents(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=intents")
+        data = await asyncio.to_thread(meta_commands.read_intents)
+        await self._deliver(update.effective_chat.id, meta_commands.intents_text(data))
+
+    async def _cmd_parties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=parties")
+        games = await asyncio.to_thread(self.bridge.load_chess_games)
+        await self._deliver(update.effective_chat.id, meta_commands.parties_text(games))
+
+    async def _cmd_oublie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Marqueur de coupure : la clé est str(chat_id), la même que celle
+        de l'historique lu par llm_router (metadata chat_id).
+        """
+        log.info("meta_command name=oublie")
+        chat_id = update.effective_chat.id
+        key = str(chat_id)
+        await asyncio.to_thread(write_conversation_reset, key)
+        log.info("meta_oublie key=%s", key)
+        await self._deliver(chat_id, meta_commands.FORGET_TEXT)
+
+    # =========================================================
     # SIGNAL D'ATTENTE
     # =========================================================
 
@@ -274,6 +394,7 @@ class TelegramInterface(BaseInterface):
                 await self._deliver(chat_id, UNDELIVERED_NOTICE)
                 await self._deliver(chat_id, pending)
             await self._deliver(chat_id, message)
+            self.last_reply[chat_id] = message
         except NetworkError as e:
             log.error(
                 "telegram send gave up after %d attempts: %s, chat_id=%s — réponse mise en attente",

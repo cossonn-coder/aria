@@ -260,6 +260,16 @@ class MempalaceBridge:
         docs = result.get("documents") or []
         metas = result.get("metadatas") or []
 
+        # Marqueurs /oublie (type conversation_reset, sprint 40) : seul le
+        # plus récent compte ; les tours qui le précèdent sont ignorés, et
+        # les marqueurs eux-mêmes ne sont jamais rendus comme des tours.
+        resets = [
+            (meta or {}).get("timestamp", "")
+            for meta in metas
+            if (meta or {}).get("type") == "conversation_reset"
+        ]
+        cutoff = max(resets, default=None)
+
         turns = [
             {
                 "role": (meta or {}).get("role", ""),
@@ -267,6 +277,8 @@ class MempalaceBridge:
                 "timestamp": (meta or {}).get("timestamp", ""),
             }
             for doc, meta in zip(docs, metas)
+            if (meta or {}).get("type") != "conversation_reset"
+            and (cutoff is None or (meta or {}).get("timestamp", "") > cutoff)
         ]
         turns.sort(key=lambda t: t["timestamp"])
         return turns[-n:]
@@ -302,3 +314,26 @@ class MempalaceBridge:
         games = [{**(meta or {}), "id": doc_id} for doc_id, meta in zip(ids, metas)]
         games.sort(key=lambda g: g.get("timestamp", ""))
         return games
+
+    def count_by_wing(self) -> dict[str, int]:
+        """
+        Nombre d'entrées par wing connue (sprint 40, /status). Une requête
+        par wing, sans documents ni métadonnées (include=[]) : seuls les ids
+        reviennent.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata.
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for wing counts; "
+                "inject at construction"
+            )
+
+        from config import config as _config
+
+        counts = {}
+        for wing in ("aria_episodic", "aria_semantic", "aria_classifier", "aria_conversation"):
+            result = self._get_by_metadata(_config.mempalace_path, {"wing": wing}, include=[]) or {}
+            counts[wing] = len(result.get("ids") or [])
+        return counts

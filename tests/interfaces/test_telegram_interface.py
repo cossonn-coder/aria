@@ -166,3 +166,110 @@ async def test_submit_text_from_thread_goes_through_kernel_and_send(monkeypatch)
 def test_submit_text_without_loop_returns_false():
     iface = TelegramInterface(kernel=MagicMock(), token="x")
     assert iface.submit_text("1. e4 *") is False
+
+
+# ── Sprint 40 (#131) : filtre utilisateur et métacommandes ──────────────────
+
+def _update_from(user_id, text="bonjour"):
+    """Update Telegram minimal : message texte privé de user_id."""
+    from datetime import datetime
+    from telegram import Chat, Message, Update, User
+    user = User(id=user_id, first_name="x", is_bot=False)
+    message = Message(
+        message_id=1, date=datetime.now(), chat=Chat(id=user_id, type="private"),
+        from_user=user, text=text,
+    )
+    return Update(update_id=1, message=message)
+
+
+def _command_update(chat_id=42):
+    update = MagicMock()
+    update.effective_chat.id = chat_id
+    return update
+
+
+def test_text_from_other_user_is_not_handled(monkeypatch):
+    # Seul ALLOWED_USER_ID atteint _handle_message (donc le kernel).
+    monkeypatch.setattr(telegram_interface.config, "allowed_user_id", 777)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface._add_handlers()
+    text_handler = iface.app.add_handler.call_args_list[0].args[0]
+
+    assert not text_handler.check_update(_update_from(999))
+    assert text_handler.check_update(_update_from(777))
+
+
+@pytest.mark.asyncio
+async def test_help_command_lists_commands():
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_help(_command_update(), None)
+
+    text = iface.app.bot.send_message.await_args.kwargs["text"]
+    for name in telegram_interface.meta_commands.COMMANDS:
+        assert f"/{name}" in text
+
+
+@pytest.mark.asyncio
+async def test_reboot_writes_marker_and_stops(monkeypatch, tmp_path):
+    marker = tmp_path / "aria" / "reboot_pending"
+    monkeypatch.setattr(telegram_interface, "REBOOT_MARKER", marker)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_reboot(_command_update(), None)
+
+    assert marker.exists()
+    assert iface.restart_requested is True
+    iface.app.stop_running.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_post_init_with_marker_announces_back(monkeypatch, tmp_path):
+    marker = tmp_path / "reboot_pending"
+    marker.touch()
+    monkeypatch.setattr(telegram_interface, "REBOOT_MARKER", marker)
+    monkeypatch.setattr(telegram_interface.config, "allowed_user_id", 777)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    application = MagicMock()
+    application.bot.set_my_commands = AsyncMock()
+    application.bot.send_message = AsyncMock()
+
+    await iface._post_init(application)
+
+    application.bot.send_message.assert_awaited_once_with(chat_id=777, text="✅ De retour.")
+    assert not marker.exists()
+    application.bot.set_my_commands.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_again_resends_last_kernel_reply():
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    sent = []
+    iface.app.bot.send_message = AsyncMock(side_effect=lambda **kw: sent.append(kw["text"]))
+
+    await iface.send(42, "réponse du kernel")
+    await iface._cmd_help(_command_update(), None)
+    await iface._cmd_again(_command_update(), None)
+
+    assert sent[-1] == "réponse du kernel"
+
+
+@pytest.mark.asyncio
+async def test_oublie_writes_reset_marker_with_chat_key(monkeypatch):
+    written = []
+    monkeypatch.setattr(telegram_interface, "write_conversation_reset", written.append)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_oublie(_command_update(chat_id=42), None)
+
+    assert written == ["42"]
+    text = iface.app.bot.send_message.await_args.kwargs["text"]
+    assert text == telegram_interface.meta_commands.FORGET_TEXT

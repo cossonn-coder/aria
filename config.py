@@ -83,6 +83,8 @@ class Config:
     maia_models_dir: str = "/home/nico/.cache/aria-maia"
     # Port du serveur de l'échiquier ARIA (sprint 35), vérifié libre sur la VM.
     board_port: int = 5002
+    # URL de l'échiquier renvoyée par /board (sprint 40).
+    board_url: str = "http://192.168.1.124:5002"
 
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")
@@ -100,6 +102,7 @@ class Config:
         self.tavily_api_key = os.getenv("TAVILY_API_KEY", "")
         # Nom sans S : c'est celui du .env de Nico.
         self.pollination_api_key = os.getenv("POLLINATION_API_KEY", "")
+        self.board_url = os.getenv("BOARD_URL", self.board_url)
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.soul_path = str(BASE_DIR / "soul.md")
         self.user_path = str(BASE_DIR / "user.md")

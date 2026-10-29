@@ -150,11 +150,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 39 clos (tag `sprint-39`, courbe du meilleur coup, mats, jeu libre, export et envoi
-PGN, liste des coups, précision, navigation flèches / molette ; voir `docs/sprint39/00_etat.md`).
-Prochain : **sprint 40**, cible choisie : métacommandes Telegram (`/reboot`, `/status`…, #131).
-Kickoff : `docs/sprint40/context_kickoff_sprint_40.md`.
-Prochaine étape : `/conception sprint 40`.
+Sprint 40 clos (tag `sprint-40`, métacommandes Telegram `/help`, `/reboot`, `/status`,
+`/logs`, `/errors`, `/llm`, `/intents`, `/parties`, `/board`, `/again`, `/oublie`, bot filtré
+sur `ALLOWED_USER_ID` ; voir `docs/sprint40/00_etat.md`).
+Prochain : **sprint 41**, cible à choisir par Nico.
+Kickoff : `docs/sprint41/context_kickoff_sprint_41.md`.
+Prochaine étape : `/conception sprint 41`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

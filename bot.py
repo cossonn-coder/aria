@@ -14,6 +14,8 @@ configure_root(level=os.getenv("ARIA_LOG_LEVEL", "INFO"))
 from core.kernel import AriaKernel
 from interfaces.board_interface import start_board_server
 from interfaces.telegram_interface import TelegramInterface
+from memory.mempalace_bridge import MempalaceBridge
+from memory.mempalace_store import get_by_metadata, search
  
  
 def main():
@@ -25,6 +27,8 @@ def main():
     telegram = TelegramInterface(
         kernel,
         token=os.environ["ARIA_BOT_TOKEN"],
+        # Bridge dédié aux métacommandes /status et /parties (sprint 40).
+        bridge=MempalaceBridge(store=search, get_by_metadata=get_by_metadata),
     )
     log.info("Telegram interface prête")
     # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
@@ -38,9 +42,10 @@ def main():
     # (relecture des pages swappées) et systemd finissait par SIGKILL.
     # Rien n'est perdu : PTB est déjà arrêté proprement et le sqlite de
     # chromadb est validé à chaque écriture. On vide seulement les logs.
-    log.info("ARIA arrêt")
+    # /reboot (sprint 40) : code 1 → systemd (Restart=on-failure) relance.
+    log.info("ARIA arrêt restart=%s", telegram.restart_requested)
     logging.shutdown()
-    os._exit(0)
+    os._exit(1 if telegram.restart_requested else 0)
  
  
 if __name__ == "__main__":
