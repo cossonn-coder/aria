@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 12-13 figés (2026-10-29). Tronçons 01-08, 10 et 12 faits.
+**Phase** : CLOS (2026-10-29, runs live 09, 11, 13 OK de Nico, tag `sprint-39`).
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -179,7 +179,7 @@ Recos de conception (Claude, figées avec l'OK) :
   vérifié VM sous node avec DOM simulé (jeu libre, variante noire / blanche / en fin de partie,
   clics) ; clic sur un coup de variante = `goTo(cursor, line)` (paramètre ajouté à `goTo`)
   au lieu de `goTo` + rejeu + `newPosition`, pour n'envoyer qu'un seul `/position`)
-- 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
+- 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ✅ 2026-10-29
 - 10 précision du coup et totale : `line_accuracy` + `POST /accuracy`, ligne sous l'échiquier
   (`10_precision.md`) ✅ (377 tests verts ; `line_accuracy` rebâtit des demi-coups minimaux
   (`SimpleNamespace`, qualité `"best"` / `"other"`) lus par `_move_accuracy` / `_effective_loss` /
@@ -187,22 +187,22 @@ Recos de conception (Claude, figées avec l'OK) :
   `refreshGame`, cache `accuracies` clé = corps JSON ; logique vérifiée VM sous node avec stubs
   (jeu libre, partie chargée au curseur et en fin) ; coup décrit au-delà du préfixe évalué →
   pas de précision du coup, totaux sur les coups évalués)
-- 11 run live de la précision, Nico (`11_run_live.md`) ⏳
+- 11 run live de la précision, Nico (`11_run_live.md`) ✅ 2026-10-29
 - 12 navigation aux flèches et à la molette, pile des coups devant (`12_navigation.md`) ✅ (377 tests verts ;
   seul `index.html` ; `variant` et `game.cursor` supprimés, déduits de la ligne affichée : helpers
   `displayedLine()` / `lineFens()` / `anchor()` / `inVariant()` / `gameCursor()` (ancien sens du curseur),
   `stepBack()` / `stepForward()` ; `curve()` → `curveFens()` ; vérifié VM sous node avec DOM simulé
   (jeu libre ← ← →, variante puis ← ×5 / → ×5, coup égal / différent du sommet, molette, `SELECT`, ◀) ;
   export en partie chargée : toute la partie seulement sans variante, sinon la ligne affichée entière)
-- 13 run live de la navigation, Nico (`13_run_live.md`) ⏳
+- 13 run live de la navigation, Nico (`13_run_live.md`) ✅ 2026-10-29
 
 ## Dettes
 
-Visées : #127, #128, #129, #130. Aucune autre touchée.
+#127, #128, #129, #130 résolues. Nouvelle : #131 (métacommandes Telegram, demande de Nico
+à la clôture, cible sprint 40).
 Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écriture
 `chess_router` → `write_chess_game` inchangé).
 
 ## §REPRISE
 
-Tronçons 01-08, 10 et 12 faits. Prochaine étape : runs live 09, 11 et 13 par Nico (redémarrer `aria.service`), à enchaîner. Clôture (merge, tag `sprint-39`) après.
-Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
+Sprint clos. Suite : `docs/sprint40/context_kickoff_sprint_40.md`, `/conception sprint 40`.
