@@ -561,8 +561,7 @@ class ChessExecutionRouter(BaseRouter):
         message  = str(payload.get("content") or "")
         metadata = payload.get("metadata", {})
 
-        analysis = analyze(message, message, config.chess_username, config.stockfish_path,
-                           config.maia_models_dir)
+        analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir)
         if analysis is None:
             log.warning("chess_router PGN unreadable")
             return self.llm_execution_router.execute({

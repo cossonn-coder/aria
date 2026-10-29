@@ -43,6 +43,8 @@ _PV_DISPLAY = 6
 # Options Stockfish de toute l'analyse (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
 
+# Nom de Nico dans les en-têtes White / Black (sprint 39 : plus de pseudo d'échecs).
+NICO_NAME = "Nico"
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
 
 
@@ -120,9 +122,9 @@ def parse_pgn(text: str) -> chess.pgn.Game | None:
     return game
 
 
-def detect_color(headers, message: str, username: str) -> tuple[str, str]:
-    """Couleur de Nico : en-tête PGN, puis message (« je joue les noirs »), puis blancs."""
-    name = username.lower()
+def detect_color(headers, message: str) -> tuple[str, str]:
+    """Couleur de Nico : en-tête PGN (« Nico »), puis message (« je joue les noirs »), puis blancs."""
+    name = NICO_NAME.lower()
     if headers.get("White", "").lower() == name:
         return "white", "header"
     if headers.get("Black", "").lower() == name:
@@ -428,7 +430,7 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     return sorted(selected, key=lambda c: c.ply.ply)
 
 
-def analyze(text: str, message: str, username: str, engine_path: str,
+def analyze(text: str, message: str, engine_path: str,
             maia_models_dir: str | None = None) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
 
@@ -440,7 +442,7 @@ def analyze(text: str, message: str, username: str, engine_path: str,
     if game is None:
         return None
     headers = dict(game.headers)
-    nico_color, source = detect_color(headers, message, username)
+    nico_color, source = detect_color(headers, message)
     plies = analyze_game(game, nico_color, engine_path)
     if maia_models_dir is not None:
         # Maia est une dépendance lourde optionnelle : son échec laisse

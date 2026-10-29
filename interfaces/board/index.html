@@ -111,8 +111,8 @@ let variant = false;
 const evals = new Map();
 const evalAsked = new Set();
 let evalChain = Promise.resolve();
-// Pseudo d'échecs de Nico, remplacé par le serveur au service de la page (export PGN).
-const CHESS_USERNAME = "__CHESS_USERNAME__";
+// Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
+const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
 const STORAGE_KEY = "aria-board";
 
@@ -687,14 +687,14 @@ $("show-forced").addEventListener("change", drawShapes);
 $("show-best").addEventListener("change", () => { drawShapes(); refreshGame(); });
 $("show-trap").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
-// « Je joue » écrit le pseudo dans le champ du camp choisi et l'ôte de l'autre ; « aucun »
+// « Je joue » écrit le nom de Nico dans le champ du camp choisi et l'ôte de l'autre ; « aucun »
 // ne touche pas aux noms.
 $("playing").addEventListener("change", () => {
   const side = $("playing").value;
   if (side) {
     const other = side === "white" ? "name-black" : "name-white";
-    $(`name-${side}`).value = CHESS_USERNAME;
-    if ($(other).value === CHESS_USERNAME) $(other).value = "";
+    $(`name-${side}`).value = NICO_NAME;
+    if ($(other).value === NICO_NAME) $(other).value = "";
   }
   saveState();
 });

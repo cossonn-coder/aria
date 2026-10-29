@@ -186,9 +186,7 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
             _load_maia_in_background()
-            # Sprint 39 : pseudo d'échecs de Nico injecté pour l'export PGN de la page.
-            page = _INDEX.read_text(encoding="utf-8").replace("__CHESS_USERNAME__", config.chess_username)
-            self._send(200, page.encode(), "text/html; charset=utf-8")
+            self._send(200, _INDEX.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/state":
             self._json(self.server.worker.state())
         else:

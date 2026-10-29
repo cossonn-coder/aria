@@ -79,8 +79,6 @@ class Config:
     # ── Coach d'échecs (sprint 26) ────────────────────────────────────────────
     # Chemin absolu : /usr/games n'est pas dans le PATH du service systemd.
     stockfish_path: str = "/usr/games/stockfish"
-    # Pseudo Chess.com de Nico, comparé aux en-têtes White/Black du PGN.
-    chess_username: str = "staroflexeur"
     # Poids Maia-2 (rapid_model.pt + config.yaml), hors Nextcloud : 280 Mo (sprint 28).
     maia_models_dir: str = "/home/nico/.cache/aria-maia"
     # Port du serveur de l'échiquier ARIA (sprint 35), vérifié libre sur la VM.
@@ -102,8 +100,6 @@ class Config:
         self.tavily_api_key = os.getenv("TAVILY_API_KEY", "")
         # Nom sans S : c'est celui du .env de Nico.
         self.pollination_api_key = os.getenv("POLLINATION_API_KEY", "")
-        # Pseudo d'échecs surchargeable par le .env (défaut : celui du champ).
-        self.chess_username = os.getenv("CHESS_USERNAME", self.chess_username)
         self.mempalace_path = "/home/nico/.mempalace/palace"
         self.soul_path = str(BASE_DIR / "soul.md")
         self.user_path = str(BASE_DIR / "user.md")

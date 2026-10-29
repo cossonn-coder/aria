@@ -9,7 +9,6 @@ import urllib.request
 import chess
 import pytest
 
-from config import config
 from interfaces.board_interface import BoardWorker, make_server
 
 _AFTER_E4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
@@ -73,9 +72,9 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert "show-trap" in page and "show-strategy" in page
         # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
         assert 'id="pgn"' in page and 'id="graph"' in page
-        # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue », pseudo injecté.
+        # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue » ; tronçon 07 : plus de pseudo injecté.
         assert 'id="export"' in page and 'id="send"' in page and 'id="playing"' in page
-        assert f'"{config.chess_username}"' in page and "__CHESS_USERNAME__" not in page
+        assert 'const NICO_NAME = "Nico"' in page and "USERNAME" not in page
         # Sprint 39, tronçon 05 : champs des noms des joueurs.
         assert 'id="name-white"' in page and 'id="name-black"' in page
     finally:

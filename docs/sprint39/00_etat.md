@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 07-09 figés (2026-10-29), prêts pour `/sprint-auto`. Tronçons 01-06 faits.
+**Phase** : B — tronçons 07-09 figés (2026-10-29). Tronçons 01-07 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -149,7 +149,10 @@ Recos de conception (Claude, figées avec l'OK) :
   10 scénarios OK ; trait bleu en fin de variante accepté « pour le moment ».
   Hors tronçon : `91271c5` pseudo surchargeable par `CHESS_USERNAME` (.env = TardoScoped).
 - 07 « moi » au lieu d'un pseudo : config, `detect_color` / `analyze`, `chess_router`,
-  page et serveur de page (`07_moi_sans_pseudo.md`) ⏳
+  page et serveur de page (`07_moi_sans_pseudo.md`) ✅ (375 tests verts ; constante
+  `NICO_NAME = "Nico"` dans `analysis.py` et la page ; page servie telle quelle
+  (`read_bytes`) ; ligne `CHESS_USERNAME` ôtée du `.env` ; test de la page : `"USERNAME"`
+  absent (au lieu de `__CHESS_USERNAME__`, pour que le grep du critère de fin reste vide))
 - 08 page : « Nouvelle partie » vide la zone PGN, liste des coups sous la courbe,
   variante entre parenthèses, coups cliquables (`08_liste_coups.md`) ⏳
 - 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
@@ -162,6 +165,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-06 faits, 07-09 figés. Prochaine étape : `/sprint-auto sprint 39`
-(tronçons 07 puis 08), puis run live 09 par Nico. Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-07 faits, 08-09 figés. Prochaine étape : `/sprint-auto sprint 39`
+(tronçon 08), puis run live 09 par Nico (redémarrer `aria.service` : `.env` modifié). Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
