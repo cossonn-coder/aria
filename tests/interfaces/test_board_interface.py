@@ -77,6 +77,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'const NICO_NAME = "Nico"' in page and "USERNAME" not in page
         # Sprint 39, tronçon 05 : champs des noms des joueurs.
         assert 'id="name-white"' in page and 'id="name-black"' in page
+        # Tronçon 08 : liste des coups sous la courbe.
+        assert 'id="moves"' in page
     finally:
         server.shutdown()
         server.server_close()

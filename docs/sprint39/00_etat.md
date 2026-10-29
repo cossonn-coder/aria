@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 07-09 figés (2026-10-29). Tronçons 01-07 faits.
+**Phase** : B — tronçons 07-09 figés (2026-10-29). Tronçons 01-08 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -154,7 +154,11 @@ Recos de conception (Claude, figées avec l'OK) :
   (`read_bytes`) ; ligne `CHESS_USERNAME` ôtée du `.env` ; test de la page : `"USERNAME"`
   absent (au lieu de `__CHESS_USERNAME__`, pour que le grep du critère de fin reste vide))
 - 08 page : « Nouvelle partie » vide la zone PGN, liste des coups sous la courbe,
-  variante entre parenthèses, coups cliquables (`08_liste_coups.md`) ⏳
+  variante entre parenthèses, coups cliquables (`08_liste_coups.md`) ✅ (375 tests verts ;
+  seul `index.html` + assertion `id="moves"` ; `renderMoves()` appelé par `refreshGame()` ;
+  vérifié VM sous node avec DOM simulé (jeu libre, variante noire / blanche / en fin de partie,
+  clics) ; clic sur un coup de variante = `goTo(cursor, line)` (paramètre ajouté à `goTo`)
+  au lieu de `goTo` + rejeu + `newPosition`, pour n'envoyer qu'un seul `/position`)
 - 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
 
 ## Dettes
@@ -165,6 +169,5 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-07 faits, 08-09 figés. Prochaine étape : `/sprint-auto sprint 39`
-(tronçon 08), puis run live 09 par Nico (redémarrer `aria.service` : `.env` modifié). Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-08 faits, 09 figé. Prochaine étape : run live 09 par Nico (redémarrer `aria.service` : `.env` modifié). Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

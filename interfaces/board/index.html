@@ -38,6 +38,9 @@
   #nav { display: flex; gap: 6px; }
   #played { margin-top: 8px; font-size: 1.1em; }
   #graph { display: block; margin-top: 12px; cursor: pointer; }
+  /* Liste des coups sous la courbe (tronçon 08), même largeur ; coup de la position affichée surligné. */
+  #moves { width: 560px; margin-top: 8px; line-height: 1.6; }
+  #moves .current { background: #6a4a1c; border-radius: 3px; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
 </style>
@@ -48,6 +51,7 @@
     <div id="board"></div>
     <div id="played"></div>
     <svg id="graph" width="560" height="200"></svg>
+    <div id="moves"></div>
     <div id="analysis">
       <div id="status"></div>
       <div id="replies"></div>
@@ -381,14 +385,15 @@ function playedOnBoard(move) {
   refreshGame();
 }
 
-// Va à la position n de la partie chargée (quitte la variante) : rejoue depuis le départ
-// pour que chess.history() soit la suite de la partie (rationnement du bleu).
-function goTo(n) {
+// Va à la position n de la partie chargée : rejoue depuis le départ pour que chess.history()
+// soit la suite de la partie (rationnement du bleu), puis les coups line d'une variante
+// (tronçon 08, clic dans la liste) ; sans line, quitte la variante.
+function goTo(n, line = []) {
   if (!game) return;
   game.cursor = Math.max(0, Math.min(n, game.sans.length));
-  variant = false;
+  variant = line.length > 0;
   chess.load(game.start);
-  for (const san of game.sans.slice(0, game.cursor)) chess.move(san);
+  for (const san of [...game.sans.slice(0, game.cursor), ...line]) chess.move(san);
   refreshGame();
   newPosition();
 }
@@ -406,6 +411,51 @@ function refreshGame() {
   $("back").style.display = variant ? "" : "none";
   $("played").textContent = playedText();
   drawGraph();
+  renderMoves();
+}
+
+// Liste des coups sous la courbe (tronçon 08), numérotée façon PGN : partie chargée, avec la
+// variante en cours entre parenthèses juste après le coup de la partie qu'elle remplace (en
+// fin de liste si elle part de la fin de partie) ; sinon la ligne du jeu libre. Un coup noir
+// en tête de liste ou de parenthèse, ou juste après elle, porte « N… ». Coup menant à la
+// position affichée surligné ; coups cliquables seulement en partie chargée.
+function renderMoves() {
+  const box = $("moves");
+  box.replaceChildren();
+  let glued = true;
+  // Un coup joué depuis fen ; numéro des noirs seulement si force.
+  const add = (fen, san, force, current, onClick) => {
+    const [, turn, , , , number] = fen.split(" ");
+    if (!glued) box.append(" ");
+    if (turn === "w" || force) box.append(`${number}${turn === "w" ? "." : "…"} `);
+    const span = document.createElement("span");
+    span.textContent = san;
+    if (onClick) { span.className = "move"; span.addEventListener("click", onClick); }
+    if (current) span.classList.add("current");
+    box.append(span);
+    glued = false;
+  };
+  if (!game) {
+    const history = chess.history({ verbose: true });
+    history.forEach((move, i) => add(move.before, move.san, i === 0, i === history.length - 1, null));
+    return;
+  }
+  const line = variant ? chess.history().slice(game.cursor) : [];
+  const fens = variantFens();
+  const cursor = game.cursor;
+  const addVariant = () => {
+    box.append(glued ? "(" : " (");
+    glued = true;
+    line.forEach((san, k) => add(fens[k], san, k === 0, k === line.length - 1,
+                                 () => goTo(cursor, line.slice(0, k + 1))));
+    box.append(")");
+  };
+  game.sans.forEach((san, i) => {
+    add(game.fens[i], san, i === 0 || (line.length > 0 && i === cursor + 1),
+        !variant && i === cursor - 1, () => goTo(i + 1));
+    if (line.length && i === cursor) addVariant();
+  });
+  if (line.length && cursor === game.sans.length) addVariant();
 }
 
 // Positions de la courbe (sprint 39) : celles de la partie chargée (variante comprise),
@@ -640,6 +690,7 @@ $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove
 $("new").addEventListener("click", () => {
   // Meilleur coup masqué en début de partie (retour live sprint 39).
   $("show-best").checked = false;
+  $("pgn").value = "";
   chess.reset();
   game = null;
   variant = false;
