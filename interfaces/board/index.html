@@ -106,10 +106,12 @@ const saved = { explosive: new Map(), trap: new Map(), strategy: new Map() };
 // Flèche bleue rationnée : FEN → camp au trait ("w" / "b") des positions où elle a été dessinée.
 const blueDrawn = new Map();
 // Partie chargée depuis un PGN (sprint 38) : FEN de départ, coups SAN, Map FEN → coup joué
-// (mêmes clés que saved), curseur (demi-coups joués depuis le début) et courbe wins du serveur.
-// variant : un coup hors partie a été joué à la main depuis la position du curseur.
+// (mêmes clés que saved) et courbe wins du serveur.
 let game = null;
-let variant = false;
+// Coups « devant » (tronçon 12) : SAN défaits par ← (sommet = dernier élément = coup suivant).
+// Ligne affichée = chess.history() puis ahead dans l'ordre de rejeu ; position affichée = fin
+// de chess.history(). En partie chargée, la variante part de l'ancrage (anchor()).
+const ahead = [];
 // Valeurs par position (sprint 39) : Map FEN → {win, mate, best} (% de gain des blancs, mat
 // signé côté blancs, meilleur coup SAN) ; partie chargée depuis /game, jeu libre par /eval.
 // evalAsked : FEN déjà demandées à /eval ; evalChain : une requête /eval à la fois.
@@ -380,24 +382,72 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
-// Coup joué à la main : le coup suivant de la partie fait avancer le curseur, tout autre
-// coup ouvre (ou prolonge) une variante.
+// Ligne affichée (tronçon 12) : coups joués jusqu'à la position affichée, puis coups devant.
+function displayedLine() {
+  return [...chess.history(), ...[...ahead].reverse()];
+}
+
+// Positions de la ligne affichée, du départ à la fin des coups devant.
+function lineFens() {
+  const history = chess.history({ verbose: true });
+  const fens = history.length ? [history[0].before, ...history.map((move) => move.after)] : [chess.fen()];
+  const board = new Chess(chess.fen());
+  for (const san of [...ahead].reverse()) { board.move(san); fens.push(board.fen()); }
+  return fens;
+}
+
+// Ancrage de la variante en partie chargée : premier indice où la ligne affichée s'écarte de
+// la partie (au-delà de sa fin compris) ; null sans partie ou sans écart.
+function anchor() {
+  if (!game) return null;
+  const i = displayedLine().findIndex((san, k) => san !== game.sans[k]);
+  return i === -1 ? null : i;
+}
+
+// Position affichée au-delà de l'ancrage : on est dans la variante (sinon dans la partie).
+function inVariant() {
+  const a = anchor();
+  return a !== null && chess.history().length > a;
+}
+
+// Position de la partie : position affichée dans la partie, ancrage dans la variante.
+function gameCursor() {
+  return inVariant() ? anchor() : chess.history().length;
+}
+
+// Coup joué à la main : égal au coup suivant de la pile, il la dépile (comme →) ; sinon la
+// suite est coupée. Partie, variante et ancrage se déduisent ensuite de la ligne affichée.
 function playedOnBoard(move) {
-  if (!game) return;
-  if (!variant && move.san === game.sans[game.cursor]) game.cursor++;
-  else variant = true;
+  if (ahead.length && ahead[ahead.length - 1] === move.san) ahead.pop();
+  else ahead.length = 0;
   refreshGame();
+}
+
+// ← : défait le dernier coup et l'empile devant (rien au départ de la ligne).
+function stepBack() {
+  if (!chess.history().length) return;
+  ahead.push(chess.undo().san);
+  newPosition();
+}
+
+// → : rejoue le coup suivant de la pile ; pile vide, en partie chargée sur la ligne de la
+// partie, joue le coup suivant de la partie (comme ▶).
+function stepForward() {
+  const shown = chess.history().length;
+  if (ahead.length) chess.move(ahead.pop());
+  else if (game && anchor() === null && shown < game.sans.length) chess.move(game.sans[shown]);
+  else return;
+  newPosition();
 }
 
 // Va à la position n de la partie chargée : rejoue depuis le départ pour que chess.history()
 // soit la suite de la partie (rationnement du bleu), puis les coups line d'une variante
-// (tronçon 08, clic dans la liste) ; sans line, quitte la variante.
+// (tronçon 08, clic dans la liste) ; sans line, quitte la variante. Vide les coups devant.
 function goTo(n, line = []) {
   if (!game) return;
-  game.cursor = Math.max(0, Math.min(n, game.sans.length));
-  variant = line.length > 0;
+  ahead.length = 0;
   chess.load(game.start);
-  for (const san of [...game.sans.slice(0, game.cursor), ...line]) chess.move(san);
+  for (const san of [...game.sans.slice(0, Math.max(0, Math.min(n, game.sans.length))), ...line]) chess.move(san);
   refreshGame();
   newPosition();
 }
@@ -405,14 +455,15 @@ function goTo(n, line = []) {
 // Coup de la partie chargée joué depuis la position affichée (coup verbose chess.js),
 // null hors partie, en variante ou en fin de partie.
 function playedMove() {
-  if (!game || variant || game.cursor >= game.sans.length) return null;
-  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[game.cursor]);
+  const shown = chess.history().length;
+  if (!game || inVariant() || shown >= game.sans.length) return null;
+  return chess.moves({ verbose: true }).find((move) => move.san === game.sans[shown]);
 }
 
 // Contrôles de navigation, coup joué sous l'échiquier et courbe selon l'état de la partie chargée.
 function refreshGame() {
   for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
-  $("back").style.display = variant ? "" : "none";
+  $("back").style.display = anchor() !== null ? "" : "none";
   const acc = accuracy();
   const pct = (value) => (value === null ? "—" : `${Math.round(value)} %`);
   $("played").textContent = playedText() + (acc && acc.move !== null ? ` — précision ${pct(acc.move)}` : "");
@@ -423,9 +474,9 @@ function refreshGame() {
 
 // Liste des coups sous la courbe (tronçon 08), numérotée façon PGN : partie chargée, avec la
 // variante en cours entre parenthèses juste après le coup de la partie qu'elle remplace (en
-// fin de liste si elle part de la fin de partie) ; sinon la ligne du jeu libre. Un coup noir
-// en tête de liste ou de parenthèse, ou juste après elle, porte « N… ». Coup menant à la
-// position affichée surligné ; coups cliquables seulement en partie chargée.
+// fin de liste si elle part de la fin de partie) ; sinon la ligne du jeu libre (coups devant
+// compris). Un coup noir en tête de liste ou de parenthèse, ou juste après elle, porte « N… ».
+// Coup menant à la position affichée surligné ; coups cliquables seulement en partie chargée.
 function renderMoves() {
   const box = $("moves");
   box.replaceChildren();
@@ -450,45 +501,43 @@ function renderMoves() {
     box.append(span);
     glued = false;
   };
+  const shown = chess.history().length;
   if (!game) {
-    const history = chess.history({ verbose: true });
-    history.forEach((move, i) => add(move.before, move.san, i === 0, i === history.length - 1, null));
+    const fens = lineFens();
+    displayedLine().forEach((san, i) => add(fens[i], san, i === 0, i === shown - 1, null));
     return;
   }
-  const line = variant ? chess.history().slice(game.cursor) : [];
+  const start = anchor();
+  const line = start === null ? [] : displayedLine().slice(start);
   const fens = variantFens();
-  const cursor = game.cursor;
+  const variant = inVariant();
   const addVariant = () => {
     box.append(glued ? "(" : " (");
     glued = true;
-    line.forEach((san, k) => add(fens[k], san, k === 0, k === line.length - 1,
-                                 () => goTo(cursor, line.slice(0, k + 1))));
+    line.forEach((san, k) => add(fens[k], san, k === 0, variant && start + k === shown - 1,
+                                 () => goTo(start, line.slice(0, k + 1))));
     box.append(")");
   };
   game.sans.forEach((san, i) => {
-    add(game.fens[i], san, i === 0 || (line.length > 0 && i === cursor + 1),
-        !variant && i === cursor - 1, () => goTo(i + 1));
-    if (line.length && i === cursor) addVariant();
+    add(game.fens[i], san, i === 0 || (line.length > 0 && i === start + 1),
+        !variant && i === shown - 1, () => goTo(i + 1));
+    if (line.length && i === start) addVariant();
   });
-  if (line.length && cursor === game.sans.length) addVariant();
+  if (line.length && start === game.sans.length) addVariant();
 }
 
-// Positions de la courbe (sprint 39) : celles de la partie chargée (variante comprise),
-// sinon la ligne de l'échiquier depuis le départ ; cursor = position marquée d'un trait.
-function curve() {
-  if (game) return { fens: game.fens, cursor: game.cursor };
-  const history = chess.history({ verbose: true });
-  const fens = history.length ? [history[0].before, ...history.map((move) => move.after)] : [chess.fen()];
-  return { fens, cursor: fens.length - 1 };
+// Positions de la courbe (sprint 39) : celles de la partie chargée (sans la variante),
+// sinon la ligne affichée depuis le départ (coups devant compris).
+function curveFens() {
+  return game ? game.fens : lineFens();
 }
 
-// Positions de la variante (tronçon 05) : de la position du curseur de la partie à celle
-// de l'échiquier (goTo rejoue la partie depuis game.start, donc l'historique au-delà du
-// curseur est la variante) ; vide hors variante.
+// Positions de la variante (tronçon 05) : de l'ancrage à la fin de la ligne affichée (goTo
+// rejoue la partie depuis game.start, donc la ligne au-delà de l'ancrage est la variante) ;
+// vide sans variante.
 function variantFens() {
-  if (!game || !variant) return [];
-  const moves = chess.history({ verbose: true }).slice(game.cursor);
-  return [game.fens[game.cursor], ...moves.map((move) => move.after)];
+  const start = anchor();
+  return start === null ? [] : lineFens().slice(start);
 }
 
 // Perte (points de % de gain) du coup joué depuis fen pour le camp au trait :
@@ -499,18 +548,17 @@ function loss(fen, before, after) {
 }
 
 // Ligne sous l'échiquier : coup joué depuis la position affichée (partie chargée hors
-// variante) ou dernier coup joué (jeu libre, variante), numéro de coup tiré du FEN d'avant
+// variante) ou coup menant à elle (jeu libre, variante), numéro de coup tiré du FEN d'avant
 // le coup, perte comparée au meilleur coup (nommé seulement si « Meilleur coup » est
 // cochée), puis mat éventuel.
 function playedText() {
   let fens, i, san;
-  if (game && !variant) {
-    fens = game.fens; i = game.cursor; san = game.sans[i];
+  if (game && !inVariant()) {
+    fens = game.fens; i = chess.history().length; san = game.sans[i];
   } else {
-    const history = chess.history();
-    fens = game ? variantFens() : curve().fens;
-    i = fens.length - 2;
-    san = history[history.length - 1];
+    fens = lineFens();
+    i = chess.history().length - 1;
+    san = displayedLine()[i];
   }
   const parts = [];
   if (san) {
@@ -532,14 +580,14 @@ function playedText() {
 
 // Ligne de calcul de la précision (tronçon 10) : positions, coups SAN et indice du coup
 // décrit par « joué » (null s'il n'y en a pas). Partie chargée hors variante : la partie ;
-// variante : la partie jusqu'au curseur puis la variante (chess.history() rejoue depuis le
-// départ, donc couvre les deux) ; jeu libre : la ligne de l'échiquier.
+// variante : la partie jusqu'à l'ancrage puis la variante (la ligne affichée rejoue depuis le
+// départ, donc couvre les deux) ; jeu libre : la ligne affichée.
 function accuracyLine() {
-  if (game && !variant) {
-    return { fens: game.fens, sans: game.sans, k: game.cursor < game.sans.length ? game.cursor : null };
+  const shown = chess.history().length;
+  if (game && !inVariant()) {
+    return { fens: game.fens, sans: game.sans, k: shown < game.sans.length ? shown : null };
   }
-  const fens = game ? [...game.fens.slice(0, game.cursor), ...variantFens()] : curve().fens;
-  return { fens, sans: chess.history(), k: fens.length >= 2 ? fens.length - 2 : null };
+  return { fens: lineFens(), sans: displayedLine(), k: shown >= 1 ? shown - 1 : null };
 }
 
 // Précision du coup décrit et totale de chaque camp jusqu'à lui (sur tous les coups évalués
@@ -575,7 +623,7 @@ function accuracy() {
 // réponse. Une requête en échec est oubliée, donc redemandée au prochain changement de position.
 // Partie chargée hors variante : rien à demander, les valeurs viennent de /game.
 function evalLine() {
-  for (const fen of game ? variantFens() : curve().fens) {
+  for (const fen of game ? variantFens() : curveFens()) {
     if (evals.has(fen) || evalAsked.has(fen)) continue;
     evalAsked.add(fen);
     evalChain = evalChain.then(async () => {
@@ -589,7 +637,8 @@ function evalLine() {
 // Nombre de positions de l'échelle horizontale de la courbe : partie (ou ligne libre),
 // prolongée par la variante quand elle dépasse la fin de la partie.
 function graphLength() {
-  return Math.max(curve().fens.length, game ? game.cursor + variantFens().length : 0);
+  const extra = variantFens();
+  return Math.max(curveFens().length, extra.length ? anchor() + extra.length : 0);
 }
 
 // Une série de la courbe : positions fens tracées à partir de l'indice offset, en color.
@@ -621,11 +670,11 @@ function graphSeries(fens, offset, color, x, y) {
 }
 
 // Courbe du % de gain des blancs (0 en bas, 100 en haut, médiane à 50 %) : partie chargée
-// (ou ligne libre) en blanc, variante superposée en cyan depuis le curseur ; trait vertical
+// (ou ligne libre) en blanc, variante superposée en cyan depuis l'ancrage ; trait vertical
 // sur la position affichée ; message tant que la courbe d'une partie chargée n'est pas là.
 const GRAPH_W = 560, GRAPH_H = 200;
 function drawGraph() {
-  const { fens, cursor } = curve();
+  const fens = curveFens();
   const extra = variantFens();
   const step = GRAPH_W / Math.max(1, graphLength() - 1);
   const x = (i) => (i * step).toFixed(1);
@@ -636,19 +685,19 @@ function drawGraph() {
     body += `<text x="${GRAPH_W / 2}" y="${GRAPH_H / 2 - 8}" fill="#ddd" text-anchor="middle">${game.message}</text>`;
   }
   body += graphSeries(fens, 0, "#eee", x, y);
-  if (extra.length) body += graphSeries(extra, cursor, "#00e5ff", x, y);
-  const marker = extra.length ? cursor + extra.length - 1 : cursor;
+  if (extra.length) body += graphSeries(extra, anchor(), "#00e5ff", x, y);
+  const marker = chess.history().length;
   body += `<line x1="${x(marker)}" x2="${x(marker)}" y1="0" y2="${GRAPH_H}" stroke="#4d8dff" stroke-width="2"/>`;
   $("graph").innerHTML = body;
 }
 
 // PGN exporté / envoyé à ARIA (sprint 39) : partie chargée hors variante → toute la partie
-// avec ses en-têtes ; sinon la ligne de l'échiquier. Puis toujours Date du jour, Elo et noms
+// avec ses en-têtes ; sinon la ligne affichée (coups devant compris). Puis Date du jour, Elo et noms
 // des champs (nom vide → "?" : White / Black toujours présents, exigés par detect_pgn).
 function exportPgn() {
-  const whole = game && !variant;
+  const whole = game && anchor() === null;
   const board = new Chess(game ? game.start : undefined);
-  for (const san of whole ? game.sans : chess.history()) board.move(san);
+  for (const san of whole ? game.sans : displayedLine()) board.move(san);
   const headers = whole ? { ...game.headers } : { Event: "Échiquier ARIA" };
   if (!headers.Result || headers.Result === "*") {
     headers.Result = board.isCheckmate() ? (board.turn() === "w" ? "0-1" : "1-0")
@@ -665,10 +714,11 @@ function exportPgn() {
   return board.pgn();
 }
 
-// Conservation au rechargement : PGN chargé et curseur, ou ligne libre ; Elo, « Je joue » et noms.
+// Conservation au rechargement : PGN chargé et position de la partie, ou ligne libre affichée
+// entière ; Elo, « Je joue » et noms.
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    pgn: game ? game.pgn : null, cursor: game ? game.cursor : 0, line: game ? [] : chess.history(),
+    pgn: game ? game.pgn : null, cursor: game ? gameCursor() : 0, line: game ? [] : displayedLine(),
     eloWhite: $("elo-white").value, eloBlack: $("elo-black").value, playing: $("playing").value,
     nameWhite: $("name-white").value, nameBlack: $("name-black").value,
   }));
@@ -719,7 +769,7 @@ async function loadGame(cursor = 0) {
   $("show-best").checked = false;
   evals.clear();
   evalAsked.clear();
-  game = { start, sans, fens, played, headers, pgn, cursor: 0, wins: null, message: "courbe en calcul…" };
+  game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…" };
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   goTo(cursor);
   const loaded = game;
@@ -748,7 +798,7 @@ $("new").addEventListener("click", () => {
   $("pgn").value = "";
   chess.reset();
   game = null;
-  variant = false;
+  ahead.length = 0;
   evals.clear();
   evalAsked.clear();
   refreshGame();
@@ -756,27 +806,36 @@ $("new").addEventListener("click", () => {
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   newPosition();
 });
-// Annuler : sur la partie chargée, équivaut à ◀ ; en variante, annule le dernier coup de la
-// variante (revenu à la position du curseur → fin de la variante).
+// Annuler : vide les coups devant ; sur la partie chargée, équivaut à ◀ ; en variante, annule
+// le dernier coup de la variante (revenu à l'ancrage → fin de la variante).
 $("undo").addEventListener("click", () => {
-  if (game && !variant) { goTo(game.cursor - 1); return; }
+  ahead.length = 0;
+  if (game && !inVariant()) { goTo(gameCursor() - 1); return; }
   if (!chess.undo()) return;
-  if (game && chess.history().length === game.cursor) variant = false;
   refreshGame();
   newPosition();
 });
 $("load").addEventListener("click", () => loadGame());
 $("first").addEventListener("click", () => goTo(0));
-$("prev").addEventListener("click", () => goTo(game.cursor - 1));
-$("next").addEventListener("click", () => goTo(game.cursor + 1));
+$("prev").addEventListener("click", () => goTo(gameCursor() - 1));
+$("next").addEventListener("click", () => goTo(gameCursor() + 1));
 $("last").addEventListener("click", () => goTo(game.sans.length));
-$("back").addEventListener("click", () => goTo(game.cursor));
-// Flèches du clavier : navigation dans la partie, sauf pendant une saisie.
+$("back").addEventListener("click", () => goTo(gameCursor()));
+// Flèches du clavier (tronçon 12) : pas dans la ligne affichée, partout, sauf pendant une saisie.
 document.addEventListener("keydown", (event) => {
-  if (!game || ["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
-  if (event.key === "ArrowLeft") goTo(game.cursor - 1);
-  if (event.key === "ArrowRight") goTo(game.cursor + 1);
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) return;
+  if (event.key === "ArrowLeft") stepBack();
+  if (event.key === "ArrowRight") stepForward();
 });
+// Molette au-dessus de l'échiquier, de la courbe et de la liste : bas = →, haut = ← ; un pas
+// par événement, la page ne défile pas (ailleurs, défilement normal).
+for (const id of ["board", "graph", "moves"]) {
+  $(id).addEventListener("wheel", (event) => {
+    event.preventDefault();
+    if (event.deltaY > 0) stepForward();
+    else if (event.deltaY < 0) stepBack();
+  }, { passive: false });
+}
 // Clic sur la courbe : va à la position de la partie la plus proche, même échelle que le
 // tracé (variante comprise ; borné par goTo) ; sans effet en jeu libre.
 $("graph").addEventListener("click", (event) => {

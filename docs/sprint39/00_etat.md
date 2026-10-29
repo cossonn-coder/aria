@@ -1,6 +1,6 @@
 # Sprint 39 — état de conception
 
-**Phase** : B — tronçons 12-13 figés (2026-10-29). Tronçons 01-08 et 10 faits.
+**Phase** : B — tronçons 12-13 figés (2026-10-29). Tronçons 01-08, 10 et 12 faits.
 **Branche** : `feat/sprint39-courbe-pgn`.
 **Cible** : #127-#130 — courbe du meilleur coup, mats sur la courbe, courbe en jeu
 libre, enregistrement + export PGN.
@@ -188,7 +188,12 @@ Recos de conception (Claude, figées avec l'OK) :
   (jeu libre, partie chargée au curseur et en fin) ; coup décrit au-delà du préfixe évalué →
   pas de précision du coup, totaux sur les coups évalués)
 - 11 run live de la précision, Nico (`11_run_live.md`) ⏳
-- 12 navigation aux flèches et à la molette, pile des coups devant (`12_navigation.md`) ⏳
+- 12 navigation aux flèches et à la molette, pile des coups devant (`12_navigation.md`) ✅ (377 tests verts ;
+  seul `index.html` ; `variant` et `game.cursor` supprimés, déduits de la ligne affichée : helpers
+  `displayedLine()` / `lineFens()` / `anchor()` / `inVariant()` / `gameCursor()` (ancien sens du curseur),
+  `stepBack()` / `stepForward()` ; `curve()` → `curveFens()` ; vérifié VM sous node avec DOM simulé
+  (jeu libre ← ← →, variante puis ← ×5 / → ×5, coup égal / différent du sommet, molette, `SELECT`, ◀) ;
+  export en partie chargée : toute la partie seulement sans variante, sinon la ligne affichée entière)
 - 13 run live de la navigation, Nico (`13_run_live.md`) ⏳
 
 ## Dettes
@@ -199,6 +204,5 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-08 et 10 faits, 12 figé. Prochaine étape : `/sprint-auto sprint 39` (tronçon 12),
-puis runs live 09, 11 et 13 par Nico (redémarrer `aria.service`), à enchaîner. Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-08, 10 et 12 faits. Prochaine étape : runs live 09, 11 et 13 par Nico (redémarrer `aria.service`), à enchaîner. Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.
