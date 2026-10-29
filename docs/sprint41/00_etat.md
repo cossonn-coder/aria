@@ -9,7 +9,7 @@
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_page_mobile.md` | `index.html` : disposition mobile façon lichess (≤ 700 px), barre d'éval, onglets, barre du bas, menu ☰, tap au lieu du survol, init Mini App Telegram ; PC inchangé | ✅ |
-| 02 | `02_bouton_board.md` | `/board` : bouton `web_app` si `board_url` en https, sinon lien texte actuel | ⏳ |
+| 02 | `02_bouton_board.md` | `/board` : bouton `web_app` si `board_url` en https, sinon lien texte actuel | ✅ |
 | 03 | `03_run_live.md` | run live Nico : préalable Tailscale + scénario téléphone en 4G (PGN : `run_live_pgn.txt`) | ⏳ (Nico) |
 
 ## Décisions arrêtées
@@ -38,5 +38,7 @@ Fermées : aucune.
 
 Lire `CLAUDE.md` + ce fichier + le kickoff du prochain tronçon ⏳.
 Tronçon 01 fait (page mobile dans `index.html`, test étendu, 396 tests verts ; JS vérifié par
-`node --check`, rendu non vu : run live). Prochaine étape : tronçon 02 (`02_bouton_board.md`),
-puis run live 03 par Nico.
+`node --check`, rendu non vu : run live).
+Tronçon 02 fait (`_cmd_board` : bouton `web_app` « ♟ Ouvrir l'échiquier » si `board_url` en
+https, sinon lien texte via `_deliver` ; 2 tests, 398 tests verts). Prochaine étape : run live 03
+par Nico (préalable Tailscale, `BOARD_URL=https://…ts.net`).
