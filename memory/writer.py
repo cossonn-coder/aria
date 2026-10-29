@@ -234,6 +234,31 @@ def write_conversation_turn(
     col.upsert(documents=[content], ids=[doc_id], metadatas=[meta])
 
 
+def write_conversation_reset(conversation_key: str, *, extra: dict | None = None) -> None:
+    """
+    Pose un marqueur de coupure dans aria_conversation (/oublie, sprint 40).
+
+    La lecture de l'historique (bridge.load_conversation_history) ignore
+    tous les tours antérieurs au marqueur le plus récent. Rien n'est
+    supprimé : effacer le document marqueur à la main rétablit l'historique.
+
+    wing / room / type / timestamp sont structurels, posés après le spread
+    de `extra` (invariant W4).
+    """
+    col = get_collection(config.mempalace_path)
+    doc_id = uuid4().hex
+
+    meta = {
+        **(extra or {}),
+        "wing": "aria_conversation",
+        "room": conversation_key,
+        "type": "conversation_reset",
+        "timestamp": _now_iso(),
+    }
+    _validate(meta)
+    col.upsert(documents=["conversation_reset"], ids=[doc_id], metadatas=[meta])
+
+
 # ── Écriture cache classifier ─────────────────────────────────────────────────
 
 def write_classifier_cache(

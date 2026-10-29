@@ -196,3 +196,14 @@ def status_text(status: dict) -> str:
     lines += [f"{wing} : {count}" for wing, count in status["counts"].items()]
     lines.append(f"Quarantaine : {status['quarantine']} dossier(s)")
     return "\n".join(lines)
+
+
+# =========================================================
+# /oublie (tronçon 03) — marqueur de coupure de la conversation
+# =========================================================
+# L'écriture passe par memory.writer.write_conversation_reset (appelée par
+# le handler) ; rien n'est supprimé, la coupure se fait à la lecture.
+
+COMMANDS["oublie"] = "Repartir d'une conversation vierge"
+
+FORGET_TEXT = "🧹 Conversation oubliée. Les souvenirs restent."

@@ -30,6 +30,7 @@ from pathlib import Path
 from config import config
 from interfaces import meta_commands
 from interfaces.base_interface import BaseInterface
+from memory.writer import write_conversation_reset
 from core.event import Event, EventType
 from logger import get_logger
 
@@ -300,6 +301,18 @@ class TelegramInterface(BaseInterface):
         log.info("meta_command name=parties")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
         await self._deliver(update.effective_chat.id, meta_commands.parties_text(games))
+
+    async def _cmd_oublie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Marqueur de coupure : la clé est str(chat_id), la même que celle
+        de l'historique lu par llm_router (metadata chat_id).
+        """
+        log.info("meta_command name=oublie")
+        chat_id = update.effective_chat.id
+        key = str(chat_id)
+        await asyncio.to_thread(write_conversation_reset, key)
+        log.info("meta_oublie key=%s", key)
+        await self._deliver(chat_id, meta_commands.FORGET_TEXT)
 
     # =========================================================
     # SIGNAL D'ATTENTE

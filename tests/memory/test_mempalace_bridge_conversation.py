@@ -158,3 +158,30 @@ def test_load_chess_games_filters_and_sorts():
 
     assert captured[0]["where"] == {"$and": [{"wing": "aria_episodic"}, {"type": "chess_game"}]}
     assert [g["id"] for g in games] == ["chess_game_a", "chess_game_b"]
+
+
+# ── Marqueur /oublie (sprint 40, tronçon 03) ─────────────────────────────────
+
+def test_load_history_cuts_at_latest_reset_then_applies_n():
+    """Tours avant le dernier marqueur exclus, marqueurs exclus, n après coupure."""
+    payload = _payload([
+        ("user", "avant 1", "2026-10-29T10:00:00+00:00"),
+        ("", "conversation_reset", "2026-10-29T10:00:01+00:00"),
+        ("user", "avant 2", "2026-10-29T10:00:02+00:00"),
+        ("", "conversation_reset", "2026-10-29T10:00:03+00:00"),
+        ("user", "après 1", "2026-10-29T10:00:04+00:00"),
+        ("assistant", "après 2", "2026-10-29T10:00:05+00:00"),
+        ("user", "après 3", "2026-10-29T10:00:06+00:00"),
+    ])
+    for meta, doc in zip(payload["metadatas"], payload["documents"]):
+        if doc == "conversation_reset":
+            meta["type"] = "conversation_reset"
+    fake_get, _ = _make_get(payload)
+    bridge = MempalaceBridge(store=lambda **kw: {}, get_by_metadata=fake_get)
+
+    assert [t["content"] for t in bridge.load_conversation_history("42", n=10)] == [
+        "après 1", "après 2", "après 3",
+    ]
+    assert [t["content"] for t in bridge.load_conversation_history("42", n=2)] == [
+        "après 2", "après 3",
+    ]

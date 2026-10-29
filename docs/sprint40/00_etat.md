@@ -46,7 +46,10 @@ suppression.
 - 02 consultations `/status`, `/logs`, `/errors`, `/llm`, `/intents`, `/parties` (`02_consultations.md`) ✅
   (393 tests verts ; lecture + texte pur par commande dans `meta_commands` ; `TelegramInterface(bridge=…)` ;
   `count_by_wing` dans le bridge ; libellés couleur / issue repris de `chess_coach.summary`)
-- 03 `/oublie`, marqueur de coupure — **palace prod** (`03_oublie.md`) ⏳
+- 03 `/oublie`, marqueur de coupure — **palace prod** (`03_oublie.md`) ✅
+  (396 tests verts ; `write_conversation_reset` (avec `extra` écrasé, W4) ; coupure dans
+  `load_conversation_history` au marqueur le plus récent, avant les n derniers ; aucun marqueur =
+  comportement inchangé ; `/status` compte les marqueurs dans `aria_conversation`)
 - 04 run live, Nico (`04_run_live.md`) ⏳
 
 ## Dettes
@@ -56,7 +59,6 @@ Visée : #131. Fermée par le filtre utilisateur : exposition du bot à tout com
 
 ## §REPRISE
 
-Tronçons 01 (commité ca132e1) et 02 implémentés (02 non commité à la livraison du sous-agent).
-Prochaine étape : tronçon 03 (`03_oublie.md`, **palace prod**) — même mécanique : entrée dans
-`meta_commands.COMMANDS` + méthode `_cmd_<nom>` dans `TelegramInterface`.
+Tronçons 01 (ca132e1), 02 (8c0cda7) et 03 (`/oublie`, non commité à la livraison du sous-agent)
+implémentés. Prochaine étape : tronçon 04, run live par Nico (`04_run_live.md`).
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

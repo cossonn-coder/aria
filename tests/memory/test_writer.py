@@ -276,3 +276,17 @@ def test_write_chess_game_structural_fields_and_dedup(fake_col):
     meta = fake_col.last_meta
     assert (meta["wing"], meta["room"], meta["type"]) == ("aria_episodic", "chess", "chess_game")
     assert meta["nico_color"] == "black"
+
+
+# ── write_conversation_reset — marqueur /oublie (sprint 40, tronçon 03) ─────
+
+def test_write_conversation_reset_structural_fields_not_overridable(fake_col):
+    w.write_conversation_reset(
+        "42",
+        extra={"wing": "aria", "room": "wrong", "type": "conversation_turn"},
+    )
+    meta = fake_col.last_meta
+    assert meta["wing"] == "aria_conversation"
+    assert meta["room"] == "42"
+    assert meta["type"] == "conversation_reset"
+    assert meta["timestamp"]

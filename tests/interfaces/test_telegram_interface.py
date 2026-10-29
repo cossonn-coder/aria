@@ -258,3 +258,18 @@ async def test_again_resends_last_kernel_reply():
     await iface._cmd_again(_command_update(), None)
 
     assert sent[-1] == "réponse du kernel"
+
+
+@pytest.mark.asyncio
+async def test_oublie_writes_reset_marker_with_chat_key(monkeypatch):
+    written = []
+    monkeypatch.setattr(telegram_interface, "write_conversation_reset", written.append)
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+
+    await iface._cmd_oublie(_command_update(chat_id=42), None)
+
+    assert written == ["42"]
+    text = iface.app.bot.send_message.await_args.kwargs["text"]
+    assert text == telegram_interface.meta_commands.FORGET_TEXT

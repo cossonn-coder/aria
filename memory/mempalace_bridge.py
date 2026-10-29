@@ -260,6 +260,16 @@ class MempalaceBridge:
         docs = result.get("documents") or []
         metas = result.get("metadatas") or []
 
+        # Marqueurs /oublie (type conversation_reset, sprint 40) : seul le
+        # plus récent compte ; les tours qui le précèdent sont ignorés, et
+        # les marqueurs eux-mêmes ne sont jamais rendus comme des tours.
+        resets = [
+            (meta or {}).get("timestamp", "")
+            for meta in metas
+            if (meta or {}).get("type") == "conversation_reset"
+        ]
+        cutoff = max(resets, default=None)
+
         turns = [
             {
                 "role": (meta or {}).get("role", ""),
@@ -267,6 +277,8 @@ class MempalaceBridge:
                 "timestamp": (meta or {}).get("timestamp", ""),
             }
             for doc, meta in zip(docs, metas)
+            if (meta or {}).get("type") != "conversation_reset"
+            and (cutoff is None or (meta or {}).get("timestamp", "") > cutoff)
         ]
         turns.sort(key=lambda t: t["timestamp"])
         return turns[-n:]
