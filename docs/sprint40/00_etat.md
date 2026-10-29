@@ -41,7 +41,8 @@ suppression.
 
 ## Tronçons
 
-- 01 socle, filtre utilisateur, `/help`, `/reboot`, `/board`, `/again` (`01_socle_reboot.md`) ⏳
+- 01 socle, filtre utilisateur, `/help`, `/reboot`, `/board`, `/again` (`01_socle_reboot.md`) ✅
+  (385 tests verts ; `_post_init` appelle `_remember_loop` ; métacommandes livrées par `_deliver`, hors `last_reply`)
 - 02 consultations `/status`, `/logs`, `/errors`, `/llm`, `/intents`, `/parties` (`02_consultations.md`) ⏳
 - 03 `/oublie`, marqueur de coupure — **palace prod** (`03_oublie.md`) ⏳
 - 04 run live, Nico (`04_run_live.md`) ⏳
@@ -53,5 +54,7 @@ Visée : #131. Fermée par le filtre utilisateur : exposition du bot à tout com
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 40` (tronçon 01).
+Tronçon 01 implémenté (non commité à la livraison du sous-agent). Prochaine étape : tronçon 02
+(`02_consultations.md`) — ajouter les commandes dans `meta_commands.COMMANDS` et une méthode
+`_cmd_<nom>` dans `TelegramInterface` (branchement automatique par `_add_handlers`).
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

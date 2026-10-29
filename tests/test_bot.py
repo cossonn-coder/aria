@@ -2,10 +2,14 @@
 
 import importlib
 
+import pytest
+
 import logger
 
 
-def test_main_exits_immediately_after_start(monkeypatch):
+@pytest.mark.parametrize("restart_requested, exit_code", [(False, 0), (True, 1)])
+def test_main_exits_immediately_after_start(monkeypatch, restart_requested, exit_code):
+    # Sprint 40 : code 1 après /reboot, pour que systemd relance.
     # configure_root(force=True) remplacerait les handlers de pytest à l'import.
     monkeypatch.setattr(logger, "configure_root", lambda level="INFO": None)
     bot = importlib.import_module("bot")
@@ -14,7 +18,7 @@ def test_main_exits_immediately_after_start(monkeypatch):
 
     class FakeTelegram:
         def __init__(self, kernel, token):
-            pass
+            self.restart_requested = restart_requested
 
         def start(self):
             calls.append("start")
@@ -32,4 +36,4 @@ def test_main_exits_immediately_after_start(monkeypatch):
 
     bot.main()
 
-    assert calls == ["board", "start", "shutdown", ("exit", 0)]
+    assert calls == ["board", "start", "shutdown", ("exit", exit_code)]
