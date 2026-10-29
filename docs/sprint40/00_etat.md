@@ -43,7 +43,9 @@ suppression.
 
 - 01 socle, filtre utilisateur, `/help`, `/reboot`, `/board`, `/again` (`01_socle_reboot.md`) ✅
   (385 tests verts ; `_post_init` appelle `_remember_loop` ; métacommandes livrées par `_deliver`, hors `last_reply`)
-- 02 consultations `/status`, `/logs`, `/errors`, `/llm`, `/intents`, `/parties` (`02_consultations.md`) ⏳
+- 02 consultations `/status`, `/logs`, `/errors`, `/llm`, `/intents`, `/parties` (`02_consultations.md`) ✅
+  (393 tests verts ; lecture + texte pur par commande dans `meta_commands` ; `TelegramInterface(bridge=…)` ;
+  `count_by_wing` dans le bridge ; libellés couleur / issue repris de `chess_coach.summary`)
 - 03 `/oublie`, marqueur de coupure — **palace prod** (`03_oublie.md`) ⏳
 - 04 run live, Nico (`04_run_live.md`) ⏳
 
@@ -54,7 +56,7 @@ Visée : #131. Fermée par le filtre utilisateur : exposition du bot à tout com
 
 ## §REPRISE
 
-Tronçon 01 implémenté (non commité à la livraison du sous-agent). Prochaine étape : tronçon 02
-(`02_consultations.md`) — ajouter les commandes dans `meta_commands.COMMANDS` et une méthode
-`_cmd_<nom>` dans `TelegramInterface` (branchement automatique par `_add_handlers`).
+Tronçons 01 (commité ca132e1) et 02 implémentés (02 non commité à la livraison du sous-agent).
+Prochaine étape : tronçon 03 (`03_oublie.md`, **palace prod**) — même mécanique : entrée dans
+`meta_commands.COMMANDS` + méthode `_cmd_<nom>` dans `TelegramInterface`.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

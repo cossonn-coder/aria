@@ -65,9 +65,12 @@ def _log_external_failure(future):
 
 class TelegramInterface(BaseInterface):
 
-    def __init__(self, kernel, token: str):
+    def __init__(self, kernel, token: str, bridge=None):
         super().__init__(kernel)
         self.token = token
+        # MempalaceBridge dédié aux métacommandes /status et /parties
+        # (sprint 40), en lecture seule, construit par bot.py.
+        self.bridge = bridge
         # Un lock par user_id — sérialise les messages d'un même utilisateur
         self.user_locks = defaultdict(asyncio.Lock)
         # Dernière réponse non livrée par chat_id, en RAM (perdue au
@@ -264,6 +267,39 @@ class TelegramInterface(BaseInterface):
         self.restart_requested = True
         log.info("meta_reboot requested")
         self.app.stop_running()
+
+    # Consultations (tronçon 02) : lectures bloquantes courtes via to_thread.
+
+    async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=status")
+        status = await asyncio.to_thread(meta_commands.read_status, self.bridge)
+        await self._deliver(update.effective_chat.id, meta_commands.status_text(status))
+
+    async def _cmd_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=logs")
+        n = meta_commands.logs_count(context.args)
+        lines = await asyncio.to_thread(meta_commands.journal_lines, n)
+        await self._deliver(update.effective_chat.id, meta_commands.logs_text(lines))
+
+    async def _cmd_errors(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=errors")
+        lines = await asyncio.to_thread(meta_commands.journal_lines, meta_commands.JOURNAL_SCAN)
+        await self._deliver(update.effective_chat.id, meta_commands.errors_text(lines))
+
+    async def _cmd_llm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=llm")
+        lines = await asyncio.to_thread(meta_commands.journal_lines, meta_commands.JOURNAL_SCAN)
+        await self._deliver(update.effective_chat.id, meta_commands.llm_text(lines))
+
+    async def _cmd_intents(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=intents")
+        data = await asyncio.to_thread(meta_commands.read_intents)
+        await self._deliver(update.effective_chat.id, meta_commands.intents_text(data))
+
+    async def _cmd_parties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=parties")
+        games = await asyncio.to_thread(self.bridge.load_chess_games)
+        await self._deliver(update.effective_chat.id, meta_commands.parties_text(games))
 
     # =========================================================
     # SIGNAL D'ATTENTE

@@ -17,7 +17,7 @@ def test_main_exits_immediately_after_start(monkeypatch, restart_requested, exit
     calls = []
 
     class FakeTelegram:
-        def __init__(self, kernel, token):
+        def __init__(self, kernel, token, bridge=None):
             self.restart_requested = restart_requested
 
         def start(self):

@@ -14,6 +14,8 @@ configure_root(level=os.getenv("ARIA_LOG_LEVEL", "INFO"))
 from core.kernel import AriaKernel
 from interfaces.board_interface import start_board_server
 from interfaces.telegram_interface import TelegramInterface
+from memory.mempalace_bridge import MempalaceBridge
+from memory.mempalace_store import get_by_metadata, search
  
  
 def main():
@@ -25,6 +27,8 @@ def main():
     telegram = TelegramInterface(
         kernel,
         token=os.environ["ARIA_BOT_TOKEN"],
+        # Bridge dédié aux métacommandes /status et /parties (sprint 40).
+        bridge=MempalaceBridge(store=search, get_by_metadata=get_by_metadata),
     )
     log.info("Telegram interface prête")
     # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
