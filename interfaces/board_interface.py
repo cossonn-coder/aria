@@ -13,6 +13,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import chess
 import chess.engine
@@ -20,6 +21,7 @@ import chess.engine
 from chess_coach import difficulty
 from chess_coach.analysis import ENGINE_OPTIONS, _win, analyze_game, parse_pgn
 from chess_coach.live import FACTORS, EngineProxy, Superseded, analyse_pass
+from chess_coach.summary import _effective_loss, _game_accuracy, _move_accuracy
 from config import config
 from logger import get_logger
 
@@ -172,6 +174,28 @@ def position_eval(fen: str) -> dict:
             "best": board.san(info["pv"][0])}
 
 
+def line_accuracy(wins: list, best: list, first: str) -> dict:
+    """Précision de chaque coup d'une ligne et précision totale de chaque camp (sprint 39).
+
+    wins : N+1 % de gain des blancs (positions de la ligne), best : N booléens (coup
+    joué = meilleur coup), first : camp du premier coup. Même formule que le bilan
+    Telegram (summary.py) : on reconstruit des demi-coups minimaux qu'elle sait lire.
+    white[k] / black[k] = précision totale du camp sur les coups 0..k (None sans coup).
+    """
+    plies = []
+    for i, is_best in enumerate(best):
+        color = ("white", "black")[(i + (first == "black")) % 2]
+        # win_before / win_after au point de vue du joueur qui joue le coup.
+        before, after = (wins[i], wins[i + 1]) if color == "white" else (100 - wins[i], 100 - wins[i + 1])
+        plies.append(SimpleNamespace(color=color, win_before=before, win_after=after,
+                                     loss=max(0, before - after), quality="best" if is_best else "other"))
+    return {
+        "moves": [round(_move_accuracy(_effective_loss(p)), 1) for p in plies],
+        "white": [_game_accuracy(plies[:k + 1], "white") for k in range(len(plies))],
+        "black": [_game_accuracy(plies[:k + 1], "black") for k in range(len(plies))],
+    }
+
+
 class _Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: bytes, content_type: str):
         self.send_response(status)
@@ -193,7 +217,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "text/plain")
 
     def do_POST(self):
-        if self.path not in ("/position", "/game", "/eval", "/send"):
+        if self.path not in ("/position", "/game", "/eval", "/send", "/accuracy"):
             self._send(404, b"", "text/plain")
             return
         data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -202,6 +226,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/game":
             self._game(data["pgn"])
+            return
+        if self.path == "/accuracy":
+            self._json(line_accuracy(data["wins"], data["best"], data["first"]))
             return
         if self.path == "/eval":
             start = time.monotonic()

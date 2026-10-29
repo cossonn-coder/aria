@@ -172,7 +172,12 @@ Recos de conception (Claude, figées avec l'OK) :
   au lieu de `goTo` + rejeu + `newPosition`, pour n'envoyer qu'un seul `/position`)
 - 09 run live, Nico (`09_run_live.md`, partie 1 de `run_live_parties.txt`) ⏳
 - 10 précision du coup et totale : `line_accuracy` + `POST /accuracy`, ligne sous l'échiquier
-  (`10_precision.md`) ⏳
+  (`10_precision.md`) ✅ (377 tests verts ; `line_accuracy` rebâtit des demi-coups minimaux
+  (`SimpleNamespace`, qualité `"best"` / `"other"`) lus par `_move_accuracy` / `_effective_loss` /
+  `_game_accuracy` de `summary.py`, inchangé ; page : `accuracyLine()` + `accuracy()` appelés par
+  `refreshGame`, cache `accuracies` clé = corps JSON ; logique vérifiée VM sous node avec stubs
+  (jeu libre, partie chargée au curseur et en fin) ; coup décrit au-delà du préfixe évalué →
+  pas de précision du coup, totaux sur les coups évalués)
 - 11 run live de la précision, Nico (`11_run_live.md`) ⏳
 
 ## Dettes
@@ -183,5 +188,6 @@ Palace prod touché par le tronçon 02 (nouveau point d'entrée, chemin d'écrit
 
 ## §REPRISE
 
-Tronçons 01-08 faits, 09-11 figés. Prochaine étape : `/sprint-auto sprint 39` (tronçon 10), puis runs live 09 et 11 par Nico (redémarrer `aria.service`). Clôture (merge, tag `sprint-39`) après.
+Tronçons 01-08 et 10 faits ; 09 et 11 = runs live par Nico (redémarrer `aria.service`), à
+enchaîner. Clôture (merge, tag `sprint-39`) après.
 Lire `CLAUDE.md`, ce fichier, le kickoff du tronçon.

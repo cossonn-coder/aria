@@ -50,6 +50,7 @@
   <div>
     <div id="board"></div>
     <div id="played"></div>
+    <div id="accuracy"></div>
     <svg id="graph" width="560" height="200"></svg>
     <div id="moves"></div>
     <div id="analysis">
@@ -115,6 +116,9 @@ let variant = false;
 const evals = new Map();
 const evalAsked = new Set();
 let evalChain = Promise.resolve();
+// Précision (tronçon 10) : réponses de POST /accuracy par ligne envoyée (clé = corps JSON
+// de la requête), null tant que la réponse n'est pas arrivée.
+const accuracies = new Map();
 // Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
 const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
@@ -409,7 +413,10 @@ function playedMove() {
 function refreshGame() {
   for (const id of ["first", "prev", "next", "last"]) $(id).disabled = !game;
   $("back").style.display = variant ? "" : "none";
-  $("played").textContent = playedText();
+  const acc = accuracy();
+  const pct = (value) => (value === null ? "—" : `${Math.round(value)} %`);
+  $("played").textContent = playedText() + (acc && acc.move !== null ? ` — précision ${pct(acc.move)}` : "");
+  $("accuracy").textContent = acc ? `Précision : blancs ${pct(acc.white)} · noirs ${pct(acc.black)}` : "";
   drawGraph();
   renderMoves();
 }
@@ -521,6 +528,46 @@ function playedText() {
   const shown = evals.get(chess.fen());
   if (shown && shown.mate) parts.push(`mat en ${Math.abs(shown.mate)} pour les ${shown.mate > 0 ? "blancs" : "noirs"}`);
   return parts.join(" — ");
+}
+
+// Ligne de calcul de la précision (tronçon 10) : positions, coups SAN et indice du coup
+// décrit par « joué » (null s'il n'y en a pas). Partie chargée hors variante : la partie ;
+// variante : la partie jusqu'au curseur puis la variante (chess.history() rejoue depuis le
+// départ, donc couvre les deux) ; jeu libre : la ligne de l'échiquier.
+function accuracyLine() {
+  if (game && !variant) {
+    return { fens: game.fens, sans: game.sans, k: game.cursor < game.sans.length ? game.cursor : null };
+  }
+  const fens = game ? [...game.fens.slice(0, game.cursor), ...variantFens()] : curve().fens;
+  return { fens, sans: chess.history(), k: fens.length >= 2 ? fens.length - 2 : null };
+}
+
+// Précision du coup décrit et totale de chaque camp jusqu'à lui (sur tous les coups évalués
+// s'il n'y a pas de coup décrit), calculées par le serveur (POST /accuracy, formule du bilan
+// Telegram) sur le plus long préfixe de positions déjà évaluées. Une requête par ligne
+// envoyée ; refreshGame est rappelé à la réponse. null tant que rien n'est connu.
+function accuracy() {
+  const { fens, sans, k } = accuracyLine();
+  let n = 0;
+  while (n < fens.length && evals.has(fens[n])) n++;
+  if (n < 2) return null;
+  const body = JSON.stringify({
+    wins: fens.slice(0, n).map((fen) => evals.get(fen).win),
+    best: sans.slice(0, n - 1).map((san, i) => san === evals.get(fens[i]).best),
+    first: fens[0].split(" ")[1] === "w" ? "white" : "black",
+  });
+  if (!accuracies.has(body)) {
+    accuracies.set(body, null);
+    fetch("/accuracy", { method: "POST", body })
+      .then((response) => response.json())
+      .then((result) => { accuracies.set(body, result); refreshGame(); })
+      .catch(() => accuracies.delete(body));
+  }
+  const result = accuracies.get(body);
+  if (!result) return null;
+  const last = result.moves.length - 1;
+  const at = k === null ? last : Math.min(k, last);
+  return { move: k !== null && k <= last ? result.moves[k] : null, white: result.white[at], black: result.black[at] };
 }
 
 // Jeu libre et variante : chaque position de la ligne (ou de la variante) absente de la Map

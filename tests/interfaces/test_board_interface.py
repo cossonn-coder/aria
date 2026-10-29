@@ -79,6 +79,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="name-white"' in page and 'id="name-black"' in page
         # Tronçon 08 : liste des coups sous la courbe.
         assert 'id="moves"' in page
+        # Tronçon 10 : ligne de précision sous le coup joué.
+        assert 'id="accuracy"' in page
     finally:
         server.shutdown()
         server.server_close()
@@ -148,3 +150,26 @@ def test_send_hands_pgn_to_aria_or_503():
         for s in (server, bare):
             s.shutdown()
             s.server_close()
+
+
+def test_line_accuracy_per_move_and_per_side():
+    # Sprint 39, tronçon 10 : meilleur coup → 100, perte → < 100, camp sans coup → None.
+    from interfaces.board_interface import line_accuracy
+
+    result = line_accuracy([50, 50, 80], [True, False], "white")
+    assert result["moves"][0] == 100 and result["moves"][1] < 100
+    assert result["white"] == [100, 100] and result["black"][0] is None
+    assert result["black"][1] == result["moves"][1]
+
+
+def test_accuracy_route_serves_line_accuracy():
+    # Sprint 39, tronçon 10 : /accuracy calcule sans Stockfish, premier coup noir.
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        result = _request(base, "/accuracy", {"wins": [50, 50], "best": [True], "first": "black"})
+        assert result == {"moves": [100.0], "white": [None], "black": [100.0]}
+    finally:
+        server.shutdown()
+        server.server_close()
