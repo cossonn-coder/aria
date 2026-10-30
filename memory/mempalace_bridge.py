@@ -35,9 +35,40 @@
 #   bridge = MempalaceBridge(store=fake_search)
 #   bridge = MempalaceBridge(store=fake_search, get_by_metadata=fake_get)
 
+import re
+import unicodedata
+
 from logger import get_logger
 
 log = get_logger(__name__)
+
+# Recherche de documents (sprint 44) : pool = toute la room `documents`
+# (borne haute du nombre de fiches lues en pratique).
+_DOCUMENT_POOL_SIZE = 20
+
+# Mots sans valeur discriminante pour choisir une fiche document : ils
+# apparaissent dans toute demande de relecture (forme sans accents).
+_DOCUMENT_STOPWORDS = frozenset({
+    "document", "documents", "page", "pages", "fichier", "fichiers",
+    "relis", "relire", "rouvre", "disait", "dans", "pour", "avec",
+    "quoi", "cette", "etait", "sont",
+})
+
+
+def _normalized_tokens(text: str) -> set[str]:
+    """Tokens `\\w+` en minuscules, sans accents (NFKD)."""
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return set(re.findall(r"\w+", plain))
+
+
+def _document_keywords(query: str) -> set[str]:
+    """
+    Mots porteurs d'une requête : ≥ 4 lettres, hors mots vides.
+    Ensemble vide = requête sans critère (« relis le document »).
+    """
+    return {t for t in _normalized_tokens(query)
+            if len(t) >= 4 and t not in _DOCUMENT_STOPWORDS}
 
 
 class MempalaceBridge:
@@ -353,6 +384,27 @@ class MempalaceBridge:
         if not docs:
             return None
         return {"title": (metas[0] or {}).get("title", ""), "text": docs[0]}
+
+    def find_documents(self, query: str) -> list[dict] | None:
+        """
+        Fiches document (room `documents` d'aria_episodic) qui contiennent
+        au moins un mot porteur de la requête (sprint 44, #146/#147).
+
+        La distance vectorielle ne discrimine pas les fiches : on prend
+        toute la room comme candidats (ordre du classement hybride de
+        mempalace), puis on filtre lexicalement.
+
+        Returns:
+            None si la requête n'a aucun mot porteur (l'appelant choisit
+            alors son repli) ; sinon la liste, dans l'ordre, des fiches
+            correspondantes (vide = aucun document correspondant).
+        """
+        keywords = _document_keywords(query)
+        if not keywords:
+            return None
+        candidates = self.retrieve_memories(query, room="documents", n=_DOCUMENT_POOL_SIZE)["hits"]
+        return [h for h in candidates
+                if keywords & _normalized_tokens(h.get("text", ""))]
 
     def count_by_wing(self) -> dict[str, int]:
         """

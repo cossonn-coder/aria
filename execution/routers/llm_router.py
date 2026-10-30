@@ -23,6 +23,8 @@
 #   9. Decay
 #   10. Écriture MemPalace
 
+import re
+
 from execution.routers.execution_base import BaseRouter
 from config import config
 from logger import get_logger
@@ -142,6 +144,15 @@ class LLMExecutionRouter(BaseRouter):
         top_k = MEMORY_TOP_K.get(operation, 4)
         global_memories = self.mempalace_bridge.retrieve_memories(message, n=top_k)
 
+        # Fiche document portant un mot de la question (sprint 44, #146) :
+        # la distance vectorielle ne la remonte pas, le filtre lexical si.
+        # Injectée en tête de la section épisodique à l'étape 4b.
+        document_hits = self.mempalace_bridge.find_documents(message)
+        document_hit = document_hits[0] if document_hits else None
+        if document_hit:
+            source = re.search(r"^Source : (\S+)$", document_hit.get("text", ""), re.MULTILINE)
+            log.info("document_recall source=%s", source.group(1) if source else "?")
+
         memory_context = MemoryContext(
             global_memories=global_memories,
             session_memories={},
@@ -255,6 +266,7 @@ class LLMExecutionRouter(BaseRouter):
             active_intents=self.intent_engine.list_attention_active(),
             session_memories=session_memories,
             global_memories=global_memories,
+            document_hit=document_hit,
         )
 
         # ── 5. Construction du contexte agent ───────────────────────────────

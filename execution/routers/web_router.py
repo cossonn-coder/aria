@@ -237,7 +237,11 @@ class WebExecutionRouter(BaseRouter):
                 if user_turns:
                     question = user_turns[-1]
 
-        hits = self.mempalace_bridge.retrieve_memories(query, room="documents", n=1)["hits"]
+        # Mots porteurs : 1re fiche qui en contient un, sinon NOT_FOUND (#147).
+        # Sans mot porteur (« relis le document ») : meilleure fiche de la room.
+        hits = self.mempalace_bridge.find_documents(query)
+        if hits is None:
+            hits = self.mempalace_bridge.retrieve_memories(query, room="documents", n=1)["hits"]
         source_match = _SOURCE_RE.search(hits[0].get("text", "")) if hits else None
         doc = self.mempalace_bridge.load_document_text(source_match.group(1)) if source_match else None
         if doc is None:

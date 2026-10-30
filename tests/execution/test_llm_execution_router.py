@@ -50,6 +50,7 @@ def make_router():
     bridge = MagicMock(spec=MempalaceBridge)
     bridge.retrieve_memories.return_value   = FAKE_GLOBAL_MEMORIES
     bridge.retrieve_by_intent.return_value  = FAKE_SESSION_MEMORIES
+    bridge.find_documents.return_value      = None
 
     # Intent factice retourné par intent_engine.apply()
     fake_intent = MagicMock()

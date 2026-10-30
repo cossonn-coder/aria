@@ -10,7 +10,7 @@
 
 | # | Kickoff | Objet | État |
 |---|---|---|---|
-| 01 | `01_recherche_documents.md` | `bridge.find_documents` (room entière + filtre par mots porteurs) ; relecture → 1re fiche correspondante ou `NOT_FOUND` ; rappel global → fiche en tête de la section épisodique, log `document_recall` | ⏳ |
+| 01 | `01_recherche_documents.md` | `bridge.find_documents` (room entière + filtre par mots porteurs) ; relecture → 1re fiche correspondante ou `NOT_FOUND` ; rappel global → fiche en tête de la section épisodique, log `document_recall` | ✅ |
 | 02 | `02_run_live.md` | run live (Nico), messages `run_live/messages.txt` | ⏳ |
 
 ## Décisions arrêtées
@@ -44,4 +44,10 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 44` (tronçon 01), puis run live 02 par Nico.
+Tronçon 01 implémenté (2026-10-30, pytest 433 verts, non commité au rendu du sous-agent) :
+`MempalaceBridge.find_documents` (None = sans mot porteur, [] = aucune fiche), relecture
+(`_handle_doc_reread`) et rappel global (`llm_router` étape 1 → `build_context_block(document_hit=…)`).
+Points à surveiller au run live : mots présents dans toute fiche (`source`, `synthese`, `https`)
+non exclus → une question qui les porte retient la 1re fiche ; seuil 0,8 conservé (fiches à
+distance > 0,8 invisibles).
+Prochaine étape : run live 02 par Nico (`docs/sprint44/02_run_live.md`).
