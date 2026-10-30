@@ -152,12 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 43 clos (tag `sprint-43`, mémoire des documents lus : fiche en `aria_episodic`, texte
-intégral en `aria_documents`, relecture « relis… » / « oui » ; correctif de la fausse quarantaine
-HNSW du fork mempalace + palace réparé ; voir `docs/sprint43/00_etat.md`).
-Prochain : **sprint 44**, cible à choisir par Nico.
-Kickoff : `docs/sprint44/context_kickoff_sprint_44.md`.
-Prochaine étape : `/conception sprint 44`.
+Sprint 44 clos (tag `sprint-44`, recherche des documents lus : `bridge.find_documents` = room
+`documents` entière + filtre par mots porteurs ; relecture → fiche correspondante ou `NOT_FOUND` ;
+fiche en tête du rappel épisodique ; voir `docs/sprint44/00_etat.md`).
+Prochain : **sprint 45**, recherche autonome (choix de Nico).
+Kickoff : `docs/sprint45/context_kickoff_sprint_45.md`.
+Prochaine étape : `/conception sprint 45`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
