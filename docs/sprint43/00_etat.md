@@ -1,9 +1,10 @@
 # Sprint 43 — état vivant
 
-**Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web).
-**Phase courante** : implémentation (`/sprint-auto sprint 43`), tronçons 01-02 faits ; reste le run live 03.
+**Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web) ; ajouté en cours :
+fausse quarantaine HNSW du palace (#105, #31), qui a bloqué le premier run live.
+**Phase courante** : conception quarantaine figée ; reste le tronçon 03 (`/sprint-auto sprint 43`) puis le run live 04.
 **Branche** : `feat/sprint43-memoire-documents`.
-**Audit** : `docs/sprint43/audit_memoire_documents.md`.
+**Audits** : `docs/sprint43/audit_memoire_documents.md`, `docs/sprint43/audit_quarantaine_hnsw.md`.
 
 ## Carte des tronçons
 
@@ -11,7 +12,8 @@
 |---|---|---|---|
 | 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
 | 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ✅ |
-| 03 | `03_run_live.md` | run live (Nico), `run_live/inventaire.txt` + `messages.txt` | ❌ bloqué (palace) |
+| 03 | `03_quarantaine_hnsw.md` | fork : cherry-pick `e811b6d1` + push `nicofork` ; pin `requirements.txt` ; `log.warning` sur `{"error"}` dans `retrieve_memories` | ⏳ |
+| 04 | `04_run_live.md` | run live (Nico) : étape 0 réparation (`run_live/reparation.txt`), étapes 1-8, étape 9 après redémarrage | ⏳ (1er essai 2026-10-30 ❌ palace) |
 
 ## Décisions arrêtées
 
@@ -31,10 +33,13 @@
 
 ## Dettes
 
-- Ferme (si run live OK) : #137 ; #139 partiellement (la relecture ne refait plus l'OCR ; « lis la suite » oui).
+- Ferme (si run live OK) : #137 ; #105 et #31 (cause racine = faux `.corrupt` du fork) ; #139 partiellement (la relecture ne refait plus l'OCR ; « lis la suite » oui).
 - Nouvelles à inscrire à la clôture :
   - `retrieve_memories(type_filter=…)` filtrerait tout : les hits mempalace n'ont pas de champ `type` (0 caller prod).
   - « lis la suite » après une relecture d'un texte > 100 000 car. repart du fichier / de l'URL.
+  - Ménage des `.drift-*` (6) et `.corrupt-*` (1) dans `~/.mempalace/palace` (+ segment orphelin après réparation).
+  - Même fichier envoyé plusieurs fois → plusieurs fiches : la source contient l'identifiant Telegram unique.
+  - Synthèse à l'envoi de l'inventaire : « carton 115, grenier » au lieu de garage (à recontrôler au run live).
   - `aria_documents` absente de `/status` (`count_by_wing`) et de `docs/architecture/memory_layers.md` (à documenter en clôture).
 
 ## §REPRISE
@@ -67,5 +72,24 @@ Constats secondaires :
 - Même fichier envoyé 3 fois → 3 fiches : la source est le chemin téléchargé, qui contient
   l'identifiant Telegram unique (`AgADoB4…`, `AgADoR4…`, `AgADoh4…`) ; « même source → remplacé » ne tient pas.
 - Synthèse à l'envoi : « carton 115, grenier », alors que l'inventaire dit garage (ligne 117).
-Prochaine étape : `/conception` sur la quarantaine HNSW (touche le palace prod → exigence relevée),
-puis rejouer le run live 03.
+Suite : conception « quarantaine HNSW » ci-dessous.
+
+### Conception « quarantaine HNSW » (2026-10-30, phase A)
+
+Audit : `docs/sprint43/audit_quarantaine_hnsw.md` (lire le TL;DR). Résumé : perte réelle le
+2026-10-23 11:56 (faux `.corrupt` du fork sur un pickle `dimensionality None`, format normal de
+chromadb-rust) ; correctif upstream `e811b6d1` applicable au fork ; réparation par
+`migrate_embedder.py` mpnet→mpnet testée sur copie (690/690) ; erreur muette dans le bridge.
+L'estimation « ~200 vecteurs » ci-dessus est fausse (capacité préallouée, pas un compte).
+Arbitrages tranchés par Nico (2026-10-30) :
+1. Rattachement : sprint 43, même branche ; un seul run live rejoué couvre réparation + documents.
+2. Correctif : cherry-pick `e811b6d1` sur le fork (+ ses tests), push `nicofork`, bump du pin
+   `requirements.txt`. Rejetés : montée v3.3.6 (227 commits), contournement côté ARIA (attribut privé).
+3. Réparation prod par Nico au run live (arrêt service, sauvegarde, marker déplacé,
+   `migrate_embedder` mpnet→mpnet) + `log.warning` dans `retrieve_memories` sur `{"error"}`.
+   Pas de ménage des `.drift-*`/`.corrupt-*` (dette).
+Conception figée sur OK de Nico (2026-10-30) : kickoffs `03_quarantaine_hnsw.md` et
+`04_run_live.md` (ancien `03_run_live.md`, renommé), `run_live/reparation.txt`.
+
+**Prochaine étape** : `/sprint-auto sprint 43` → tronçon 03 seul, puis remise du run live 04 à Nico
+(étape 0 = réparation du palace, à faire **après** le correctif du fork).

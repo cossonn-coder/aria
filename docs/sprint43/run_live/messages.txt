@@ -1,4 +1,5 @@
 Run live sprint 43 — fichier dans docs/sprint43/run_live/
+(avant tout : étape 0, réparation du palace — voir reparation.txt)
 
 1. envoyer inventaire.txt (sans légende)
 2. /oublie
@@ -10,3 +11,6 @@ Run live sprint 43 — fichier dans docs/sprint43/run_live/
    puis : /oublie
    puis : que disait la page sur le paillage ?
 8. relis le document sur les impôts
+9. sudo systemctl restart aria.service
+   puis : /oublie
+   puis : tu te souviens de l'inventaire que je t'ai envoyé ?
