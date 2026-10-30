@@ -8,7 +8,7 @@
 
 | # | Kickoff | Objet | État |
 |---|---|---|---|
-| 01 | `01_reception_fichiers.md` | handler document, `Event FILE` → `FILE_READ` → lecture comme une URL (texte, .html, PDF texte), `.pgn` → analyse, image en fichier → photo, > 20 Mo refusé | ⏳ |
+| 01 | `01_reception_fichiers.md` | handler document, `Event FILE` → `FILE_READ` → lecture comme une URL (texte, .html, PDF texte), `.pgn` → analyse, image en fichier → photo, > 20 Mo refusé | ✅ |
 | 02 | `02_pgn_plusieurs_parties.md` | PGN de plusieurs parties : toutes analysées, réponse groupée | ⏳ |
 | 03 | `03_ocr.md` | OCR par la chaîne vision : pages PDF scannées (20 max), texte des photos | ⏳ |
 | 04 | `04_run_live.md` | run live (Nico) | ⏳ |
@@ -38,4 +38,10 @@
 
 ## §REPRISE
 
-Conception figée. Exécution : `/sprint-auto sprint 42` (tronçons 01 → 03, puis run live 04 par Nico).
+Tronçon 01 fait (pytest 410 verts, baseline 398) : `_handle_document` dans l'interface,
+`files/extract.py`, `FILE_READ` → `web_router` (`_read_slice` choisit Tavily ou `extract_text`
+selon que la source est une URL http(s) ou un chemin local). Écarts mineurs : `EventType.FILE`
+existait déjà dans `core/event.py` ; une image envoyée en fichier est téléchargée dans
+`received_files/` (pas `received_images/`) ; le téléchargement d'un document se fait hors verrou
+utilisateur (le `.pgn` repasse par `_process_text`, qui prend le verrou).
+Suite : tronçon 02 (`02_pgn_plusieurs_parties.md`).

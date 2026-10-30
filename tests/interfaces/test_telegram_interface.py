@@ -5,11 +5,13 @@
 # Sprint 30 : signal d'attente (#103), photo en échec sautée (#104).
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from telegram.error import TimedOut
 
+from core.event import EventType
 from interfaces import telegram_interface
 from interfaces.telegram_interface import TelegramInterface
 
@@ -305,3 +307,88 @@ async def test_oublie_writes_reset_marker_with_chat_key(monkeypatch):
     assert written == ["42"]
     text = iface.app.bot.send_message.await_args.kwargs["text"]
     assert text == telegram_interface.meta_commands.FORGET_TEXT
+
+
+# ── Sprint 42 : aiguillage des documents reçus ──────────────────────────────
+
+def _document_update(file_name, mime_type, data, file_size=None, caption=None):
+    """Update factice : document dont le téléchargement écrit `data`."""
+    async def _download(custom_path):
+        Path(custom_path).write_bytes(data)
+        return custom_path
+    tg_file = MagicMock()
+    tg_file.download_to_drive = AsyncMock(side_effect=_download)
+    update = MagicMock()
+    update.effective_user.id = 777
+    update.effective_chat.id = 42
+    update.message.caption = caption
+    document = update.message.document
+    document.file_name = file_name
+    document.mime_type = mime_type
+    document.file_size = len(data) if file_size is None else file_size
+    document.file_unique_id = "uid"
+    document.get_file = AsyncMock(return_value=tg_file)
+    return update
+
+
+def _document_iface(monkeypatch, tmp_path):
+    monkeypatch.setattr(telegram_interface.config, "file_receive_dir", str(tmp_path))
+    kernel = MagicMock()
+    kernel.handle_event = AsyncMock(return_value="réponse")
+    iface = TelegramInterface(kernel=kernel, token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_chat_action = AsyncMock()
+    iface.app.bot.send_message = AsyncMock()
+    return iface, kernel
+
+
+@pytest.mark.asyncio
+async def test_document_too_big_answers_without_kernel(monkeypatch, tmp_path):
+    iface, kernel = _document_iface(monkeypatch, tmp_path)
+    update = _document_update("gros.pdf", "application/pdf", b"x", file_size=21 * 1024 * 1024)
+
+    await iface._handle_document(update, None)
+
+    kernel.handle_event.assert_not_awaited()
+    update.message.document.get_file.assert_not_awaited()
+    iface.app.bot.send_message.assert_awaited_once_with(chat_id=42, text=telegram_interface.FILE_TOO_BIG)
+
+
+@pytest.mark.asyncio
+async def test_document_image_becomes_image_event(monkeypatch, tmp_path):
+    iface, kernel = _document_iface(monkeypatch, tmp_path)
+
+    await iface._handle_document(_document_update("photo.png", "image/png", b"png", caption="c'est quoi ?"), None)
+
+    event = kernel.handle_event.await_args.args[0]
+    assert event.type == EventType.IMAGE
+    assert event.content == {"file_path": str(tmp_path / "uid_photo.png"), "caption": "c'est quoi ?"}
+
+
+@pytest.mark.asyncio
+async def test_document_pgn_goes_as_text_with_caption(monkeypatch, tmp_path):
+    iface, kernel = _document_iface(monkeypatch, tmp_path)
+    pgn = '[White "nico"]\n\n1. e4 e5 *'
+
+    await iface._handle_document(
+        _document_update("Ma partie.PGN", "application/octet-stream", pgn.encode(), caption="analyse"), None,
+    )
+
+    event = kernel.handle_event.await_args.args[0]
+    assert event.type == EventType.TEXT
+    assert event.content == f"analyse\n\n{pgn}"
+
+
+@pytest.mark.asyncio
+async def test_document_other_becomes_file_event(monkeypatch, tmp_path):
+    iface, kernel = _document_iface(monkeypatch, tmp_path)
+
+    await iface._handle_document(_document_update("mon rapport.txt", "text/plain", b"texte"), None)
+
+    event = kernel.handle_event.await_args.args[0]
+    assert event.type == EventType.FILE
+    assert event.content == {
+        "file_path": str(tmp_path / "uid_mon_rapport.txt"),
+        "file_name": "mon rapport.txt",
+        "caption": None,
+    }

@@ -6,7 +6,7 @@
 # appeler kernel.handle_event(), et envoyer la réponse.
 #
 # Ce module ne contient aucune logique métier.
-# Il sait lire les types Telegram (texte, photo) et envoyer
+# Il sait lire les types Telegram (texte, photo, document) et envoyer
 # les réponses appropriées (texte, photo).
 #
 # Gestion de la concurrence : un Lock par user_id évite les
@@ -32,6 +32,7 @@ from interfaces import meta_commands
 from interfaces.base_interface import BaseInterface
 from memory.writer import write_conversation_reset
 from core.event import Event, EventType
+from files.extract import extract_text
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -51,6 +52,11 @@ UNDELIVERED_NOTICE = "⚠️ Ma réponse précédente n'avait pas pu partir :"
 TYPING_REFRESH_SECONDS = 4
 WAIT_NOTICE_SECONDS = 20
 WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
+
+# Documents reçus (sprint 42) : au-delà de 20 Mo, la Bot API refuse le
+# téléchargement ; on répond directement, sans kernel.
+MAX_FILE_BYTES = 20 * 1024 * 1024
+FILE_TOO_BIG = "Fichier trop gros : je ne peux lire que les fichiers de 20 Mo au plus."
 
 # Marqueur posé par /reboot, lu au démarrage suivant pour annoncer le retour
 # (sprint 40). Constante module : surchargée en test.
@@ -111,6 +117,11 @@ class TelegramInterface(BaseInterface):
         # Photos envoyées par l'utilisateur
         self.app.add_handler(
             MessageHandler(only_nico & filters.PHOTO, self._handle_photo)
+        )
+
+        # Documents (fichiers) envoyés par l'utilisateur (sprint 42)
+        self.app.add_handler(
+            MessageHandler(only_nico & filters.Document.ALL, self._handle_document)
         )
 
         # Métacommandes : une méthode _cmd_<nom> par entrée de COMMANDS.
@@ -231,6 +242,65 @@ class TelegramInterface(BaseInterface):
                     "file_path": str(file_path),
                     "caption": update.message.caption,
                 },
+                metadata={"chat_id": chat_id},
+            )
+            result = await self._handle_with_waiting(chat_id, event)
+
+        await self.send(chat_id, result)
+
+    async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Reçoit un document Telegram et l'aiguille selon son type (sprint 42) :
+
+          > 20 Mo   → refus direct, sans téléchargement ni kernel
+          .pgn      → texte (légende en tête) traité comme un message
+          image/*   → Event IMAGE, même chemin qu'une photo
+          autre     → Event FILE, lu comme une URL (FILE_READ)
+
+        Nom téléchargé sans espace : le marqueur de lecture partielle
+        relu par « lis la suite » s'arrête au premier espace.
+        """
+
+        # Trace de réception (#63), cf. _handle_message.
+        log.info(
+            "telegram_update update_id=%s message_id=%s type=document",
+            update.update_id, update.message.message_id,
+        )
+
+        user_id = str(update.effective_user.id)
+        chat_id = update.effective_chat.id
+        document = update.message.document
+        caption = update.message.caption
+
+        if document.file_size and document.file_size > MAX_FILE_BYTES:
+            await self._deliver(chat_id, FILE_TOO_BIG)
+            return
+
+        file = await document.get_file()
+        file_receive_dir = Path(config.file_receive_dir)
+        file_receive_dir.mkdir(parents=True, exist_ok=True)
+        file_name = (document.file_name or "fichier").replace(" ", "_")
+        dest = file_receive_dir / f"{document.file_unique_id}_{file_name}"
+        file_path = str(await file.download_to_drive(custom_path=dest))
+
+        # PGN : même chemin qu'un PGN collé (detect_pgn → CHESS_ANALYSIS).
+        if file_name.lower().endswith(".pgn"):
+            pgn = extract_text(file_path)
+            await self._process_text(user_id, chat_id, f"{caption}\n\n{pgn}" if caption else pgn)
+            return
+
+        if (document.mime_type or "").startswith("image/"):
+            event_type = EventType.IMAGE
+            content = {"file_path": file_path, "caption": caption}
+        else:
+            event_type = EventType.FILE
+            content = {"file_path": file_path, "file_name": document.file_name, "caption": caption}
+
+        async with self.user_locks[user_id]:
+            event = Event.create(
+                event_type=event_type,
+                user_id=user_id,
+                content=content,
                 metadata={"chat_id": chat_id},
             )
             result = await self._handle_with_waiting(chat_id, event)

@@ -19,6 +19,7 @@ class CognitiveOperation(Enum):
     WEB_SEARCH = "web_search"  # délégué en REASONING par web_router (sprint 22)
     URL_READ = "url_read"      # lecture d'URL collée, déléguée en REASONING (sprint 23)
     CHESS_ANALYSIS = "chess_analysis"  # PGN collé, analyse Stockfish (sprint 26)
+    FILE_READ = "file_read"    # document reçu sur Telegram, lu comme une URL (sprint 42)
 
 
 # Préfixe du marqueur de lecture partielle posé par web_router dans le

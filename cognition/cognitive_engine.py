@@ -99,6 +99,14 @@ class CognitiveEngine:
                 interrogative=interrogative,
             )
 
+        # ── Documents (sprint 42) ────────────────────────────────────────────
+        # Le type d'Event suffit : lecture du fichier, sans appel LLM.
+        if event.type == EventType.FILE:
+            return CognitiveResult(
+                type=CognitiveOperation.FILE_READ.value,
+                operation=CognitiveOperation.FILE_READ,
+            )
+
         # ── Événements texte ─────────────────────────────────────────────────
         if event.type == EventType.TEXT:
             message = event.content if isinstance(event.content, str) else ""
