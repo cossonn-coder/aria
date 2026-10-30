@@ -368,3 +368,33 @@ def test_variant_line_capture_and_check():
     line = _variant_line(CriticalPosition(kind="a", ply=ply, score=20.0))
 
     assert line == "Variante : 4.Bxf7+ prend pion f7, échec ; 4...Kxf7 reprend ; 5.Ng5+ échec."
+
+
+def test_multi_games_grouped_answer(monkeypatch, tmp_path):
+    def _analysis(white, uci):
+        p = _ply(1, 17, "Ng4+", "d6", "d7d6")
+        p.uci = uci
+        return GameAnalysis(headers={"White": white, "Black": "staroflexeur", "Result": "0-1"},
+                            nico_color="black", color_source="header", plies=[p],
+                            critical=[CriticalPosition(kind="a", ply=p, score=p.loss)])
+    by_white = {"A": _analysis("A", "a7a6"), "B": _analysis("B", "b7b6")}
+    monkeypatch.setattr(chess_router_mod, "analyze",
+                        lambda text, *a: by_white["A" if '"A"' in text else "B"])
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    write_game = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+    pgn = '[White "A"]\n\n1. e4 e5 0-1\n\n[White "B"]\n\n1. d4 d5 0-1'
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": pgn, "metadata": {"chat_id": 42}}
+    )
+
+    assert [i["caption"][:21] for i in result["images"]] == ["Partie 1 — Position 1", "Partie 2 — Position 1"]
+    assert result["text"].startswith("Partie 1 — A – staroflexeur (0-1)\nexplication")
+    assert "\n\nPartie 2 — B – staroflexeur (0-1)\nexplication" in result["text"]
+    assert write_game.call_count == 2

@@ -57,6 +57,9 @@ WAIT_NOTICE = "⏳ Je travaille dessus, ça peut prendre jusqu'à 2 minutes."
 # téléchargement ; on répond directement, sans kernel.
 MAX_FILE_BYTES = 20 * 1024 * 1024
 FILE_TOO_BIG = "Fichier trop gros : je ne peux lire que les fichiers de 20 Mo au plus."
+# Annonce d'un .pgn de plusieurs parties : le bilan groupé arrive à la fin.
+PGN_MULTI_NOTICE = ("♟ {n} parties trouvées : je les analyse toutes et je t'envoie "
+                    "le bilan groupé à la fin (≈ 2 min par partie).")
 
 # Marqueur posé par /reboot, lu au démarrage suivant pour annoncer le retour
 # (sprint 40). Constante module : surchargée en test.
@@ -286,6 +289,9 @@ class TelegramInterface(BaseInterface):
         # PGN : même chemin qu'un PGN collé (detect_pgn → CHESS_ANALYSIS).
         if file_name.lower().endswith(".pgn"):
             pgn = extract_text(file_path)
+            n_games = sum(1 for line in pgn.splitlines() if line.strip().startswith("[White "))
+            if n_games >= 2:
+                await self._deliver(chat_id, PGN_MULTI_NOTICE.format(n=n_games))
             await self._process_text(user_id, chat_id, f"{caption}\n\n{pgn}" if caption else pgn)
             return
 

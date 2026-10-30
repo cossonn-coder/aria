@@ -9,7 +9,7 @@
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_reception_fichiers.md` | handler document, `Event FILE` → `FILE_READ` → lecture comme une URL (texte, .html, PDF texte), `.pgn` → analyse, image en fichier → photo, > 20 Mo refusé | ✅ |
-| 02 | `02_pgn_plusieurs_parties.md` | PGN de plusieurs parties : toutes analysées, réponse groupée | ⏳ |
+| 02 | `02_pgn_plusieurs_parties.md` | PGN de plusieurs parties : toutes analysées, réponse groupée | ✅ |
 | 03 | `03_ocr.md` | OCR par la chaîne vision : pages PDF scannées (20 max), texte des photos | ⏳ |
 | 04 | `04_run_live.md` | run live (Nico) | ⏳ |
 
@@ -44,4 +44,10 @@ selon que la source est une URL http(s) ou un chemin local). Écarts mineurs : `
 existait déjà dans `core/event.py` ; une image envoyée en fichier est téléchargée dans
 `received_files/` (pas `received_images/`) ; le téléchargement d'un document se fait hors verrou
 utilisateur (le `.pgn` repasse par `_process_text`, qui prend le verrou).
-Suite : tronçon 02 (`02_pgn_plusieurs_parties.md`).
+Tronçon 02 fait (pytest 413 verts) : `split_pgn` dans `chess_coach/analysis.py` (nouvelle partie
+= ligne « [ » après une ligne de coups ; légende recopiée en tête de chaque partie) ;
+`ChessExecutionRouter.execute` → `_execute_many` si ≥ 2 parties, corps d'une partie extrait tel
+quel dans `_execute_game` (partie unique inchangée) ; annonce `PGN_MULTI_NOTICE` dans
+`_handle_document` (compte des lignes `[White `). Un PGN collé de plusieurs parties passe aussi
+par `_execute_many`, sans annonce (l'annonce n'existe que pour le fichier).
+Suite : tronçon 03 (`03_ocr.md`).

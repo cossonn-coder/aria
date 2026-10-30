@@ -380,6 +380,18 @@ async def test_document_pgn_goes_as_text_with_caption(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_document_pgn_several_games_announced(monkeypatch, tmp_path):
+    iface, kernel = _document_iface(monkeypatch, tmp_path)
+    pgn = '[White "a"]\n\n1. e4 e5 *\n\n[White "b"]\n\n1. d4 d5 *'
+
+    await iface._handle_document(_document_update("p.pgn", "application/octet-stream", pgn.encode()), None)
+
+    iface.app.bot.send_message.assert_any_await(
+        chat_id=42, text=telegram_interface.PGN_MULTI_NOTICE.format(n=2))
+    kernel.handle_event.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_document_other_becomes_file_event(monkeypatch, tmp_path):
     iface, kernel = _document_iface(monkeypatch, tmp_path)
 
