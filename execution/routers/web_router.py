@@ -35,6 +35,13 @@
 #   bridge → même synthèse qu'URL_READ, sans fichier, Tavily ni OCR, et
 #   sans réécrire la fiche.
 #
+# Pipeline WEB_RESEARCH (sprint 45), une seule vague :
+#   4 derniers messages + 4 souvenirs (bridge) → plan de 3 à 5 requêtes
+#   (LLM CHAT) → search() par requête → lecture intégrale de 3 pages sans
+#   doublon (extract, à défaut l'extrait Tavily) → rapport (LLM DIGEST)
+#   → rapport écrit comme un document lu (write_document, source
+#   « recherche:<date>-<sha8> ») → LLMExecutionRouter en REASONING + skip_intent.
+#
 # Règle d'architecture :
 #   Ce router n'écrit en mémoire que la fiche document, via memory/writer.py
 #   (règle 1). L'écriture conversation est faite par LLMExecutionRouter.
@@ -46,7 +53,7 @@ from datetime import date
 from pathlib import Path
 
 from execution.routers.execution_base import BaseRouter
-from cognition.cognitive_classifier import _DOC_REREAD_WORDS, detect_url
+from cognition.cognitive_classifier import _DOC_REREAD_WORDS, detect_url, extract_research_subject
 from cognition.cognitive_context import CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER
 from files.extract import extract_text
 from llm.llm_role import LLMRole
@@ -74,6 +81,15 @@ _PROPOSAL_RE = re.compile(re.escape(REREAD_PROPOSAL) + r"(.+?) »")
 
 # Budget de la synthèse ; l'atteindre = synthèse probablement coupée.
 _DIGEST_MAX_TOKENS = 1000
+
+# Recherche autonome (sprint 45) : pages lues en entier, et taille max de
+# chacune dans le prompt du rapport [arbitraire].
+_RESEARCH_PAGES = 3
+_RESEARCH_PAGE_MAX_CHARS = 30_000
+_RESEARCH_MAX_QUERIES = 5
+# Plafond du rapport (sprint 45, tronçon 03) : 1500 tronquait le rapport
+# avant la liste des URL au run live 02.
+_RESEARCH_REPORT_MAX_TOKENS = 3000
 
 
 class WebExecutionRouter(BaseRouter):
@@ -110,6 +126,9 @@ class WebExecutionRouter(BaseRouter):
 
         if op_type == CognitiveOperation.DOC_REREAD.value:
             return self._handle_doc_reread(payload)
+
+        if op_type == CognitiveOperation.WEB_RESEARCH.value:
+            return self._handle_research(payload)
 
         raise ValueError(f"WebExecutionRouter: op_type inconnu '{op_type}'")
 
@@ -186,6 +205,160 @@ class WebExecutionRouter(BaseRouter):
             log.warning("web_search query reformulation failed, raw message used: %s", e)
             return message
 
+
+    # =========================================================
+    # WEB RESEARCH (sprint 45)
+    # =========================================================
+
+    def _handle_research(self, payload: dict) -> dict:
+        message  = str(payload.get("content") or "")
+        metadata = payload.get("metadata", {})
+        subject  = extract_research_subject(message)[:80]
+
+        queries = self._plan_research(message, metadata)
+
+        # ── Recherche : séquentielle, une requête en échec n'arrête pas les autres ──
+        results_by_query = []
+        for q in queries:
+            try:
+                results_by_query.append(search(q))
+            except Exception as e:
+                log.warning("web_research search FAILED query=%r error=%s", q, e)
+        n_results = sum(len(r) for r in results_by_query)
+        if n_results == 0:
+            log.warning("web_research FAILED: no result for %d queries", len(queries))
+            return self._delegate_unavailable(message, metadata)
+
+        # ── Lecture : 1er résultat de chaque requête, puis les suivants, sans doublon ──
+        candidates, seen = [], set()
+        for rank in range(max(len(r) for r in results_by_query)):
+            for results in results_by_query:
+                if rank < len(results) and results[rank]["url"] not in seen:
+                    seen.add(results[rank]["url"])
+                    candidates.append(results[rank])
+        pages, failed = [], 0
+        for r in candidates[:_RESEARCH_PAGES]:
+            try:
+                text = extract(r["url"])["content"]
+            except Exception as e:
+                # Échec de lecture : on garde l'extrait Tavily du résultat.
+                log.warning("web_research extract FAILED url=%s error=%s", r["url"], e)
+                failed += 1
+                text = r["content"]
+            pages.append({"title": r["title"], "url": r["url"], "content": text[:_RESEARCH_PAGE_MAX_CHARS]})
+        log.info("web_research pages read=%d failed=%d", len(pages) - failed, failed)
+
+        # ── Rapport : pages lues + extraits des autres résultats ──
+        read_urls = {p["url"] for p in pages}
+        blocks = [f"### {p['title']} — {p['url']}\n{p['content']}" for p in pages]
+        snippets = [
+            f"- {r['title']} — {r['url']}\n  {r['content'][:_SNIPPET_MAX_CHARS]}"
+            for r in candidates if r["url"] not in read_urls
+        ]
+        prompt = (
+            "Rédige un rapport de recherche fidèle en français sur la demande de Nico, "
+            "sans rien inventer, uniquement à partir des pages et des extraits ci-dessous. "
+            "Termine par la liste des URL utilisées.\n\n"
+            f"Demande de Nico : {message}\n\n"
+            "Pages lues :\n" + "\n\n".join(blocks) + "\n\n"
+            "Autres extraits :\n" + ("\n".join(snippets) or "(aucun)") + "\n\nRapport :"
+        )
+        try:
+            response = self.llm_router.complete(
+                prompt=prompt, role=LLMRole.DIGEST, temperature=0.3,
+                max_tokens=_RESEARCH_REPORT_MAX_TOKENS,
+            )
+            report = response.content.strip()
+        except Exception as e:
+            log.warning("web_research report FAILED error=%s", e)
+            return self._delegate_unavailable(message, metadata)
+        # Tokens de sortie : DeepSeek (format OpenAI) ou Anthropic.
+        usage = response.usage or {}
+        report_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+        if report_tokens is not None and report_tokens >= _RESEARCH_REPORT_MAX_TOKENS:
+            log.warning("web_research report hit max_tokens=%d", _RESEARCH_REPORT_MAX_TOKENS)
+
+        # ── Trace (non bloquante) : le rapport est conservé comme un document lu ──
+        # Source sans espace : _SOURCE_RE doit la relire.
+        source = f"recherche:{date.today().isoformat()}-{hashlib.sha256(message.encode()).hexdigest()[:8]}"
+        doc_name = f"Recherche : {subject}"
+        fiche = (
+            f"Document « {doc_name} » lu le {date.today().isoformat()}\n"
+            f"Source : {source}\n"
+            f"Synthèse : {report}"
+        )
+        key = hashlib.sha256(source.encode()).hexdigest()[:16]
+        try:
+            write_document(fiche, report, source, doc_name)
+            log.info("document_write OK key=%s source=%s chars=%d", key, source, len(report))
+        except Exception:
+            log.exception("document_write ERROR key=%s source=%s", key, source)
+
+        log.info(
+            "web_research OK queries=%d results=%d pages=%d report_tokens=%s",
+            len(queries), n_results, len(pages), report_tokens,
+        )
+        enriched = (
+            f"[Rapport de recherche « {subject} » :\n{report}]\n"
+            "[Consigne : réponds à Nico à partir de ce rapport et termine par la "
+            "liste des URL utilisées.]\n\n"
+            f"{message}"
+        )
+        return self.llm_execution_router.execute({
+            "op_type" : CognitiveOperation.REASONING.value,
+            "content" : enriched,
+            # skip_intent : une recherche ne résout ni ne mute d'intent
+            "metadata": {**metadata, "skip_intent": True},
+        })
+
+    def _plan_research(self, message: str, metadata: dict) -> list[str]:
+        """
+        Plan de 3 à 5 requêtes web, construit à partir de la conversation
+        récente et des souvenirs de Nico. Échec du LLM ou plan vide :
+        la seule requête est le message brut.
+        """
+        conversation_key = str(metadata.get("chat_id", "default"))
+        try:
+            history = self.mempalace_bridge.load_conversation_history(conversation_key, n=4)
+            hits = self.mempalace_bridge.retrieve_memories(message, n=4)["hits"]
+            conversation = "\n".join(f"{t['role']}: {t['content']}" for t in history)
+            memories = "\n".join(f"- {h.get('text', '')[:300]}" for h in hits)
+            prompt = (
+                "Formule 3 à 5 requêtes de recherche web courtes couvrant les différents "
+                "angles du sujet demandé par Nico, en tenant compte de la conversation "
+                "et de ses souvenirs. Une requête par ligne, rien d'autre.\n\n"
+                f"Conversation récente :\n{conversation or '(aucune)'}\n\n"
+                f"Souvenirs de Nico :\n{memories or '(aucun)'}\n\n"
+                f"Demande : {message}\n\nRequêtes :"
+            )
+            response = self.llm_router.complete(
+                prompt=prompt, role=LLMRole.CHAT, temperature=0.2, max_tokens=200,
+            )
+            # Nettoyage : puces, numéros (« 1. », « 2) ») et guillemets.
+            queries = [
+                re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip().strip('"«» ')
+                for line in response.content.splitlines()
+            ]
+            queries = [q for q in queries if q][:_RESEARCH_MAX_QUERIES]
+        except Exception as e:
+            log.warning("web_research plan failed, raw message used: %s", e)
+            queries = []
+        queries = queries or [message]
+        log.info("web_research plan queries=%d %r", len(queries), queries)
+        return queries
+
+    def _delegate_unavailable(self, message: str, metadata: dict) -> dict:
+        """Même consigne que _handle_search quand la recherche web échoue."""
+        enriched = (
+            "[Recherche web indisponible : dis-le à Nico en une phrase, puis "
+            "réponds si tu peux en précisant que ce n'est pas vérifié.]\n\n"
+            f"{message}"
+        )
+        return self.llm_execution_router.execute({
+            "op_type" : CognitiveOperation.REASONING.value,
+            "content" : enriched,
+            "metadata": {**metadata, "skip_intent": True},
+        })
 
     # =========================================================
     # URL READ
