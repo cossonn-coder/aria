@@ -1,0 +1,166 @@
+─────────────────────────────────────────────────────────────────────────
+ARIA — Kickoff sprint 46 (ouverture)
+─────────────────────────────────────────────────────────────────────────
+
+**Date**                          : 2026-10-30
+**Tag de référence sortie**       : `sprint-45`
+**État sprint 45**                : CLOS (tronçons 01 et 03, runs live 02 et 03 OK par Nico).
+  Détail : `docs/sprint45/00_etat.md`.
+
+─────────────────────────────────────────────────────────────────────────
+
+## Acquis sprint 45 (rappel synthétique)
+
+- Opération `WEB_RESEARCH` sur phrases explicites seulement (`_WEB_RESEARCH_PHRASES` :
+  « fais une recherche sur », « renseigne-toi sur », « recherche approfondie »…), testée avant
+  `WEB_SEARCH` (inchangée, recherche rapide) ; absente du classifier LLM.
+- `web_router._handle_research`, une vague : contexte (4 messages + 4 souvenirs via bridge) →
+  plan LLM CHAT de 3 à 5 requêtes → Tavily par requête → lecture intégrale de 3 pages sans doublon
+  (extrait Tavily en repli) → rapport DIGEST (`_RESEARCH_REPORT_MAX_TOKENS = 3000`) → délégation
+  REASONING + `skip_intent`. Durée observée 36-38 s [n=2 runs live].
+- Rapport conservé comme document lu (`write_document`, source `recherche:<date>-<sha8>`, nom
+  « Recherche : <sujet> » via `extract_research_subject`) → retrouvé par `find_documents`
+  (`document_recall`), relu par « relis la recherche sur… » (`doc_reread`).
+- 438 tests verts.
+
+─────────────────────────────────────────────────────────────────────────
+
+## Cible sprint 46
+
+À choisir par Nico en `/conception sprint 46`.
+
+─────────────────────────────────────────────────────────────────────────
+
+## Dettes ouvertes au 2026-10-30 (post sprint 45)
+
+| #  | Sujet | Statut |
+|----|-------|--------|
+| 9, 10, 11, 13, 15, 16, 19, 23 | (legacy < sprint 6) | ouverts, non touchés |
+| 17 | Semantic wings non câblées | ouvert, architectural |
+| 24 | `_read_collection_dim_count_sqlite` ignore database_id | ouvert, mono-db sans effet |
+| 26 | Artefacts résiduels `~/.mempalace/` | partiellement résolue sprint 10 |
+| 31 | Drift HNSW mécanique récurrent | **résolue sprint 43** (via #105) |
+| 32 | Digression Normandie → Belgique | à reconfirmer |
+| 33 | Garde runbook `"mempalace-fork" in __file__` | ouvert, polish trivial |
+| 35 | Tests dépendants de l'auto-sys.path pytest | ouvert |
+| 36 | `LLMRouter.route()` inerte, jamais appelée | ouvert |
+| 37 | `max_history_turns` compte des tours, l'API des messages | ouvert, reformulée sprint 33 : nommage seul, sans effet sur le volume (plafond 6 000 car. en aval) |
+| 38 | Double présence épisodique / conversation dans le contexte | ouvert, bornée (400 car./souvenir), pas la cause du volume [audit sprint 33] |
+| 39 | executor/critic (phase `execution`) sans historique | **résolue sprint 34** : code supprimé (#72) |
+| 40 | Embeddings inutiles sur `aria_conversation` (latence CPU, HNSW) | ouvert |
+| 41 | `executor_agent.py`, `critic_agent.py` absents de l'inventaire des callers de `complete` | **résolue sprint 34** : code supprimé (#72) |
+| 43 | `mempalace_mcp` logue en ERROR « No palace found » au 1er message après reset | ouvert, cosmétique |
+| 52 | `scripts/check_keys.py` teste des modèles retirés | ouvert |
+| 53 | Config morte : `gemini_model`, `sambanova_*`, `cerebras_*`, `mistral_*`, `openrouter_vision_models`, `OpenRouterVisionClient` | ouvert |
+| 54 | `LLMRole.REFLECTION` sans caller | ouvert |
+| 55 | `CriticAgent` : sortie jamais lue (appel LLM sans effet) | **résolue sprint 34** : code supprimé (#72) |
+| 56 | Mode enrichi : question en anglais → réponse en français (message enrichi majoritairement FR, `user.md` « Langue : français ») | ouvert, accepté par Nico |
+| 58 | #51 option (b) : rattachement photo → intent sur correspondance forte | ouvert, seulement si perte de contexte projet constatée |
+| 60 | Vision : lecture fine inventée (position d'échecs), limite modèle ; le LLM texte dit alors « je ne vois pas l'image » alors que la description est dans l'historique | ouvert, accepté (reformulée sprint 20) |
+| 63 | Photo analysée deux fois après redémarrage (23:16:01 / 23:16:18) — rejeu Telegram ou double envoi | instrumentée sprint 21 (log `telegram_update`), à confirmer |
+| 64 | `IntentActionType.IGNORE` déclaré, jamais utilisé | ouvert, polish |
+| 65 | `aria.service` versionné pointe `/home/nico/projects/aria` (installé : Nextcloud) | ouvert |
+| 66 | Découpage 4096 de `send()` coupe au milieu des mots (commentaire faux) | ouvert, polish |
+| 67 | IPv6 VM → Telegram injoignable | ouvert, piste si timeouts persistent |
+| 68 | Rappels différés + envoi proactif (scheduler) | ouvert, sprint dédié |
+| 70 | Météo dédiée (aujourd'hui via `web_search`) | ouvert |
+| 71 | `print()` dans `core/kernel.py` `_normalize` | **résolue sprint 29** (logger, tronçon 01) |
+| 72 | Code sans caller apparent : `cognition/cognitive_dispatcher.py`, `execution/execution_plan_builder.py`, `cognition/dispatcher_types.py` ; depuis sprint 32 aussi `agents/executor_agent.py`, `agents/critic_agent.py` et leurs entrées du registre | **résolue sprint 34** : modules supprimés, orphelins (`ExecutionPlan`, `Intent.infer_phase`, `IntentPhase`) retirés, redémarrage sans ImportError |
+| 73 | Groq 413 sur conversation chargée (ITPM `Limit 7000`) | **résolue sprint 31** : saut préventif de Groq au-delà de 12 000 car. (`GROQ_MAX_PAYLOAD_CHARS`), aucun 413 au run live ; Groq garde les petites requêtes |
+| 74 | Réponse hors sujet « Prochaine action : … » à un message conversationnel [n=4] | **résolue sprint 32** : messages courts et non classés → analyst seul ; au run live, `salut` en 6 s, un seul appel DeepSeek, plus de « Prochaine action » |
+| 75 | Intent parasite `vacances normandie train` créé sur une question de suivi de lecture d'URL (« et la gastronomie normande… ») [n=1] | ouvert |
+| 76 | Suite de lecture : la réponse refusionne la tranche 1 et parle de « trois parties » au lieu de deux [n=1] | ouvert, polish prompt |
+| 77 | Image-to-image (photo + légende de génération) : Pollinations accepte `image=`, il faut une URL publique de la photo | ouvert |
+| 78 | `llm/image_gen/hf_client.py` + `config.hf_image_model` morts (HF hors table depuis sprint 24) | ouvert, polish |
+| 79 | Position d'échecs depuis une image (photo d'échiquier physique + capture d'écran) | ouvert |
+| 80 | Relance moteur sur une position citée en texte libre (coups tapés sans en-tête : LLM seul, 15.Cg5+ conseillé à tort au run 06, SF d22 [1 run] : 15.exd6 +2,8) | ouvert |
+| 81 | Bilan joueur / progression / déviations de répertoire (lecture des fiches `chess_game`) | partiellement résolue sprint 28 (modèle joueur RPG) ; déviations de répertoire non traitées |
+| 82 | Questions d'ouverture sans PGN (LLM seul, hallucinations constatées) | ouvert |
+| 83 | Lien de partie Chess.com → PGN via API publique | ouvert |
+| 84 | Récit LLM inventé autour des coups (matériel / menaces absents du bloc enrichi) | partiellement résolue sprint 27 (lignes `matériel :` / `attaquées :`) ; résidu → #92 |
+| 85 | Positions critiques et meilleur coup instables entre deux analyses de la même partie (A : 16…Fe6 → 3…g6 ; F : 12.e5 → 38.Dc4+) [runs 04 et 06] | ouvert ; `test_explosive_early_queen_nf6` en échec 3/5 suites complètes [n=5, sprint 28] et 1/5 isolé [n=5] |
+| 86 | 413 Groq systématique sur les échanges échecs, suivis compris | **résolue sprint 31** (via #73), suivis vérifiés au run live |
+| 88 | Question de suivi « la position 1 de cette partie » répond sur une autre partie malgré l'ancre (run 06 C, n=1) ; hypothèse non vérifiée : historique pollué par la mauvaise réponse du run 04 | ouvert, à auditer |
+| 87 | Coups conseillés « explosifs » (sorte d) | partiellement résolue sprint 27 : moteur ✅ (Morra 8.Nd5, Dame précoce, letton) ; texte → #89-#92 ; Maia (lc0) = v2 |
+| 89 | Variante du tournant (e) non montrée par le LLM | **résolue sprint 29** : ligne « Variante : » écrite par le router (tronçon 15), vue sur les 4 tournants du run live 13 |
+| 90 | « Avantage clair » trop permissif : critères développement (écart ≥ 2) et activité (écart ≥ 10 coups légaux) valident des fins de variante à 36-54 % de gain [n=4, run live 27-10] | ouvert, seuils à réviser |
+| 91 | Occasions explosives sans vrai piège : la réponse logique est une des bonnes réponses | **résolue sprint 29** : espérance humaine Maia, réponse affichée = réponse humaine la plus probable (tronçon 04) ; bruit d'ouverture accepté (2.d4, 3.Bb5, 6.Bb5) |
+| 92 | Faits inventés résiduels dans le texte LLM : run live 27-10 (« 8.e5 meilleur coup », « Na6 sacrifie un pion ») ; run live 13 sprint 29 : « trois pièces de plus » à +3 points, « Rd1# imparable » alors que 39.Qc2 pare, « tu prends tout sur la colonne d » hors variante [3 sur 21 entrées] | ouvert |
+| 93 | Polish rendu échecs : légende tournant « joué X (meilleur X) » redondante ; « fin de variante : matériel : … » (double deux-points) | ouvert, cosmétique |
+| 94 | Échiquier d'analyse rejouable (chessground) avec flèches ; rejeu d'une partie PGN | **résolue sprint 38** : PGN chargé dans l'échiquier, navigation, variante, « joué : X » + pièce cerclée, courbe du % de gain des blancs (run live 2026-10-27) ; calque chess.com abandonné |
+| 95 | Inventaire / bilan complet sans PGN (« où j'en suis aux échecs ? ») | ouvert (sprint 28) |
+| 96 | `summary.unconverted` vrai sur les parties à résultat `*` (outcome unknown) | ouvert (sprint 28) |
+| 97 | Renvoyer une ancienne partie la replace en dernier dans la chronologie (timestamp d'analyse) | ouvert (sprint 28) |
+| 98 | Fiches parasites « Test » ×2 / « Ami » dans le palace prod (ignorées : hors saison) | ouvert (sprint 28) |
+| 99 | Arrêt d'`aria.service` > 90 s puis SIGKILL | **résolue sprint 29** : `os._exit(0)` après arrêt PTB (tronçon 10), arrêt dans la seconde aux runs 11-13 |
+| 100 | Thèmes du modèle joueur par motif tactique | **résolue sprint 29** : `chess_coach/motifs.py` (portage cook.py + 11 mats), un classement par motif + « Mats », Global = moyenne des thèmes à ≥ 1 épreuve |
+| 101 | Ligne fusionnée du bloc Progression (deux thèmes au même coup) non observée en live, couverte par les tests seuls | ouvert, à observer |
+| 102 | Mémoire du service 2,2 Go après 4 analyses (Maia/torch chargé) sur VM 4 Go [1 relevé] | ouvert, à surveiller |
+| 103 | `handle_event` synchrone bloque la boucle du bot pendant l'analyse | **résolue sprint 30** : `asyncio.to_thread` + « écrit… » + ⏳ unique, validé live ; reste #112 |
+| 104 | Un échec d'envoi de photo interrompt l'envoi du texte qui suit (`images_text`) | **résolue sprint 30** (tests seuls, non provocable en live) |
+| 105 | Quarantaine HNSW récurrente de `mempalace_drawers` (`sync_threshold` 50 000) | **résolue sprint 43** : cause racine = faux `.corrupt-*` du fork sur un pickle `dimensionality: None` (format normal chromadb 1.5.5) ; correctif amont `e811b6d1` repris (fork `ecf72132`), palace réparé (698/698), plus de `Quarantined invalid HNSW metadata` au run live ; les `.drift-*` restent sans dommage (→ #142) |
+| 106 | Le LLM écrit « finale » sur une position classée milieu de partie | ouvert (sprint 29) |
+| 107 | `context_block` épisodique nourri d'analyses passées (influence sur la légende non mesurée) | ouvert (sprint 29) |
+| 108 | Analyse non déterministe : occasions explosives et précision différentes d'un passage à l'autre (86 % → 87 % sur la même partie) | ouvert (sprint 29) ; recoupe #85 |
+| 109 | Ligne « Variante : » parfois réduite à 1-2 coups (« 28...Kh7. », « 12.Bd2 ; 12...Nf5. ») : PV coupée à l'avantage clair ou courte | ouvert (sprint 29) |
+| 110 | Consignes d / e en tension avec « idée générale seule, 1-3 phrases » : le LLM recopie « face à un humain l'espérance n'est pas meilleure que le meilleur coup » (2 fois sur la partie 2) | ouvert (sprint 29), polish prompt |
+| 111 | Message ⏳ « jusqu'à 2 minutes » envoyé sur un `salut` | **résolue sprint 31** : seuil 20 s, aucun ⏳ sur les messages courts au run live (11 s max) |
+| 112 | PTB traite les updates en séquence : un message envoyé pendant une analyse n'est pris qu'après elle | ouvert, observé au run 31 [n=1], seulement si gênant (`concurrent_updates`) |
+| 113 | Prompts de 319 023 / 161 407 car. envoyés à DeepSeek sur un `salut` après une analyse | **résolue sprint 32** : c'étaient les prompts executor / critic (rediagnostic), disparus au run live ; l'historique restant (≈ 37 000 car.) relève de #37 ; **ramené à ≤ 6 000 car. sprint 33** |
+| 114 | `actions_history` des intents stocke les messages entiers (blocs d'analyse ≈ 9 000 car.), `intents.json` à 327 Ko [audit sprint 32] et en croissance ; disque seulement, plus envoyé au LLM | **résolue sprint 34** : `save_intents` coupe chaque action à 100 car. ; `intents.json` 343 805 → 13 922 octets au run live |
+| 115 | Suivi de partie : « pourquoi mon 12e coup était une erreur ? » → l'analyst accepte la prémisse (l'analyse disait aucune erreur), dit « tu as gagné un pion » sur une reprise, invente 12…Nd3+ « décisif » ; faits moteur et PGN coupés de l'historique par le plafond sprint 33 (cause probable, non prouvée) [n=1] | ouvert (sprint 33) |
+| 116 | `intent_compression_engine.py` affecte la property `actions` sans setter (crash si fusion) | ouvert (sprint 34), non vérifié |
+| 117 | `print()` dans `intent/intent_store.py` | ouvert (sprint 34), polish |
+| 118 | Deux intents `jeux echecs` dans `intents.json` | ouvert (sprint 34) |
+| 119 | `ExecutionStatus` sans usage | ouvert (sprint 34), polish |
+| 120 | `aria.egg-info/SOURCES.txt` versionné, liste encore les fichiers supprimés au sprint 34 | ouvert (sprint 34), polish |
+| 121 | Coups explosifs trop rares : gambits d'ouverture, Fxf7+, sacrifice grec non signalés ; meilleur coup exclu, sacrifice mesuré net après l'échange, fenêtre 35-75 % [retour run live sprint 35] | **résolue sprint 36** : sacrifice = offre acceptée (déficit ≥ 1 pion vs ligne du meilleur coup, perte ≤ 10 pts, avantage clair ou échec), meilleur coup candidat en live, `_WIN_MAX` 85 ; Göring, Fxf7+, Fxh7+ vus au run live |
+| 122 | Latence de l'analyse live de l'échiquier : passe ×1 ≈ 4-6 s, ×2 ≈ 8-12 s, ×4 ≈ 30 s [journal 2026-10-23, n=6 à 31 par passe] ; coups joués vite → analyses `superseded` sans flèche | ouvert, accepté par Nico (« finalement ça va ») ; non aggravée par le sprint 36 ; sprint 37 (piège + stratégie) : ×1 1,8-9,5 s, médiane ≈ 6 s [journal 2026-10-26, n=24], ×4 13-49 s [n=4] |
+| 123 | Flèche rose sans explication : la page montre le coup et sa suite, pas l'idée stratégique en mots [run live sprint 37] | ouvert (sprint 37), souhait de Nico |
+| 124 | « pronostic humain X % (meilleur coup Y %) » illisible : c'est le score attendu du camp au trait d'après la tête de valeur Maia-2, pas une probabilité de jouer le coup [run live sprint 37] | ouvert (sprint 37), libellé à revoir |
+| 125 | Section 2 du run live : cyan sur g3 au lieu de h6 attendu, orange Na6 disparu entre deux passes [n=1] | ouvert (sprint 37), recoupe #108 |
+| 126 | Code couleur cyan / rose / bleu rationné absent de Telegram (échiquier seul) | ouvert (sprint 37), décision lot 1 |
+| 127 | Courbe du meilleur coup à chaque position, en comparaison de la courbe jouée (sens à préciser : la courbe actuelle suppose déjà le meilleur jeu ensuite) [run live sprint 38] | **résolue sprint 39** |
+| 128 | Indication des chances de mat sur la courbe [run live sprint 38] | **résolue sprint 39** |
+| 129 | Courbe visible en permanence, y compris en jeu libre (aujourd'hui seulement avec un PGN chargé) [run live sprint 38] | **résolue sprint 39** |
+| 130 | Partie jouée sur l'échiquier enregistrée au fil des coups, export PGN [run live sprint 38] | **résolue sprint 39** |
+| 131 | Métacommandes Telegram : `/reboot` et commandes de confort (`/status`…) ; aujourd'hui `filters.TEXT & ~filters.COMMAND` ignore tout `/xxx` sans réponse | **résolue sprint 40** : 11 commandes + menu Telegram, filtre `ALLOWED_USER_ID`, `/reboot` par sortie code 1, `/oublie` = marqueur réversible (run live 2026-10-29) |
+| 132 | Échiquier ouvert via `/board` : la 1re passe d'analyse expire pendant le chargement de Maia (`board_analysis error id=1 pass=1`, `TimeoutError`) puis `InvalidStateError` de `chess.engine` (réponse UCI arrivée après annulation) ; 3 tracebacks au journal, sans effet visible [run live sprint 40, n=1] | ouvert (sprint 40) |
+| 133 | `/reboot` annonce « ≈ 15 s », relance mesurée ≈ 38 s (arrêt 20:17:11 → démarrage 20:17:46) [n=1] | ouvert (sprint 40), cosmétique |
+| 134 | `/status` compte les marqueurs `/oublie` (`conversation_reset`) dans le total `aria_conversation` | ouvert (sprint 40), cosmétique |
+| 135 | Un seul `BoardWorker` côté serveur : PC et téléphone ouverts en même temps se volent l'analyse live (la dernière position soumise gagne) | ouvert (sprint 41) |
+| 136 | « Exporter PGN » (téléchargement `blob:`) peut ne pas marcher dans la webview Telegram | ouvert (sprint 41), run live « tout bon » global, export non détaillé |
+| 137 | Document lu oublié après quelques échanges : la synthèse n'est que dans `aria_conversation` (relue par ordre chronologique, plafond 6 000 car.) ; pas d'écriture épisodique (`no_intent_resolved`) → introuvable par le sens quelques jours plus tard [run live sprint 42] | **résolue sprint 43** : fiche `aria_episodic`/room `documents` + texte intégral `aria_documents`, relecture « relis… » / « oui » ; rappel après `/oublie` et redémarrage OK au run live (inventaire) ; résidus #146-#148 |
+| 138 | `pypdf` installé dans le venv mais absent de `requirements.txt` | ouvert (sprint 42), polish |
+| 139 | « lis la suite » sur un PDF scanné refait l'OCR de tout le fichier à chaque tranche (rare : > 100 000 car.) | partiellement résolue sprint 43 : la relecture d'un document ne refait plus l'OCR ; « lis la suite » oui |
+| 153 | Relecture d'une recherche (`source=recherche:…`) libellée « synthèse du fichier » par `_read_slice` (toute source non http = fichier) | ouvert (sprint 45), cosmétique |
+| 154 | `web_research OK … pages=` compte les pages en échec d'extraction (`read=2 failed=1` → `pages=3`) | ouvert (sprint 45), cosmétique |
+| 155 | Rappel épisodique hors sujet : « quel temps demain à Grenoble ? » → `document_recall source=…inventaire.txt` [n=1, run live 02] | ouvert (sprint 45) |
+| 156 | Réponse Telegram > 4096 car. découpée au milieu d'une ligne (URL coupée en deux messages au run live 03) | ouvert (sprint 45), cosmétique |
+
+Hors dettes (Q4 sprint 27) : rangement des fiches `chess_game` en wing `echecs` / room
+par ouverture.
+| 140 | `retrieve_memories(type_filter=…)` filtrerait tout : les hits mempalace n'ont pas de champ `type` | ouvert (sprint 43), 0 caller prod |
+| 141 | « lis la suite » après la relecture d'un texte > 100 000 car. repart du fichier / de l'URL | ouvert (sprint 43) |
+| 142 | Ménage du palace : `.drift-*` (7, dont l'ancien segment orphelin `cc7e6b6a.drift-20261030-170109`), `.corrupt-*` (1), sauvegarde `~/.mempalace/palace.pre-repair-20261030` | ouvert (sprint 43) |
+| 143 | Même fichier envoyé plusieurs fois → plusieurs fiches : la source contient l'identifiant Telegram unique (4 fiches `inventaire.txt` au run live) | ouvert (sprint 43) |
+| 144 | Synthèse à l'envoi de l'inventaire : « carton 115, grenier » au lieu de garage [1er run live, n=1] | ouvert (sprint 43), non réobservé au 2e run |
+| 145 | `aria_documents` absente de `/status` (`count_by_wing`) | ouvert (sprint 43), cosmétique |
+| 146 | Page web lue introuvable par le sens : « que disait la page sur le paillage ? » → fiche « Paillis — Wikipédia » à distance 0,641, derrière les fiches inventaire (0,55-0,59) et des souvenirs d'images, hors des 10 premiers [1 requête, copie du palace] | **résolue sprint 44** : `bridge.find_documents` (room `documents` entière + filtre par mots porteurs), fiche en tête de la section épisodique ; retrouvée au run live (`document_recall`) |
+| 147 | `DOC_REREAD` sans seuil propre : « relis le document sur les impôts » relit l'inventaire (seuil par défaut 0,8) au lieu de `NOT_FOUND` ; le LLM répond quand même « aucun document » | **résolue sprint 44** : relecture avec mot porteur → 1re fiche correspondante ou `NOT_FOUND` (run live OK) |
+| 148 | Acceptation « oui » d'une proposition de relecture non testée en live (tests seuls) : au run live, l'extrait de la fiche contenait déjà la réponse | ouvert (sprint 43), à observer |
+| 149 | Échecs : le compte rendu d'une partie envoyée sur Telegram doit montrer **en priorité** des miniatures sur les coups manqués de Nico (explosif, stratégique, piège, faute, gaffe) — « c'est en étudiant mes mauvais coups que je vais le plus apprendre » ; garder une miniature pour un coup spectaculaire s'il y en a un | ouvert (sprint 44), demande de Nico |
+| 150 | Rappel épisodique : les hits room `general` (images) sont retirés par le bridge après la coupe de mempalace → moins de souvenirs que `top_k` (n=4 → 3) [1 requête, audit sprint 44] | ouvert (sprint 44) |
+| 151 | L'opération classée par LLM et le nombre de souvenirs rappelés ne sont pas journalisés | ouvert (sprint 44) |
+| 152 | Recherche de documents : mots présents dans toute fiche (`source`, `synthese`, `https`) non exclus des mots porteurs → une question qui les porte retient la 1re fiche ; seuil de distance 0,8 conservé (fiche à distance > 0,8 invisible, distances observées 0,42-0,84 [audit sprint 44]) | ouvert (sprint 44), non observé au run live |
+
+Hors dettes (Q4 sprint 27) : rangement des fiches `chess_game` en wing `echecs` / room
+par ouverture.
+
+─────────────────────────────────────────────────────────────────────────
+
+## Préalable matériel
+
+- `feat/sprint45-recherche-autonome` mergé sur `main`, tag `sprint-45` sur le commit de clôture documentaire.
+- Branche sprint 46 à créer en conception.
+- Prochaine étape : `/conception sprint 46`.

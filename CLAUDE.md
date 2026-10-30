@@ -152,12 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 44 clos (tag `sprint-44`, recherche des documents lus : `bridge.find_documents` = room
-`documents` entière + filtre par mots porteurs ; relecture → fiche correspondante ou `NOT_FOUND` ;
-fiche en tête du rappel épisodique ; voir `docs/sprint44/00_etat.md`).
-Prochain : **sprint 45**, recherche autonome (choix de Nico).
-Kickoff : `docs/sprint45/context_kickoff_sprint_45.md`.
-Prochaine étape : `/conception sprint 45`.
+Sprint 45 clos (tag `sprint-45`, recherche autonome : opération `WEB_RESEARCH` sur phrases
+explicites, plan de 3 à 5 requêtes → Tavily → 3 pages lues → rapport conservé comme document lu,
+relu par « relis la recherche sur… » ; voir `docs/sprint45/00_etat.md`).
+Prochain : **sprint 46**, sujet à choisir par Nico.
+Kickoff : `docs/sprint46/context_kickoff_sprint_46.md`.
+Prochaine étape : `/conception sprint 46`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
