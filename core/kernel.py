@@ -65,6 +65,7 @@ _ROUTING_TABLE = RoutingTable({
     CognitiveOperation.WEB_SEARCH.value        : "web_router",
     CognitiveOperation.URL_READ.value          : "web_router",
     CognitiveOperation.FILE_READ.value         : "web_router",
+    CognitiveOperation.DOC_REREAD.value        : "web_router",
     CognitiveOperation.CHESS_ANALYSIS.value    : "chess_router",
 })
 

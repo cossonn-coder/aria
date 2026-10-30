@@ -30,6 +30,11 @@
 #   d'un FILE_READ ou d'un URL_READ réussi, la fiche (nom, source, synthèse)
 #   et le texte intégral extrait sont écrits via writer.write_document.
 #
+# Pipeline DOC_REREAD (sprint 43) : fiche retrouvée par le sens (room
+#   documents) → source → texte intégral lu dans aria_documents via le
+#   bridge → même synthèse qu'URL_READ, sans fichier, Tavily ni OCR, et
+#   sans réécrire la fiche.
+#
 # Règle d'architecture :
 #   Ce router n'écrit en mémoire que la fiche document, via memory/writer.py
 #   (règle 1). L'écriture conversation est faite par LLMExecutionRouter.
@@ -41,8 +46,8 @@ from datetime import date
 from pathlib import Path
 
 from execution.routers.execution_base import BaseRouter
-from cognition.cognitive_classifier import detect_url
-from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
+from cognition.cognitive_classifier import _DOC_REREAD_WORDS, detect_url
+from cognition.cognitive_context import CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER
 from files.extract import extract_text
 from llm.llm_role import LLMRole
 from memory.writer import write_document
@@ -60,6 +65,12 @@ _SLICE_MAX_CHARS = 100_000
 # Marqueur de lecture partielle relu au tour suivant (« lis la suite »).
 # Format exact émis par _read_slice : « <marqueur> <url> caractères <start>-<end> sur <total>] ».
 _PARTIAL_RE = re.compile(re.escape(URL_PARTIAL_MARKER) + r" (\S+) caractères \d+-(\d+) sur \d+\]")
+
+# Fiche document (sprint 43, format du tronçon 01) : ligne de source.
+_SOURCE_RE = re.compile(r"^Source : (\S+)$", re.MULTILINE)
+
+# Nom du document dans la proposition de relecture : « Veux-tu que je relise « X » ? ».
+_PROPOSAL_RE = re.compile(re.escape(REREAD_PROPOSAL) + r"(.+?) »")
 
 # Budget de la synthèse ; l'atteindre = synthèse probablement coupée.
 _DIGEST_MAX_TOKENS = 1000
@@ -96,6 +107,9 @@ class WebExecutionRouter(BaseRouter):
                 content["file_path"], 0, content.get("caption") or "",
                 payload.get("metadata", {}), name=content.get("file_name"),
             )
+
+        if op_type == CognitiveOperation.DOC_REREAD.value:
+            return self._handle_doc_reread(payload)
 
         raise ValueError(f"WebExecutionRouter: op_type inconnu '{op_type}'")
 
@@ -200,8 +214,54 @@ class WebExecutionRouter(BaseRouter):
             })
         return self._read_slice(match.group(1), int(match.group(2)), message, metadata)
 
+    # =========================================================
+    # DOC REREAD (sprint 43)
+    # =========================================================
+
+    def _handle_doc_reread(self, payload: dict) -> dict:
+        message  = str(payload.get("content") or "")
+        metadata = payload.get("metadata", {})
+
+        # Acceptation d'une proposition : le nom vient de la proposition,
+        # la question du dernier tour `user` (restée sans réponse).
+        # Sinon (« relis… ») : requête = question = le message.
+        query = question = message
+        if not any(w in message.lower() for w in _DOC_REREAD_WORDS):
+            conversation_key = str(metadata.get("chat_id", "default"))
+            history = self.mempalace_bridge.load_conversation_history(conversation_key, n=2)
+            assistant_turns = [t["content"] for t in history if t.get("role") == "assistant"]
+            match = _PROPOSAL_RE.search(assistant_turns[-1]) if assistant_turns else None
+            if match:
+                query = match.group(1)
+                user_turns = [t["content"] for t in history if t.get("role") == "user"]
+                if user_turns:
+                    question = user_turns[-1]
+
+        hits = self.mempalace_bridge.retrieve_memories(query, room="documents", n=1)["hits"]
+        source_match = _SOURCE_RE.search(hits[0].get("text", "")) if hits else None
+        doc = self.mempalace_bridge.load_document_text(source_match.group(1)) if source_match else None
+        if doc is None:
+            log.info("doc_reread NOT_FOUND query=%r", query)
+            enriched = (
+                "[Aucun document correspondant en mémoire : dis-le à Nico en une phrase.]\n\n"
+                f"{message}"
+            )
+            return self.llm_execution_router.execute({
+                "op_type" : CognitiveOperation.REASONING.value,
+                "content" : enriched,
+                "metadata": {**metadata, "skip_intent": True},
+            })
+
+        source = source_match.group(1)
+        log.info("doc_reread OK source=%s chars=%d", source, len(doc["text"]))
+        return self._read_slice(
+            source, 0, question, metadata,
+            page={"title": doc["title"], "content": doc["text"]},
+        )
+
     def _read_slice(
         self, url: str, start: int, message: str, metadata: dict, name: str | None = None,
+        page: dict | None = None,
     ) -> dict:
         """
         Lit une tranche de la page à partir de `start`, la synthétise et
@@ -211,15 +271,20 @@ class WebExecutionRouter(BaseRouter):
         `url` est une URL http(s) ou, pour FILE_READ, le chemin local du
         fichier reçu (sprint 42) : seuls la source du texte et les
         libellés changent. `name` : nom d'origine du fichier, porté par
-        la fiche document (à défaut, le titre de la page).
+        la fiche document (à défaut, le titre de la page). `page` :
+        titre et texte déjà connus (relecture depuis le palace, sprint 43) ;
+        ni extraction ni réécriture de la fiche dans ce cas.
         """
+        reread = page is not None
         is_file = not url.startswith(("http://", "https://"))
         source = "du fichier" if is_file else "de la page"
         kind = "d'un fichier" if is_file else "d'une page web"
         # En reprise (start > 0), « oui » n'oriente pas la synthèse.
         request = message if start == 0 else "(suite de la lecture : résumé général)"
         try:
-            if is_file:
+            if reread:
+                pass  # titre et texte fournis par le palace
+            elif is_file:
                 # Titre = nom téléchargé, qui contient le nom d'origine.
                 page = {"title": Path(url).name, "content": extract_text(url)}
             else:
@@ -261,7 +326,7 @@ class WebExecutionRouter(BaseRouter):
             # ── Fiche document (non bloquante), à la première tranche seulement ──
             # Nom et source en tête : l'embedder ne lit que ≈ 128 tokens.
             # Format parsé par le tronçon 02 du sprint 43 : ne pas changer.
-            if start == 0:
+            if start == 0 and not reread:
                 doc_name = name or page["title"]
                 fiche = (
                     f"Document « {doc_name} » lu le {date.today().isoformat()}\n"

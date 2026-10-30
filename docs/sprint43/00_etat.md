@@ -1,7 +1,7 @@
 # Sprint 43 — état vivant
 
 **Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web).
-**Phase courante** : implémentation (`/sprint-auto sprint 43`), tronçon 01 fait.
+**Phase courante** : implémentation (`/sprint-auto sprint 43`), tronçons 01-02 faits ; reste le run live 03.
 **Branche** : `feat/sprint43-memoire-documents`.
 **Audit** : `docs/sprint43/audit_memoire_documents.md`.
 
@@ -10,7 +10,7 @@
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
-| 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ⏳ |
+| 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ✅ |
 | 03 | `03_run_live.md` | run live (Nico), `run_live/inventaire.txt` + `messages.txt` | ⏳ |
 
 ## Décisions arrêtées
@@ -44,4 +44,12 @@ Tronçon 01 ✅ (2026-10-30, pytest 422 verts) : `writer.write_document`, fiche 
 `REREAD_PROPOSAL` dans `cognitive_context.py`, extrait 1 500 car. + consigne dans
 `context_builder._build_episodic_section`. Écart mineur : la ligne de consigne n'est pas
 décomptée du budget épisodique (≈ 50 tokens hors budget).
-Prochaine étape : tronçon 02 (`02_relecture.md`), puis run live 03 par Nico.
+
+Tronçon 02 ✅ (2026-10-30, pytest 427 verts) : `CognitiveOperation.DOC_REREAD` → `web_router`,
+`detect_doc_reread` (règle 2c du classifier), `bridge.load_document_text(source)`,
+`web_router._handle_doc_reread` → `_read_slice(..., page={title, content})` (nouveau kwarg `page` :
+ni extraction ni réécriture de fiche). Écart : dans le router, le cas « acceptation » est choisi
+quand le message ne contient pas `relis/relire/rouvre` (et non sur la seule présence de la
+proposition dans le dernier tour assistant) — sinon « relis X » juste après une proposition
+relirait le document proposé avec l'ancienne question.
+Prochaine étape : run live 03 par Nico.

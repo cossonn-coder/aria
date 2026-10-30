@@ -229,3 +229,33 @@ def test_read_slice_resume_does_not_write_document(tmp_path, write_document_mock
     router._read_slice(str(p), 100_000, "oui", {"chat_id": 42})
 
     write_document_mock.assert_not_called()
+
+
+# ── DOC_REREAD (sprint 43, tronçon 02) ───────────────────────────────────────
+
+def test_doc_reread_synthesizes_palace_text_without_extraction(monkeypatch, write_document_mock):
+    extract_mock = MagicMock()
+    monkeypatch.setattr(web_router_mod, "extract", extract_mock)
+    monkeypatch.setattr(web_router_mod, "extract_text", extract_mock)
+    router, llm_exec = _make_router()
+    bridge = router.mempalace_bridge
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": "où est la perceuse ?"},
+        {"role": "assistant", "content": "Je ne sais pas. Veux-tu que je relise « inventaire.pdf » ?"},
+    ]
+    bridge.retrieve_memories.return_value = {"hits": [{
+        "text": "Document « inventaire.pdf » lu le 2026-10-30\nSource : /tmp/inv.pdf\nSynthèse : outils",
+    }]}
+    bridge.load_document_text.return_value = {"title": "inventaire.pdf", "text": "perceuse : garage, étagère 2"}
+    router.llm_router.complete.return_value = MagicMock(content="Au garage.", usage=None)
+
+    router.execute({"op_type": "doc_reread", "content": "oui", "metadata": {"chat_id": 42}})
+
+    bridge.retrieve_memories.assert_called_once_with("inventaire.pdf", room="documents", n=1)
+    bridge.load_document_text.assert_called_once_with("/tmp/inv.pdf")
+    prompt = router.llm_router.complete.call_args.kwargs["prompt"]
+    assert "perceuse : garage, étagère 2" in prompt
+    assert "où est la perceuse ?" in prompt
+    extract_mock.assert_not_called()
+    write_document_mock.assert_not_called()
+    assert llm_exec.execute.call_args.args[0]["metadata"]["skip_intent"] is True
