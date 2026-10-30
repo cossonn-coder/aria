@@ -164,3 +164,15 @@ def test_no_document_card_no_reread_instruction():
     block = build_context_block("q", make_bridge(), [], {}, global_memories={"hits": hits})
     assert "z" * 400 in block and "z" * 401 not in block
     assert REREAD_PROPOSAL not in block
+
+
+# ── Fiche document retrouvée par mot porteur (sprint 44) ──────────────────────
+
+def test_document_hit_first_even_when_session_full():
+    fiche = "Document « wiki » lu le 2026-10-30\nSource : https://x/wiki/Paillage\nSynthèse : paillage"
+    session = {"hits": [make_hit(f"souvenir {i}") for i in range(3)]}
+    doc = {"text": fiche, "distance": 0.7, "room": "documents"}
+    block = build_context_block("q", make_bridge(), [], session, document_hit=doc)
+    episodic = block.split("[Souvenirs pertinents]\n")[1]
+    assert episodic.startswith(f"- {fiche}")
+    assert REREAD_PROPOSAL in block

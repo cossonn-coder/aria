@@ -42,6 +42,7 @@ def build_context_block(
     session_memories: dict,
     global_memories: dict | None = None,
     token_budget: int = 2000,
+    document_hit: dict | None = None,
 ) -> str:
     """
     Assemble le bloc de contexte cognitif injectable dans un prompt LLM.
@@ -59,6 +60,8 @@ def build_context_block(
         session_memories: dict {"hits": [...]} filtré par intent_id — source primaire
         global_memories : dict {"hits": [...]} toutes rooms — fallback si session vide
         token_budget    : budget maximum en tokens estimés (défaut 2000)
+        document_hit    : fiche document retrouvée par mot porteur (sprint 44) —
+                          placée en tête des souvenirs, même session pleine
 
     Returns:
         str — bloc texte multi-sections, prêt à injecter dans un prompt.
@@ -97,6 +100,11 @@ def build_context_block(
             key=lambda h: h.get("distance", 1.0),
         )
         episodic_hits = session_hits + fallback
+
+    # Fiche document retrouvée lexicalement : en tête, sans doublon.
+    if document_hit:
+        doc_text = document_hit.get("text", "")
+        episodic_hits = [document_hit] + [h for h in episodic_hits if h.get("text", "") != doc_text]
 
     section = _build_episodic_section(episodic_hits, remaining)
     if section:

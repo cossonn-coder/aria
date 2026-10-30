@@ -243,15 +243,15 @@ def test_doc_reread_synthesizes_palace_text_without_extraction(monkeypatch, writ
         {"role": "user", "content": "où est la perceuse ?"},
         {"role": "assistant", "content": "Je ne sais pas. Veux-tu que je relise « inventaire.pdf » ?"},
     ]
-    bridge.retrieve_memories.return_value = {"hits": [{
+    bridge.find_documents.return_value = [{
         "text": "Document « inventaire.pdf » lu le 2026-10-30\nSource : /tmp/inv.pdf\nSynthèse : outils",
-    }]}
+    }]
     bridge.load_document_text.return_value = {"title": "inventaire.pdf", "text": "perceuse : garage, étagère 2"}
     router.llm_router.complete.return_value = MagicMock(content="Au garage.", usage=None)
 
     router.execute({"op_type": "doc_reread", "content": "oui", "metadata": {"chat_id": 42}})
 
-    bridge.retrieve_memories.assert_called_once_with("inventaire.pdf", room="documents", n=1)
+    bridge.find_documents.assert_called_once_with("inventaire.pdf")
     bridge.load_document_text.assert_called_once_with("/tmp/inv.pdf")
     prompt = router.llm_router.complete.call_args.kwargs["prompt"]
     assert "perceuse : garage, étagère 2" in prompt
@@ -259,3 +259,15 @@ def test_doc_reread_synthesizes_palace_text_without_extraction(monkeypatch, writ
     extract_mock.assert_not_called()
     write_document_mock.assert_not_called()
     assert llm_exec.execute.call_args.args[0]["metadata"]["skip_intent"] is True
+
+
+def test_doc_reread_no_matching_document_answers_not_found():
+    router, llm_exec = _make_router()
+    bridge = router.mempalace_bridge
+    bridge.find_documents.return_value = []
+
+    router.execute({"op_type": "doc_reread", "content": "relis le document sur les impôts",
+                    "metadata": {"chat_id": 42}})
+
+    bridge.load_document_text.assert_not_called()
+    assert "Aucun document correspondant" in llm_exec.execute.call_args.args[0]["content"]
