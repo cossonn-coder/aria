@@ -122,6 +122,8 @@ voir `docs/architecture/memory_layers.md`) :
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
+- `aria_documents` : texte intégral des documents lus, lu par source (relecture). Actif (sprint 43) ;
+  la fiche du document est dans `aria_episodic`, room `documents`.
 - `aria_intentual` : intents sérialisés. Pas implémenté.
 - `aria` (legacy) : `mempalace_drawers` vide, 32 entrées résiduelles en `mempalace_closets`.
 
@@ -150,11 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 42 clos (tag `sprint-42`, lecture des fichiers envoyés sur Telegram : texte, PDF,
-OCR des scans par la vision, `.pgn` de plusieurs parties ; voir `docs/sprint42/00_etat.md`).
-Prochain : **sprint 43**, cible à choisir par Nico.
-Kickoff : `docs/sprint43/context_kickoff_sprint_43.md`.
-Prochaine étape : `/conception sprint 43`.
+Sprint 43 clos (tag `sprint-43`, mémoire des documents lus : fiche en `aria_episodic`, texte
+intégral en `aria_documents`, relecture « relis… » / « oui » ; correctif de la fausse quarantaine
+HNSW du fork mempalace + palace réparé ; voir `docs/sprint43/00_etat.md`).
+Prochain : **sprint 44**, cible à choisir par Nico.
+Kickoff : `docs/sprint44/context_kickoff_sprint_44.md`.
+Prochaine étape : `/conception sprint 44`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

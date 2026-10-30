@@ -131,3 +131,15 @@ def test_retrieve_memories_max_distance_none_skips_filter():
     r3 = bridge.retrieve_memories(query="q", wing="any", n=2, max_distance=0.6)
     assert len(r3["hits"]) == 1
     assert r3["hits"][0]["text"] == "proche"
+
+def test_retrieve_memories_logs_store_error(caplog):
+    """Une erreur du store donne 0 hit, mais elle est journalisée (sprint 43)."""
+    def fake_store(**kwargs):
+        return {"error": "Search error: Error finding id"}
+    bridge = MempalaceBridge(store=fake_store)
+
+    with caplog.at_level("WARNING"):
+        res = bridge.retrieve_memories("inventaire", n=5)
+
+    assert res["count"] == 0
+    assert "retrieve_memories error" in caplog.text

@@ -54,3 +54,26 @@ def test_file_event_classified_file_read():
     )
     result = CognitiveEngine().classify(event)
     assert result.operation == CognitiveOperation.FILE_READ
+
+
+# ── Sprint 43 : relecture d'un document en mémoire → DOC_REREAD ─────────────
+
+def test_relis_is_doc_reread_without_history():
+    bridge = MagicMock()
+    op = classify_operation("relis l'inventaire, où est la perceuse ?", metadata={"chat_id": 42}, bridge=bridge)
+    assert op == CognitiveOperation.DOC_REREAD
+    bridge.load_conversation_history.assert_not_called()
+
+
+def test_oui_after_reread_proposal_is_doc_reread():
+    bridge = MagicMock()
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": "où est la perceuse ?"},
+        {"role": "assistant", "content": "Je ne sais pas. Veux-tu que je relise « inventaire.pdf » ?"},
+    ]
+    assert classify_operation("oui", metadata={"chat_id": 42}, bridge=bridge) == CognitiveOperation.DOC_REREAD
+
+
+def test_oui_without_reread_proposal_is_not_doc_reread():
+    bridge = _bridge("on mange quoi ce soir")
+    assert classify_operation("oui", metadata={"chat_id": 42}, bridge=bridge) != CognitiveOperation.DOC_REREAD

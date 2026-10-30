@@ -9,6 +9,7 @@
 #   1b. PGN collé (en-tête White/Black + coups)      → CHESS_ANALYSIS
 #   2. URL http(s):// dans le message                → URL_READ
 #   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
+#   2c. « relis… » ou « oui » après proposition de relecture → DOC_REREAD
 #   3. Heuristique texte recherche web              → WEB_SEARCH
 #   4. Heuristique texte image generation           → IMAGE_GENERATION
 #   5. Message court → CONFIRMATION                 ← anti-intents parasites
@@ -26,7 +27,7 @@
 
 import json
 import re
-from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
+from cognition.cognitive_context import CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
 from logger import get_logger
@@ -189,6 +190,30 @@ def detect_url_resume(message: str, metadata: dict, bridge) -> bool:
     return bool(user_turns) and URL_PARTIAL_MARKER in user_turns[-1]
 
 
+# Verbes de relecture explicite d'un document en mémoire (sprint 43).
+_DOC_REREAD_WORDS = ["relis", "relire", "rouvre"]
+
+
+def detect_doc_reread(message: str, metadata: dict, bridge) -> bool:
+    """
+    Retourne True si le message demande de relire un document déjà lu.
+
+    Cas explicite : « relis / relire / rouvre » dans le message, sans
+    lecture d'historique. Cas acceptation : réponse de reprise (« oui »,
+    « vas-y »…) alors que le dernier tour `assistant` contient la
+    proposition REREAD_PROPOSAL posée par la consigne de contexte.
+    """
+    lower = message.lower().strip().rstrip("?!. ")
+    if any(w in lower for w in _DOC_REREAD_WORDS):
+        return True
+    if lower not in _URL_RESUME_EXACT or bridge is None:
+        return False
+    conversation_key = str(metadata.get("chat_id", "default"))
+    history = bridge.load_conversation_history(conversation_key, n=2)
+    assistant_turns = [t["content"] for t in history if t.get("role") == "assistant"]
+    return bool(assistant_turns) and REREAD_PROPOSAL in assistant_turns[-1]
+
+
 # =========================================================
 # HEURISTIQUE RECHERCHE WEB
 # =========================================================
@@ -290,6 +315,11 @@ def classify_operation(
     # Avant « message court » : « oui » serait sinon une CONFIRMATION.
     if detect_url_resume(message, metadata, bridge):
         return CognitiveOperation.URL_READ
+
+    # ── 2c. Relecture d'un document en mémoire (sprint 43) ──────────────────
+    # Avant « message court » : « oui » serait sinon une CONFIRMATION.
+    if detect_doc_reread(message, metadata, bridge):
+        return CognitiveOperation.DOC_REREAD
 
     # ── 3. Heuristique recherche web ────────────────────────────────────────
     # Avant la règle « message court » : « source ? » ferait 8 caractères.

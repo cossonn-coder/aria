@@ -35,6 +35,10 @@
 #   bridge = MempalaceBridge(store=fake_search)
 #   bridge = MempalaceBridge(store=fake_search, get_by_metadata=fake_get)
 
+from logger import get_logger
+
+log = get_logger(__name__)
+
 
 class MempalaceBridge:
     """
@@ -103,6 +107,10 @@ class MempalaceBridge:
             room=room,
             n=n * 2,
         )
+        # Erreur de recherche (ex. index HNSW incomplet) : le comportement reste
+        # « 0 hit », mais on la journalise — elle passait jusqu'ici inaperçue.
+        if "error" in result:
+            log.warning("retrieve_memories error wing=%s room=%s: %s", wing, room, result["error"])
 
         hits = [
             h for h in result.get("results", [])
@@ -314,6 +322,37 @@ class MempalaceBridge:
         games = [{**(meta or {}), "id": doc_id} for doc_id, meta in zip(ids, metas)]
         games.sort(key=lambda g: g.get("timestamp", ""))
         return games
+
+    def load_document_text(self, source: str) -> dict | None:
+        """
+        Texte intégral d'un document lu (sprint 43), stocké en wing
+        aria_documents par writer.write_document. Lecture non-vectorielle
+        par filtre wing + source, comme load_chess_games.
+
+        Returns:
+            {"title", "text"} ou None si aucun texte pour cette source.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata.
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for document text; "
+                "inject at construction"
+            )
+
+        from config import config as _config
+
+        where = {"$and": [
+            {"wing": "aria_documents"},
+            {"source": source},
+        ]}
+        result = self._get_by_metadata(_config.mempalace_path, where) or {}
+        docs = result.get("documents") or []
+        metas = result.get("metadatas") or []
+        if not docs:
+            return None
+        return {"title": (metas[0] or {}).get("title", ""), "text": docs[0]}
 
     def count_by_wing(self) -> dict[str, int]:
         """

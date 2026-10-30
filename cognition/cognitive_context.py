@@ -20,11 +20,17 @@ class CognitiveOperation(Enum):
     URL_READ = "url_read"      # lecture d'URL collée, déléguée en REASONING (sprint 23)
     CHESS_ANALYSIS = "chess_analysis"  # PGN collé, analyse Stockfish (sprint 26)
     FILE_READ = "file_read"    # document reçu sur Telegram, lu comme une URL (sprint 42)
+    DOC_REREAD = "doc_reread"  # relecture d'un document en mémoire (sprint 43)
 
 
 # Préfixe du marqueur de lecture partielle posé par web_router dans le
 # message enrichi (donc dans l'historique) ; relu au tronçon 02 du sprint 23.
 URL_PARTIAL_MARKER = "[Lecture partielle :"
+
+# Début de la phrase par laquelle ARIA propose de relire un document dont la
+# fiche est remontée en mémoire (consigne posée par context_builder) ; le
+# classifier du tronçon 02 du sprint 43 la reconnaît dans le dernier tour.
+REREAD_PROPOSAL = "Veux-tu que je relise « "
 
 
 # TOP_K mémoire par opération

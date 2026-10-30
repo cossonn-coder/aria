@@ -1,0 +1,11 @@
+Réparation du palace — étape 0 du run live sprint 43 (une commande par ligne, dans l'ordre)
+
+sudo systemctl stop aria.service
+cp -a ~/.mempalace/palace ~/.mempalace/palace.pre-repair-20261030
+mv ~/.mempalace/palace/.embedder-migration-marker ~/.mempalace/embedder-migration-marker.pre-repair
+cd ~/Nextcloud/projects/aria
+./venv/bin/python scripts/migrate_embedder.py --no-snapshot --from-model sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+sudo systemctl start aria.service
+
+Retour arrière si la migration échoue :
+rm -rf ~/.mempalace/palace && cp -a ~/.mempalace/palace.pre-repair-20261030 ~/.mempalace/palace
