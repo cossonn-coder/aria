@@ -1,6 +1,6 @@
 # Sprint 42 — lecture des fichiers envoyés sur Telegram
 
-**Phase** : B figée (OK Nico 2026-10-30) — prêt pour `/sprint-auto sprint 42`.
+**Phase** : CLOS (run live OK Nico 2026-10-30, tag `sprint-42`).
 **Branche** : `feat/sprint42-fichiers-telegram` (depuis `main` après `sprint-41`).
 **Audit** : `audit_fichiers_telegram.md`.
 
@@ -11,7 +11,7 @@
 | 01 | `01_reception_fichiers.md` | handler document, `Event FILE` → `FILE_READ` → lecture comme une URL (texte, .html, PDF texte), `.pgn` → analyse, image en fichier → photo, > 20 Mo refusé | ✅ |
 | 02 | `02_pgn_plusieurs_parties.md` | PGN de plusieurs parties : toutes analysées, réponse groupée | ✅ |
 | 03 | `03_ocr.md` | OCR par la chaîne vision : pages PDF scannées (20 max), texte des photos | ✅ |
-| 04 | `04_run_live.md` | run live (Nico) | ⏳ |
+| 04 | `04_run_live.md` | run live (Nico) | ✅ |
 
 ## Décisions arrêtées
 
@@ -32,9 +32,21 @@
   (≈ 1,5-3 min par partie [n=2], ARIA bloquée pendant ce temps, #112 accepté).
 - > 20 Mo (limite Bot API) : refus immédiat par l'interface.
 
+## Run live (2026-10-30)
+
+Étapes 1-9 conformes, aucun `ERROR` au journal ; `chess_router multi games=2 ok=2`.
+- Étape 4 (`scan.pdf`) d'abord « illisible » : `GroqVisionClient._to_image_url` faisait
+  `Path(data_url).exists()` → `OSError` « File name too long » sur les 4 fournisseurs.
+  Correctif `620911a` (data URL transmise telle quelle) + test ; revalidé en live.
+- Étape 9 d'abord ratée (« Quel article ? ») : question posée après six échanges longs,
+  synthèse sortie de la fenêtre de 6 000 car. de l'historique (comportement attendu) ;
+  revalidée posée juste après l'article.
+
 ## Dettes ouvertes par le sprint
 
-(aucune pour l'instant)
+- #137 document lu oublié après quelques échanges (pas d'écriture épisodique, historique chronologique).
+- #138 `pypdf` absent de `requirements.txt`.
+- #139 « lis la suite » sur PDF scanné refait l'OCR complet.
 
 ## §REPRISE
 
@@ -57,4 +69,4 @@ Tronçon 03 fait (pytest 416 verts) : vision `max_tokens` 4096 ; `ImageRouter.tr
 Compté comme page scannée : toute page sans texte, même sans image.
 À noter : « lis la suite » rappelle `extract_text` → l'OCR d'un PDF scanné est refait à chaque
 tranche (rare : > 100 000 car. sur 20 pages).
-Suite : tronçon 04 (`04_run_live.md`, Nico).
+Run live OK, sprint clos. Suite : `docs/sprint43/context_kickoff_sprint_43.md`.

@@ -150,11 +150,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 41 clos (tag `sprint-41`, échiquier mobile façon lichess en Mini App Telegram via
-`/board` + Tailscale HTTPS ; voir `docs/sprint41/00_etat.md`).
-Prochain : **sprint 42**, cible à choisir par Nico.
-Kickoff : `docs/sprint42/context_kickoff_sprint_42.md`.
-Prochaine étape : `/conception sprint 42`.
+Sprint 42 clos (tag `sprint-42`, lecture des fichiers envoyés sur Telegram : texte, PDF,
+OCR des scans par la vision, `.pgn` de plusieurs parties ; voir `docs/sprint42/00_etat.md`).
+Prochain : **sprint 43**, cible à choisir par Nico.
+Kickoff : `docs/sprint43/context_kickoff_sprint_43.md`.
+Prochaine étape : `/conception sprint 43`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
