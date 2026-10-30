@@ -35,6 +35,10 @@
 #   bridge = MempalaceBridge(store=fake_search)
 #   bridge = MempalaceBridge(store=fake_search, get_by_metadata=fake_get)
 
+from logger import get_logger
+
+log = get_logger(__name__)
+
 
 class MempalaceBridge:
     """
@@ -103,6 +107,10 @@ class MempalaceBridge:
             room=room,
             n=n * 2,
         )
+        # Erreur de recherche (ex. index HNSW incomplet) : le comportement reste
+        # « 0 hit », mais on la journalise — elle passait jusqu'ici inaperçue.
+        if "error" in result:
+            log.warning("retrieve_memories error wing=%s room=%s: %s", wing, room, result["error"])
 
         hits = [
             h for h in result.get("results", [])

@@ -2,7 +2,7 @@
 
 **Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web) ; ajouté en cours :
 fausse quarantaine HNSW du palace (#105, #31), qui a bloqué le premier run live.
-**Phase courante** : conception quarantaine figée ; reste le tronçon 03 (`/sprint-auto sprint 43`) puis le run live 04.
+**Phase courante** : tronçon 03 fait ; reste le run live 04 (Nico).
 **Branche** : `feat/sprint43-memoire-documents`.
 **Audits** : `docs/sprint43/audit_memoire_documents.md`, `docs/sprint43/audit_quarantaine_hnsw.md`.
 
@@ -12,7 +12,7 @@ fausse quarantaine HNSW du palace (#105, #31), qui a bloqué le premier run live
 |---|---|---|---|
 | 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
 | 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ✅ |
-| 03 | `03_quarantaine_hnsw.md` | fork : cherry-pick `e811b6d1` + push `nicofork` ; pin `requirements.txt` ; `log.warning` sur `{"error"}` dans `retrieve_memories` | ⏳ |
+| 03 | `03_quarantaine_hnsw.md` | fork : cherry-pick `e811b6d1` + push `nicofork` ; pin `requirements.txt` ; `log.warning` sur `{"error"}` dans `retrieve_memories` | ✅ |
 | 04 | `04_run_live.md` | run live (Nico) : étape 0 réparation (`run_live/reparation.txt`), étapes 1-8, étape 9 après redémarrage | ⏳ (1er essai 2026-10-30 ❌ palace) |
 
 ## Décisions arrêtées
@@ -91,5 +91,13 @@ Arbitrages tranchés par Nico (2026-10-30) :
 Conception figée sur OK de Nico (2026-10-30) : kickoffs `03_quarantaine_hnsw.md` et
 `04_run_live.md` (ancien `03_run_live.md`, renommé), `run_live/reparation.txt`.
 
-**Prochaine étape** : `/sprint-auto sprint 43` → tronçon 03 seul, puis remise du run live 04 à Nico
-(étape 0 = réparation du palace, à faire **après** le correctif du fork).
+Tronçon 03 ✅ (2026-10-30, pytest ARIA 428 verts, fork `tests/test_backends.py` 68 verts) :
+fork `feat/configurable-embedder` = cherry-pick `-x` de `e811b6d1` sans conflit →
+`ecf72132c42604c79d644693b4aa8d812ab6a823`, poussé sur `nicofork` (en SSH : le helper HTTPS
+est mort ; `ls-remote` confirme le SHA). `requirements.txt` épinglé sur ce SHA (le venv voit
+le fork en éditable, aucune réinstallation). `retrieve_memories` journalise
+`retrieve_memories error wing=… room=…` quand le store renvoie `{"error"}` (+ 1 test).
+Le palace prod n'a pas été touché.
+
+**Prochaine étape** : remise du run live 04 à Nico (étape 0 = réparation du palace, à faire
+avec le service redémarré sur le fork corrigé).
