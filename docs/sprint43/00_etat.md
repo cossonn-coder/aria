@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
 | 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ✅ |
-| 03 | `03_run_live.md` | run live (Nico), `run_live/inventaire.txt` + `messages.txt` | ⏳ |
+| 03 | `03_run_live.md` | run live (Nico), `run_live/inventaire.txt` + `messages.txt` | ❌ bloqué (palace) |
 
 ## Décisions arrêtées
 
@@ -52,4 +52,20 @@ ni extraction ni réécriture de fiche). Écart : dans le router, le cas « acce
 quand le message ne contient pas `relis/relire/rouvre` (et non sur la seule présence de la
 proposition dans le dernier tour assistant) — sinon « relis X » juste après une proposition
 relirait le document proposé avec l'ancienne question.
-Prochaine étape : run live 03 par Nico.
+Run live 03 (2026-10-30 15:37-15:40) : ❌ dès l'étape 3. Les fiches sont bien écrites
+(3 × `document_write OK`), mais après `/oublie` ARIA dit n'avoir aucun inventaire.
+Cause (audit sur une copie du palace) : **pas le code du sprint**. À 15:39:50, mempalace a mis
+l'index HNSW en quarantaine (`.drift-20261030-153950`, « sqlite 2672s newer than HNSW and integrity
+check failed »), la 4e fois ce jour-là (07:12, 13:31, 13:48, 15:39). L'index reconstruit ne contient
+que les vecteurs écrits depuis : SQLite a 690 entrées, le HNSW environ 200 [estimation sur la taille
+de `data_level0.bin`]. Toute requête vectorielle filtrée sur une wing volumineuse
+(`aria_episodic`, `aria_conversation`) échoue avec `Error finding id` ; les petits filtres
+(`room=documents`, `wing=aria_documents`) passent (recherche exhaustive). `mempalace_store.search`
+renvoie `{"error": …}`, que `bridge.retrieve_memories` lit comme 0 hit, sans aucun log :
+le rappel épisodique global est muet depuis chaque quarantaine.
+Constats secondaires :
+- Même fichier envoyé 3 fois → 3 fiches : la source est le chemin téléchargé, qui contient
+  l'identifiant Telegram unique (`AgADoB4…`, `AgADoR4…`, `AgADoh4…`) ; « même source → remplacé » ne tient pas.
+- Synthèse à l'envoi : « carton 115, grenier », alors que l'inventaire dit garage (ligne 117).
+Prochaine étape : `/conception` sur la quarantaine HNSW (touche le palace prod → exigence relevée),
+puis rejouer le run live 03.
