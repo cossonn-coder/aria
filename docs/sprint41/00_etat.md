@@ -44,6 +44,14 @@ Ouvertes par le sprint (à reporter au kickoff 42) :
 - Préalable Tailscale fait : `https://vdebiania.tail25c240.ts.net` (`tailscale serve --bg 5002`),
   `BOARD_URL` posé dans `.env`.
 
+## Correctifs après clôture (commits `483e5a1`, `b9bc4e6`, `83d41ee`, OK live Nico 2026-10-30)
+
+- Colonnes sur téléphone : un bloc reste visible tant que la partie suit une de ses
+  variantes (réponses humaines, suite du piège, ligne rose), effacé dès qu'elle en sort.
+- Statut d'analyse à hauteur fixe (deux lignes) : plus de clignotement de l'échiquier.
+- Bouton « retourner l'échiquier » (flèches tournantes) dans la barre du bas.
+- Tout bouton du menu ☰ le ferme après son action (cases à cocher et champs exclus).
+
 Fermées : aucune.
 
 ## §REPRISE
