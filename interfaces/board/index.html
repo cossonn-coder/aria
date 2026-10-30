@@ -151,7 +151,13 @@
   </div>
 </main>
 <div id="bottombar">
-  <button id="menu">☰</button><button id="to-start">⏮</button><button id="step-back">◀</button>
+  <button id="menu">☰</button>
+  <!-- Retourner l'échiquier : deux flèches qui tournent, façon lichess. -->
+  <button id="flip-bar" aria-label="Retourner l'échiquier"><svg width="22" height="22" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/>
+    <path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></button>
+  <button id="to-start">⏮</button><button id="step-back">◀</button>
   <button id="step-forward">▶</button><button id="to-end">⏭</button>
 </div>
 <div id="mini"></div>
@@ -986,6 +992,7 @@ $("graph").addEventListener("click", (event) => {
   goTo(Math.round(x / (GRAPH_W / Math.max(1, graphLength() - 1))));
 });
 $("flip").addEventListener("click", () => { ground.toggleOrientation(); drawEvalbar(); });
+$("flip-bar").addEventListener("click", () => $("flip").click());
 $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
