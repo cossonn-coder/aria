@@ -65,7 +65,10 @@
     /* Carré : largeur d'écran moins les marges (16 px) et la barre d'évaluation (10 + 4 px). */
     #board { width: calc(100vw - 30px); height: calc(100vw - 30px); }
     #analysis { order: 2; }
-    #status { width: auto; margin-top: 0; cursor: pointer; }
+    /* Hauteur fixe de deux lignes : le statut d'analyse qui apparaît, change ou s'efface
+       ne décale plus rien (clignotement de l'échiquier). */
+    #status { width: auto; margin-top: 0; cursor: pointer; height: 2.6em; line-height: 1.3;
+              overflow: hidden; }
     #replies { width: auto; }
     #played { order: 3; margin-top: 0; }
     #accuracy { order: 4; }
@@ -400,7 +403,26 @@ const savedDetails = {
 
 // Colonne kind : un bloc par position où le coup a été trouvé, numéro du coup compris ;
 // chaque coup dit quand il est aussi le meilleur coup. Coups les plus avancés en haut
-// (demi-coup décroissant) ; les blocs d'une autre position que celle affichée portent la
+// Variantes du coup trouvé move affichées dans son bloc, jouées depuis sa position : suite
+// de chaque réponse humaine, suite du piège, ligne de la stratégie (le coup seul au minimum).
+function savedLines(move) {
+  const lines = [[move.san], ...(move.replies || []).map((reply) => [move.san, ...reply.line_san])];
+  if (move.trap_line_san) lines.push([move.san, ...move.trap_line_san]);
+  if (move.pv_san) lines.push(move.pv_san);
+  return lines;
+}
+
+// Bloc de la position fen suivi : la position affichée est fen, ou y mène depuis fen par
+// le début d'une des variantes lines ; il s'efface dès que la partie en sort.
+function followsLine(fen, lines) {
+  const history = chess.history({ verbose: true });
+  const start = fen === positionFen ? history.length : history.findIndex((m) => m.before === fen);
+  if (start < 0) return false;
+  const played = history.slice(start).map((m) => m.san);
+  return lines.some((line) => played.every((san, k) => san === line[k]));
+}
+
+// (demi-coup décroissant) ; les blocs dont la partie ne suit pas la variante portent la
 // classe other, masquée sur téléphone (sprint 41).
 function renderSaved(kind) {
   const panel = $(`saved-${kind}`);
@@ -410,7 +432,7 @@ function renderSaved(kind) {
   for (const [fen, { move, best }] of entries) {
     const [, turn, , , , number] = fen.split(" ");
     const entry = document.createElement("div");
-    entry.className = fen === positionFen ? "entry" : "entry other";
+    entry.className = followsLine(fen, savedLines(move)) ? "entry" : "entry other";
     const title = document.createElement("div");
     title.append(`${kind === "explosive" ? "🟠 " : ""}${number}${turn === "w" ? "." : "…"} `,
                  variation(fen, [move.san]));
