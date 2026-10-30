@@ -35,7 +35,9 @@ class GroqVisionClient:
         - chaîne arbitraire (tests unitaires)
         """
 
-        if isinstance(image, str) and image.startswith("http"):
+        # URL distante ou data URL déjà encodée (pages PDF scannées, sprint 42) :
+        # transmises telles quelles, sans passer par Path (nom trop long).
+        if isinstance(image, str) and image.startswith(("http", "data:")):
             return image
 
         path = Path(image)

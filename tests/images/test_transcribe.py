@@ -19,3 +19,13 @@ def test_transcribe_returns_text():
 
 def test_transcribe_no_text_returns_empty():
     assert _router("AUCUN TEXTE").transcribe("img.png") == ""
+
+
+def test_long_data_url_passed_through():
+    # Run live sprint 42 : une page PDF scannée arrive en data URL de plusieurs
+    # dizaines de Ko ; Path(...).exists() levait « File name too long ».
+    from llm.vision.groq_vision import GroqVisionClient
+
+    client = GroqVisionClient(base_url="http://test", api_key="x", model="m")
+    data_url = "data:image/jpeg;base64," + "A" * 60_000
+    assert client._to_image_url(data_url) == data_url
