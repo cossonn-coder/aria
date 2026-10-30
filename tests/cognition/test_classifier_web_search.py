@@ -23,3 +23,18 @@ def test_source_inside_sentence_does_not_match():
 
 def test_prompt_has_web_search_category():
     assert "web_search" in CLASSIFIER_PROMPT
+
+
+# ── Sprint 45 : recherche autonome WEB_RESEARCH ──────────────────────────────
+
+def test_explicit_research_phrase_is_web_research():
+    assert classify_operation("fais une recherche sur le paillage") == CognitiveOperation.WEB_RESEARCH
+
+
+def test_research_online_phrase_is_web_research_not_web_search():
+    msg = "fais une recherche en ligne sur la rotation des cultures"
+    assert classify_operation(msg) == CognitiveOperation.WEB_RESEARCH
+
+
+def test_quick_search_stays_web_search():
+    assert classify_operation("cherche en ligne la météo") == CognitiveOperation.WEB_SEARCH

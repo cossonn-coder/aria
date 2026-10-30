@@ -271,3 +271,48 @@ def test_doc_reread_no_matching_document_answers_not_found():
 
     bridge.load_document_text.assert_not_called()
     assert "Aucun document correspondant" in llm_exec.execute.call_args.args[0]["content"]
+
+
+# ── WEB_RESEARCH (sprint 45, tronçon 01) ─────────────────────────────────────
+
+def test_research_nominal_reads_pages_writes_report_and_delegates(monkeypatch, write_document_mock):
+    results = {
+        "rotation cultures": [
+            {"title": "A", "url": "https://a.ex/1", "content": "extrait A"},
+            {"title": "B", "url": "https://b.ex/2", "content": "extrait B"},
+        ],
+        "rotation potager familles": [
+            {"title": "A", "url": "https://a.ex/1", "content": "extrait A"},
+            {"title": "C", "url": "https://c.ex/3", "content": "extrait C"},
+        ],
+    }
+    monkeypatch.setattr(web_router_mod, "search", lambda q: results[q])
+    extracted = []
+    def _extract(url):
+        extracted.append(url)
+        return {"title": "T", "url": url, "content": f"texte de {url}"}
+    monkeypatch.setattr(web_router_mod, "extract", _extract)
+    router, llm_exec = _make_router()
+    router.mempalace_bridge.retrieve_memories.return_value = {"hits": [{"text": "souvenir"}]}
+    router.llm_router.complete.side_effect = [
+        MagicMock(content="1. rotation cultures\n- rotation potager familles\n"),
+        MagicMock(content="LE RAPPORT https://a.ex/1"),
+    ]
+
+    result = router.execute({"op_type": "web_research",
+                             "content": "fais une recherche sur la rotation des cultures",
+                             "metadata": {"chat_id": 42}})
+
+    # 1er résultat de chaque requête, puis les suivants, sans doublon
+    assert extracted == ["https://a.ex/1", "https://b.ex/2", "https://c.ex/3"]
+    delegated = llm_exec.execute.call_args.args[0]
+    assert result == {"text": "réponse"}
+    assert delegated["op_type"] == "reasoning"
+    assert delegated["metadata"]["skip_intent"] is True
+    assert "LE RAPPORT" in delegated["content"]
+    write_document_mock.assert_called_once()
+    fiche, text, source, name = write_document_mock.call_args.args
+    assert source.startswith("recherche:") and " " not in source
+    assert "Source : recherche:" in fiche
+    assert text == "LE RAPPORT https://a.ex/1"
+    assert name.startswith("Recherche : ")

@@ -10,6 +10,7 @@
 #   2. URL http(s):// dans le message                → URL_READ
 #   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
 #   2c. « relis… » ou « oui » après proposition de relecture → DOC_REREAD
+#   3a. « fais une recherche sur… » (sprint 45)      → WEB_RESEARCH
 #   3. Heuristique texte recherche web              → WEB_SEARCH
 #   4. Heuristique texte image generation           → IMAGE_GENERATION
 #   5. Message court → CONFIRMATION                 ← anti-intents parasites
@@ -22,6 +23,7 @@
 #   detect_url()                      — première URL http(s) du message
 #   detect_pgn()                      — partie PGN collée (sprint 26)
 #   detect_web_search_intent()        — heuristique recherche web explicite
+#   detect_web_research_intent()      — heuristique recherche autonome (sprint 45)
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
 
@@ -247,6 +249,28 @@ def detect_web_search_intent(message: str) -> bool:
     return lower.strip().rstrip("?!. ") in _WEB_SEARCH_EXACT
 
 
+# Phrases explicites déclenchant WEB_RESEARCH (sprint 45, sous-chaîne, minuscules).
+# Recherche longue (plusieurs requêtes + lecture de pages) : jamais déduite
+# par le classifier LLM, uniquement sur demande explicite.
+_WEB_RESEARCH_PHRASES = [
+    "fais une recherche sur", "fais une recherche en ligne sur", "fais des recherches sur",
+    "fais une recherche approfondie", "recherche approfondie",
+    "renseigne-toi sur", "renseigne toi sur",
+]
+
+
+def detect_web_research_intent(message: str) -> bool:
+    """
+    Retourne True si le message demande explicitement une recherche autonome.
+
+    Exemples positifs : "fais une recherche sur la rotation des cultures",
+    "renseigne-toi sur le paillage"
+    Exemple négatif : "cherche en ligne la météo" (recherche rapide, WEB_SEARCH)
+    """
+    lower = message.lower()
+    return any(p in lower for p in _WEB_RESEARCH_PHRASES)
+
+
 # =========================================================
 # CLASSIFIER LLM
 # =========================================================
@@ -320,6 +344,12 @@ def classify_operation(
     # Avant « message court » : « oui » serait sinon une CONFIRMATION.
     if detect_doc_reread(message, metadata, bridge):
         return CognitiveOperation.DOC_REREAD
+
+    # ── 3a. Recherche autonome (sprint 45) ──────────────────────────────────
+    # Avant la règle 3 : « fais une recherche en ligne sur X » contient
+    # « recherche en ligne » mais demande une recherche autonome.
+    if detect_web_research_intent(message):
+        return CognitiveOperation.WEB_RESEARCH
 
     # ── 3. Heuristique recherche web ────────────────────────────────────────
     # Avant la règle « message court » : « source ? » ferait 8 caractères.

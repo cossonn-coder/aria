@@ -30,7 +30,7 @@ partir de ses LLM, de sa mémoire et de la conversation), va chercher sur intern
 
 | # | Kickoff | Objet | État |
 |---|---|---|---|
-| 01 | `01_recherche_autonome.md` | opération `WEB_RESEARCH` (phrases explicites) + `_handle_research` dans `web_router` + tests | ⏳ |
+| 01 | `01_recherche_autonome.md` | opération `WEB_RESEARCH` (phrases explicites) + `_handle_research` dans `web_router` + tests | ✅ (437 verts, non commité) |
 | 02 | `02_run_live.md` | run live (Nico), messages `run_live/messages.txt` | ⏳ |
 
 ## Dettes
@@ -41,5 +41,8 @@ partir de ses LLM, de sa mémoire et de la conversation), va chercher sur intern
 
 ## §REPRISE
 
-Conception figée et commitée. Prochaine étape : `/sprint-auto sprint 45` (tronçon 01), puis run
-live 02 par Nico.
+Tronçon 01 implémenté (pytest 437 verts), non commité : commit local
+`feat(sprint45) tronçon 01: recherche autonome WEB_RESEARCH` à poser par l'orchestrateur.
+Écart au kickoff : phrase `fais une recherche en ligne sur` ajoutée à `_WEB_RESEARCH_PHRASES`
+(aucune des phrases listées ne couvrait « fais une recherche en ligne sur X », test exigé).
+Prochaine étape : run live 02 par Nico (`02_run_live.md`).

@@ -21,6 +21,7 @@ class CognitiveOperation(Enum):
     CHESS_ANALYSIS = "chess_analysis"  # PGN collé, analyse Stockfish (sprint 26)
     FILE_READ = "file_read"    # document reçu sur Telegram, lu comme une URL (sprint 42)
     DOC_REREAD = "doc_reread"  # relecture d'un document en mémoire (sprint 43)
+    WEB_RESEARCH = "web_research"  # recherche autonome (sprint 45)
 
 
 # Préfixe du marqueur de lecture partielle posé par web_router dans le
