@@ -1,0 +1,14 @@
+Run live sprint 42 — fichiers dans docs/sprint42/run_live/
+
+1. envoyer notes.txt (sans légende)
+2. envoyer article.pdf avec la légende :
+quelles sont les idées principales ?
+3. envoyer long.txt (sans légende), puis :
+lis la suite
+4. envoyer scan.pdf (sans légende)
+5. envoyer document.png EN FICHIER (pas en photo), sans légende
+6. prendre une photo de ticket ou d'écran et l'envoyer en photo normale
+7. envoyer deux_parties.pgn
+8. envoyer archive.zip
+9. question de suivi sur l'article :
+selon l'article, quel est le meilleur compromis ?
