@@ -1049,6 +1049,10 @@ showTab($("tabs").firstElementChild);
 const toggleMenu = () => document.body.classList.toggle("menu-open");
 $("menu").addEventListener("click", toggleMenu);
 $("menu-close").addEventListener("click", toggleMenu);
+// Tout bouton du menu le ferme après son action (les cases à cocher le laissent ouvert).
+$("controls").addEventListener("click", (event) => {
+  if (event.target.closest("button")) document.body.classList.remove("menu-open");
+});
 $("to-start").addEventListener("click", toStart);
 $("step-back").addEventListener("click", stepBack);
 $("step-forward").addEventListener("click", stepForward);
