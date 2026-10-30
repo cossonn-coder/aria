@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 01 | `01_reception_fichiers.md` | handler document, `Event FILE` → `FILE_READ` → lecture comme une URL (texte, .html, PDF texte), `.pgn` → analyse, image en fichier → photo, > 20 Mo refusé | ✅ |
 | 02 | `02_pgn_plusieurs_parties.md` | PGN de plusieurs parties : toutes analysées, réponse groupée | ✅ |
-| 03 | `03_ocr.md` | OCR par la chaîne vision : pages PDF scannées (20 max), texte des photos | ⏳ |
+| 03 | `03_ocr.md` | OCR par la chaîne vision : pages PDF scannées (20 max), texte des photos | ✅ |
 | 04 | `04_run_live.md` | run live (Nico) | ⏳ |
 
 ## Décisions arrêtées
@@ -50,4 +50,11 @@ Tronçon 02 fait (pytest 413 verts) : `split_pgn` dans `chess_coach/analysis.py`
 quel dans `_execute_game` (partie unique inchangée) ; annonce `PGN_MULTI_NOTICE` dans
 `_handle_document` (compte des lignes `[White `). Un PGN collé de plusieurs parties passe aussi
 par `_execute_many`, sans annonce (l'annonce n'existe que pour le fichier).
-Suite : tronçon 03 (`03_ocr.md`).
+Tronçon 03 fait (pytest 416 verts) : vision `max_tokens` 4096 ; `ImageRouter.transcribe`
+(« AUCUN TEXTE » → `""`, point final toléré) ; phrase « Texte : » ajoutée aux deux prompts de
+`handle_input` ; `files/extract.py` `_pdf_text` : page sans texte → `transcribe` de chaque image
+(data URL), 20 pages scannées max puis mention « [Transcription arrêtée à 20 pages scannées sur N.] ».
+Compté comme page scannée : toute page sans texte, même sans image.
+À noter : « lis la suite » rappelle `extract_text` → l'OCR d'un PDF scanné est refait à chaque
+tranche (rare : > 100 000 car. sur 20 pages).
+Suite : tronçon 04 (`04_run_live.md`, Nico).

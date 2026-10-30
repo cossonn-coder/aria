@@ -57,7 +57,7 @@ class GroqVisionClient:
                 {"type": "image_url", "image_url": {"url": image_url}},
                 {"type": "text", "text": prompt},
             ]}],
-            "max_tokens": 1024,
+            "max_tokens": 4096,
         }
         payload.update(self.extra or {})
         r = httpx.post(

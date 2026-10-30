@@ -85,6 +85,24 @@ GENERATION_ROUTING_TABLE = [
 ]
 
 
+# ── Consignes OCR (sprint 42) ────────────────────────────────────────────────
+
+# Ajoutée aux deux prompts de description : le texte lisible d'une photo
+# (capture d'écran, ticket…) est recopié dans le même appel vision.
+_TEXT_COPY_RULE = (
+    "S'il y a du texte lisible (document, capture d'écran, ticket, panneau…), "
+    "recopie-le intégralement à la fin, après « Texte : »."
+)
+
+# Consigne de transcription pure, pour les pages scannées d'un PDF.
+_TRANSCRIBE_PROMPT = (
+    "Transcris intégralement et fidèlement tout le texte visible, dans sa "
+    "langue d'origine, sans résumer ni commenter. S'il n'y a aucun texte, "
+    "réponds exactement : AUCUN TEXTE."
+)
+_NO_TEXT = "AUCUN TEXTE"
+
+
 # ── Router ────────────────────────────────────────────────────────────────────
 
 class ImageRouter:
@@ -141,7 +159,8 @@ class ImageRouter:
                 f"Réponds en français, sauf si le message de l'utilisateur est "
                 f"dans une autre langue.\n"
                 f"Language rule: if the user's message is not in French, write "
-                f"your whole answer in the language of that message."
+                f"your whole answer in the language of that message.\n"
+                f"{_TEXT_COPY_RULE}"
             )
         else:
             # Prompt de description sobre : court, en français, anti-invention.
@@ -149,7 +168,8 @@ class ImageRouter:
                 "Décris cette photo en français, en quelques phrases : sujet "
                 "principal, contexte, éléments notables. Ne décris que ce qui est "
                 "visible ; si tu n'es pas sûr de ce qu'est un élément ou un lieu, "
-                "dis-le au lieu de deviner."
+                "dis-le au lieu de deviner.\n"
+                f"{_TEXT_COPY_RULE}"
             )
 
         caption = self._run_vision(source, prompt=prompt)
@@ -164,6 +184,19 @@ class ImageRouter:
                 "user_caption": image_input.caption or "",
             },
         )
+
+    def transcribe(self, image) -> str:
+        """
+        Transcrit le texte visible d'une image (OCR par la chaîne vision).
+
+        Args:
+            image: chemin local, URL ou data URL de l'image.
+
+        Returns:
+            Le texte transcrit, ou "" si le modèle répond « AUCUN TEXTE ».
+        """
+        text = self._run_vision(image, prompt=_TRANSCRIBE_PROMPT).strip()
+        return "" if text.rstrip(".") == _NO_TEXT else text
 
     def generate(self, message: str, intent_id: str | None = None) -> ImageArtifact:
         """

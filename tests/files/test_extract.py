@@ -54,3 +54,25 @@ def test_pdf_with_text(tmp_path):
         writer.write(f)
 
     assert "Bonjour ARIA" in extract_text(str(p))
+
+
+def test_scanned_pdf_page_is_transcribed(tmp_path, monkeypatch):
+    # Sprint 42, tronçon 03 : page sans texte, une image → transcription vision.
+    from PIL import Image
+    from llm.image_router import ImageRouter
+
+    img = tmp_path / "scan.png"
+    Image.new("RGB", (50, 50), "white").save(img)
+    p = tmp_path / "scan.pdf"
+    Image.open(img).save(p, "PDF")
+
+    seen = []
+
+    def fake_transcribe(self, image):
+        seen.append(image)
+        return "Facture n° 42"
+
+    monkeypatch.setattr(ImageRouter, "transcribe", fake_transcribe)
+
+    assert "Facture n° 42" in extract_text(str(p))
+    assert seen and seen[0].startswith("data:image/")
