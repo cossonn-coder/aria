@@ -23,6 +23,14 @@ filesystem documenté dans `docs/architecture/chromadb_palace.md`.
   résiduelles dans `mempalace_closets` non migrées (hors scope
   sprint 4, à arbitrer si un usage justifie leur migration).
 
+## Ajouts sprint 43
+
+- `aria_episodic`, room `documents` : fiche par document lu (fichier Telegram ou page web) —
+  titre, source, synthèse. Écrite par `writer.write_document`, rappelée par le sens.
+- `aria_documents` : texte intégral extrait de chaque document lu, clé `sha256(source)[:16]`.
+  Lue par source (`bridge.load_document_text`, relecture `DOC_REREAD`), jamais rappelée par
+  le sens. Absente de `/status` (dette #145).
+
 ## Voir aussi
 
 Layout filesystem du palace, backend chromadb-rust et mécanismes de

@@ -2,7 +2,7 @@
 
 **Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web) ; ajouté en cours :
 fausse quarantaine HNSW du palace (#105, #31), qui a bloqué le premier run live.
-**Phase courante** : tronçon 03 fait ; reste le run live 04 (Nico).
+**Phase courante** : **CLOS** (2026-10-30) — tronçons 01-03 + run live 04 OK.
 **Branche** : `feat/sprint43-memoire-documents`.
 **Audits** : `docs/sprint43/audit_memoire_documents.md`, `docs/sprint43/audit_quarantaine_hnsw.md`.
 
@@ -13,7 +13,7 @@ fausse quarantaine HNSW du palace (#105, #31), qui a bloqué le premier run live
 | 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
 | 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ✅ |
 | 03 | `03_quarantaine_hnsw.md` | fork : cherry-pick `e811b6d1` + push `nicofork` ; pin `requirements.txt` ; `log.warning` sur `{"error"}` dans `retrieve_memories` | ✅ |
-| 04 | `04_run_live.md` | run live (Nico) : étape 0 réparation (`run_live/reparation.txt`), étapes 1-8, étape 9 après redémarrage | ⏳ (1er essai 2026-10-30 ❌ palace) |
+| 04 | `04_run_live.md` | run live (Nico) : étape 0 réparation (`run_live/reparation.txt`), étapes 1-8, étape 9 après redémarrage | ✅ (2e essai 2026-10-30 16:44-17:01 ; 1er essai ❌ palace) |
 
 ## Décisions arrêtées
 
@@ -99,5 +99,20 @@ le fork en éditable, aucune réinstallation). `retrieve_memories` journalise
 `retrieve_memories error wing=… room=…` quand le store renvoie `{"error"}` (+ 1 test).
 Le palace prod n'a pas été touché.
 
-**Prochaine étape** : remise du run live 04 à Nico (étape 0 = réparation du palace, à faire
-avec le service redémarré sur le fork corrigé).
+Run live 04 (2026-10-30 16:44-17:01, Nico) : **OK au critère de succès**.
+- Étape 0 : migration mpnet→mpnet 698/698, dim 768. Plus aucune ligne `Quarantined invalid HNSW
+  metadata`. Un `.drift-20261030-170109` au redémarrage, sur l'ancien segment `cc7e6b6a` devenu
+  orphelin (segment actif : `64ac86cd`) : sans effet, comme prévu. Écart de procédure :
+  `restart` au lieu de `stop`, ARIA tournait pendant la migration ; vérifié en lecture seule,
+  sans dégât (écritures postérieures dans la nouvelle collection, 725 entrées).
+- Étapes 1, 2, 3, 6, 9 conformes ; aucun `ERROR`, aucun `retrieve_memories error`.
+- Étape 4 : « carton 115 » direct (l'extrait 1 500 car. de la fiche contient « guirlandes de
+  Noël (115) ») : pas d'invention, la proposition de relecture n'avait pas lieu d'être.
+- Étape 5 : envoyé « relis le document » au lieu de « oui » → `doc_reread OK`, 115 garage.
+  L'acceptation « oui » n'est couverte que par les tests (dette #148).
+- Étape 7 ❌ (non bloquant) : fiche Paillage écrite, mais introuvable par le sens après
+  `/oublie` (dette #146). Étape 8 ⚠️ : relit l'inventaire au lieu de `NOT_FOUND`, le LLM
+  répond correctement (dette #147).
+
+Clôture : kickoff `docs/sprint44/context_kickoff_sprint_44.md` (dettes #140-#148),
+`aria_documents` documentée (`CLAUDE.md`, `docs/architecture/memory_layers.md`), tag `sprint-43`.
