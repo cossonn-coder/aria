@@ -1,0 +1,12 @@
+Run live sprint 43 — fichier dans docs/sprint43/run_live/
+
+1. envoyer inventaire.txt (sans légende)
+2. /oublie
+3. tu te souviens de l'inventaire que je t'ai envoyé ?
+4. dans quel carton sont les guirlandes de Noël ?
+5. oui
+6. relis l'inventaire, où est la perceuse ?
+7. https://fr.wikipedia.org/wiki/Paillage
+   puis : /oublie
+   puis : que disait la page sur le paillage ?
+8. relis le document sur les impôts
