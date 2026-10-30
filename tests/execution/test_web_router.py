@@ -140,3 +140,51 @@ def test_url_read_resume_reads_next_slice(monkeypatch):
     assert prompt.split("sur 250000) :\n")[1].startswith("DEBUT_SUITE")
     content = llm_exec.execute.call_args.args[0]["content"]
     assert f"[Lecture partielle : {_URL} caractères 99000-" in content
+
+
+# ── FILE_READ (sprint 42, tronçon 01) ────────────────────────────────────────
+
+def _file_payload(path, caption=None):
+    return {"op_type": "file_read",
+            "content": {"file_path": str(path), "file_name": path.name, "caption": caption},
+            "metadata": {"chat_id": 42}}
+
+
+def test_file_read_short_file_delegates_digest(tmp_path):
+    p = tmp_path / "uid_notes.txt"
+    p.write_text("Notes courtes.\nFin.", encoding="utf-8")
+    router, llm_exec = _make_router()
+    router.llm_router.complete.return_value = MagicMock(content="LA SYNTHÈSE", usage=None)
+
+    router.execute(_file_payload(p))
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "Synthèse du fichier « uid_notes.txt »" in content
+    assert "LA SYNTHÈSE" in content
+    assert "[Lecture partielle :" not in content
+    assert "Notes courtes." in router.llm_router.complete.call_args.kwargs["prompt"]
+
+
+def test_file_read_long_file_marks_path_then_resumes_from_disk(tmp_path):
+    p = tmp_path / "uid_long.txt"
+    p.write_text(("x" * 999 + "\n") * 250, encoding="utf-8")  # 250 000 car.
+    router, llm_exec = _make_router()
+    router.llm_router.complete.return_value = MagicMock(content="S", usage=None)
+
+    router.execute(_file_payload(p, caption="résume"))
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    marker = next(l for l in content.splitlines() if l.startswith("[Lecture partielle :"))
+    assert marker.startswith(f"[Lecture partielle : {p} caractères 0-")
+
+    # « oui » au tour suivant : le marqueur est dans le dernier tour user.
+    router.mempalace_bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": content},
+        {"role": "assistant", "content": "Je lis la suite ?"},
+    ]
+    router.execute({"op_type": "url_read", "content": "oui", "metadata": {"chat_id": 42}})
+
+    end = int(marker.split("caractères 0-")[1].split(" ")[0])
+    prompt = router.llm_router.complete.call_args.kwargs["prompt"]
+    assert f"caractères {end}-" in prompt
+    assert "Fichier :" in prompt

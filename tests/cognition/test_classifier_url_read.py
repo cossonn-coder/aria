@@ -40,3 +40,17 @@ def test_oui_after_partial_read_is_url_read():
 def test_oui_without_marker_stays_confirmation():
     bridge = _bridge("on mange quoi ce soir")
     assert classify_operation("oui", metadata={"chat_id": 42}, bridge=bridge) == CognitiveOperation.CONFIRMATION
+
+
+# ── Sprint 42 : document reçu → FILE_READ sans LLM ──────────────────────────
+
+def test_file_event_classified_file_read():
+    from cognition.cognitive_engine import CognitiveEngine
+    from core.event import Event, EventType
+    event = Event.create(
+        event_type=EventType.FILE, user_id="1",
+        content={"file_path": "/tmp/x.txt", "file_name": "x.txt", "caption": None},
+        metadata={},
+    )
+    result = CognitiveEngine().classify(event)
+    assert result.operation == CognitiveOperation.FILE_READ

@@ -21,16 +21,23 @@
 #   → LLMExecutionRouter en REASONING + skip_intent. C'est donc la
 #   synthèse, pas la page, qui part dans l'historique.
 #
+# Pipeline FILE_READ (sprint 42) : document reçu sur Telegram, même
+#   pipeline qu'URL_READ ; le texte vient de files.extract.extract_text
+#   (chemin local) au lieu de Tavily. Le marqueur de lecture partielle
+#   porte alors le chemin du fichier : « lis la suite » le relit du disque.
+#
 # Règle d'architecture :
 #   Ce router n'écrit RIEN en mémoire. L'écriture conversation est faite
 #   par LLMExecutionRouter (règle 1). La lecture de l'historique passe
 #   par le bridge (règle 2).
 
 import re
+from pathlib import Path
 
 from execution.routers.execution_base import BaseRouter
 from cognition.cognitive_classifier import detect_url
 from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
+from files.extract import extract_text
 from llm.llm_role import LLMRole
 from web.tavily_search import extract, search
 from logger import get_logger
@@ -74,6 +81,14 @@ class WebExecutionRouter(BaseRouter):
 
         if op_type == CognitiveOperation.URL_READ.value:
             return self._handle_url_read(payload)
+
+        if op_type == CognitiveOperation.FILE_READ.value:
+            # Le content est le dict de l'Event FILE {file_path, file_name, caption}.
+            content = payload.get("content") or {}
+            return self._read_slice(
+                content["file_path"], 0, content.get("caption") or "",
+                payload.get("metadata", {}),
+            )
 
         raise ValueError(f"WebExecutionRouter: op_type inconnu '{op_type}'")
 
@@ -184,22 +199,32 @@ class WebExecutionRouter(BaseRouter):
         délègue la réponse à LLMExecutionRouter.
 
         Appelée avec start > 0 pour « lis la suite » (tronçon 02).
+        `url` est une URL http(s) ou, pour FILE_READ, le chemin local du
+        fichier reçu (sprint 42) : seuls la source du texte et les
+        libellés changent.
         """
+        is_file = not url.startswith(("http://", "https://"))
+        source = "du fichier" if is_file else "de la page"
+        kind = "d'un fichier" if is_file else "d'une page web"
         # En reprise (start > 0), « oui » n'oriente pas la synthèse.
         request = message if start == 0 else "(suite de la lecture : résumé général)"
         try:
-            page = extract(url)
+            if is_file:
+                # Titre = nom téléchargé, qui contient le nom d'origine.
+                page = {"title": Path(url).name, "content": extract_text(url)}
+            else:
+                page = extract(url)
             text = page["content"]
             total = len(text)
             chunk = _cut_slice(text, start)
             end = start + len(chunk)
 
             prompt = (
-                "Voici le texte d'une page web. Fais-en une synthèse fidèle en "
+                f"Voici le texte {kind}. Fais-en une synthèse fidèle en "
                 "français, sans rien inventer. Si le message de Nico contient une "
                 "consigne ou une question, oriente la synthèse en conséquence ; "
                 "sinon, fais un résumé général.\n\n"
-                f"Titre : {page['title']}\nURL : {url}\n"
+                f"Titre : {page['title']}\n{'Fichier' if is_file else 'URL'} : {url}\n"
                 f"Message de Nico : {request}\n\n"
                 f"Texte (caractères {start}-{end} sur {total}) :\n{chunk}\n\nSynthèse :"
             )
@@ -210,7 +235,8 @@ class WebExecutionRouter(BaseRouter):
             digest = response.content.strip()
         except Exception as e:
             log.warning("url_read FAILED url=%s error=%s", url, e)
-            enriched = f"[Page illisible : dis-le à Nico en une phrase.]\n\n{message}"
+            unreadable = "Fichier illisible" if is_file else "Page illisible"
+            enriched = f"[{unreadable} : dis-le à Nico en une phrase.]\n\n{message}"
         else:
             # Tokens de sortie : DeepSeek (format OpenAI) ou Anthropic.
             usage = response.usage or {}
@@ -223,7 +249,7 @@ class WebExecutionRouter(BaseRouter):
                 log.warning("url_read digest hit max_tokens=%d url=%s", _DIGEST_MAX_TOKENS, url)
 
             parts = [
-                f"[Synthèse de la page « {page['title']} » — {url} "
+                f"[Synthèse {source} « {page['title']} » — {url} "
                 f"(caractères {start}-{end} sur {total}) :\n{digest}]"
             ]
             if end < total:
@@ -233,6 +259,8 @@ class WebExecutionRouter(BaseRouter):
                     f"sur {total}, donne la synthèse ou la réponse à partir de cette "
                     "synthèse, puis propose-lui de lire la suite.]"
                 )
+            elif is_file:
+                parts.append("[Consigne : réponds à partir de cette synthèse.]")
             else:
                 parts.append("[Consigne : réponds à partir de cette synthèse et cite l'URL.]")
             enriched = "\n".join(parts) + f"\n\n{message}"

@@ -15,6 +15,7 @@ chroma/
 # Images — générées et reçues, pas besoin de versionner
 generated_images/
 received_images/
+received_files/
 
 # VSCode
 .vscode/

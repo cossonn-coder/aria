@@ -35,7 +35,9 @@ class GroqVisionClient:
         - chaîne arbitraire (tests unitaires)
         """
 
-        if isinstance(image, str) and image.startswith("http"):
+        # URL distante ou data URL déjà encodée (pages PDF scannées, sprint 42) :
+        # transmises telles quelles, sans passer par Path (nom trop long).
+        if isinstance(image, str) and image.startswith(("http", "data:")):
             return image
 
         path = Path(image)
@@ -57,7 +59,7 @@ class GroqVisionClient:
                 {"type": "image_url", "image_url": {"url": image_url}},
                 {"type": "text", "text": prompt},
             ]}],
-            "max_tokens": 1024,
+            "max_tokens": 4096,
         }
         payload.update(self.extra or {})
         r = httpx.post(

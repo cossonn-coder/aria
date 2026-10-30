@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
+from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
 from chess_coach.render import SIZE, render_position
@@ -197,3 +198,12 @@ def test_render_position_with_explosive_arrow(tmp_path):
     render_position(fen, "black", "g8f6", str(out), alt_uci="g7g6")
     with Image.open(out) as image:
         assert image.size == (SIZE, SIZE)
+
+
+def test_split_pgn_two_games_keeps_preface():
+    text = ('je joue les noirs\n[Event "A"]\n[White "X"]\n\n1. e4 e5 *\n\n'
+            '[Event "B"]\n  [White "Y"]\n\n  1. d4 d5 *\n')
+    games = split_pgn(text)
+    assert len(games) == 2
+    assert all(g.startswith("je joue les noirs\n\n[Event") for g in games)
+    assert [parse_pgn(g).headers["White"] for g in games] == ["X", "Y"]

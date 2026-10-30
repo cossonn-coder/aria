@@ -109,6 +109,8 @@ class Config:
         self.pending_path = str(BASE_DIR / "pending_memories.json")
         self.image_output_dir = str(BASE_DIR / "generated_images")
         self.image_receive_dir = str(BASE_DIR / "received_images")
+        # Documents reçus sur Telegram (sprint 42).
+        self.file_receive_dir = str(BASE_DIR / "received_files")
         self.hf_token = os.getenv("HF_TOKEN", "")
         if self.hf_token:
             os.environ["HF_TOKEN"] = self.hf_token

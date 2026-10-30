@@ -25,7 +25,7 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze
+from chess_coach.analysis import analyze, split_pgn
 from chess_coach.explosive import _GAIN_MIN
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
 from chess_coach.render import render_position
@@ -561,6 +561,11 @@ class ChessExecutionRouter(BaseRouter):
         message  = str(payload.get("content") or "")
         metadata = payload.get("metadata", {})
 
+        # Plusieurs parties (sprint 42) : toutes analysées, réponse groupée.
+        games = split_pgn(message)
+        if len(games) > 1:
+            return self._execute_many(games, metadata)
+
         analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir)
         if analysis is None:
             log.warning("chess_router PGN unreadable")
@@ -569,7 +574,32 @@ class ChessExecutionRouter(BaseRouter):
                 "content" : f"[PGN illisible : dis-le à Nico en une phrase.]\n\n{message}",
                 "metadata": metadata,
             })
+        return self._execute_game(analysis, message, metadata)
 
+    def _execute_many(self, games: list[str], metadata: dict) -> dict:
+        """Une analyse complète par partie, puis fusion en une seule réponse.
+
+        Images concaténées (légende préfixée « Partie k — »), puis un bloc de
+        texte par partie sous son titre ; une partie illisible tient une ligne.
+        """
+        texts, images, ok = [], [], 0
+        for k, game in enumerate(games, 1):
+            analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir)
+            if analysis is None:
+                log.warning("chess_router PGN unreadable game=%d", k)
+                texts.append(f"Partie {k} — PGN illisible")
+                continue
+            result = self._execute_game(analysis, game, metadata)
+            ok += 1
+            h = analysis.headers
+            title = f"Partie {k} — {h.get('White', '?')} – {h.get('Black', '?')} ({h.get('Result', '*')})"
+            texts.append(f"{title}\n{result['text']}")
+            images += [{**img, "caption": f"Partie {k} — {img['caption']}"} for img in result["images"]]
+        log.info("chess_router multi games=%d ok=%d", len(games), ok)
+        return {"text": "\n\n".join(texts), "images": images}
+
+    def _execute_game(self, analysis, message: str, metadata: dict) -> dict:
+        """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM."""
         # ── Diagrammes : un PNG par position critique ────────────────────────
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)

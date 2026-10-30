@@ -122,6 +122,32 @@ def parse_pgn(text: str) -> chess.pgn.Game | None:
     return game
 
 
+def split_pgn(text: str) -> list[str]:
+    """Découpe un PGN de plusieurs parties : une chaîne par partie (sprint 42).
+
+    Même nettoyage que parse_pgn (lignes dépouillées). Une partie commence à
+    une ligne « [ » qui suit une ligne non vide hors en-tête (fin des coups de
+    la précédente) ou au tout premier en-tête. Le texte libre avant le premier
+    en-tête (légende) est recopié en tête de chaque partie : detect_color y lit
+    la couleur de Nico. Sans en-tête, retourne [text].
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    starts, previous = [], None
+    for i, line in enumerate(lines):
+        if line.startswith("[") and (previous is None or not previous.startswith("[")):
+            starts.append(i)
+        if line:
+            previous = line
+    if not starts:
+        return [text]
+    preface = "\n".join(lines[:starts[0]]).strip()
+    games = []
+    for start, end in zip(starts, starts[1:] + [len(lines)]):
+        game = "\n".join(lines[start:end]).strip()
+        games.append(f"{preface}\n\n{game}" if preface else game)
+    return games
+
+
 def detect_color(headers, message: str) -> tuple[str, str]:
     """Couleur de Nico : en-tête PGN (« Nico »), puis message (« je joue les noirs »), puis blancs."""
     name = NICO_NAME.lower()
