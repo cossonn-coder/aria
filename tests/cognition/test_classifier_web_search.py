@@ -4,6 +4,7 @@ from cognition.cognitive_classifier import (
     CLASSIFIER_PROMPT,
     classify_operation,
     detect_web_search_intent,
+    extract_research_subject,
 )
 from cognition.cognitive_context import CognitiveOperation
 
@@ -38,3 +39,9 @@ def test_research_online_phrase_is_web_research_not_web_search():
 
 def test_quick_search_stays_web_search():
     assert classify_operation("cherche en ligne la météo") == CognitiveOperation.WEB_SEARCH
+
+
+def test_extract_research_subject_drops_trigger_phrase():
+    assert (extract_research_subject("fais une recherche sur la rotation des cultures au potager")
+            == "la rotation des cultures au potager")
+    assert extract_research_subject("fais une recherche approfondie sur le compost ?") == "le compost"

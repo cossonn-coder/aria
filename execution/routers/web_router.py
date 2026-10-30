@@ -53,7 +53,7 @@ from datetime import date
 from pathlib import Path
 
 from execution.routers.execution_base import BaseRouter
-from cognition.cognitive_classifier import _DOC_REREAD_WORDS, detect_url
+from cognition.cognitive_classifier import _DOC_REREAD_WORDS, detect_url, extract_research_subject
 from cognition.cognitive_context import CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER
 from files.extract import extract_text
 from llm.llm_role import LLMRole
@@ -87,6 +87,9 @@ _DIGEST_MAX_TOKENS = 1000
 _RESEARCH_PAGES = 3
 _RESEARCH_PAGE_MAX_CHARS = 30_000
 _RESEARCH_MAX_QUERIES = 5
+# Plafond du rapport (sprint 45, tronçon 03) : 1500 tronquait le rapport
+# avant la liste des URL au run live 02.
+_RESEARCH_REPORT_MAX_TOKENS = 3000
 
 
 class WebExecutionRouter(BaseRouter):
@@ -210,7 +213,7 @@ class WebExecutionRouter(BaseRouter):
     def _handle_research(self, payload: dict) -> dict:
         message  = str(payload.get("content") or "")
         metadata = payload.get("metadata", {})
-        subject  = message[:80]
+        subject  = extract_research_subject(message)[:80]
 
         queries = self._plan_research(message, metadata)
 
@@ -262,12 +265,18 @@ class WebExecutionRouter(BaseRouter):
         )
         try:
             response = self.llm_router.complete(
-                prompt=prompt, role=LLMRole.DIGEST, temperature=0.3, max_tokens=1500,
+                prompt=prompt, role=LLMRole.DIGEST, temperature=0.3,
+                max_tokens=_RESEARCH_REPORT_MAX_TOKENS,
             )
             report = response.content.strip()
         except Exception as e:
             log.warning("web_research report FAILED error=%s", e)
             return self._delegate_unavailable(message, metadata)
+        # Tokens de sortie : DeepSeek (format OpenAI) ou Anthropic.
+        usage = response.usage or {}
+        report_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+        if report_tokens is not None and report_tokens >= _RESEARCH_REPORT_MAX_TOKENS:
+            log.warning("web_research report hit max_tokens=%d", _RESEARCH_REPORT_MAX_TOKENS)
 
         # ── Trace (non bloquante) : le rapport est conservé comme un document lu ──
         # Source sans espace : _SOURCE_RE doit la relire.
@@ -286,8 +295,8 @@ class WebExecutionRouter(BaseRouter):
             log.exception("document_write ERROR key=%s source=%s", key, source)
 
         log.info(
-            "web_research OK queries=%d results=%d pages=%d",
-            len(queries), n_results, len(pages),
+            "web_research OK queries=%d results=%d pages=%d report_tokens=%s",
+            len(queries), n_results, len(pages), report_tokens,
         )
         enriched = (
             f"[Rapport de recherche « {subject} » :\n{report}]\n"

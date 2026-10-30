@@ -296,7 +296,7 @@ def test_research_nominal_reads_pages_writes_report_and_delegates(monkeypatch, w
     router.mempalace_bridge.retrieve_memories.return_value = {"hits": [{"text": "souvenir"}]}
     router.llm_router.complete.side_effect = [
         MagicMock(content="1. rotation cultures\n- rotation potager familles\n"),
-        MagicMock(content="LE RAPPORT https://a.ex/1"),
+        MagicMock(content="LE RAPPORT https://a.ex/1", usage={"completion_tokens": 900}),
     ]
 
     result = router.execute({"op_type": "web_research",
@@ -315,4 +315,5 @@ def test_research_nominal_reads_pages_writes_report_and_delegates(monkeypatch, w
     assert source.startswith("recherche:") and " " not in source
     assert "Source : recherche:" in fiche
     assert text == "LE RAPPORT https://a.ex/1"
-    assert name.startswith("Recherche : ")
+    assert name == "Recherche : la rotation des cultures"
+    assert router.llm_router.complete.call_args_list[1].kwargs["max_tokens"] == 3000

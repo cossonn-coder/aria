@@ -271,6 +271,29 @@ def detect_web_research_intent(message: str) -> bool:
     return any(p in lower for p in _WEB_RESEARCH_PHRASES)
 
 
+def extract_research_subject(message: str) -> str:
+    """
+    Retourne le sujet d'une demande de recherche, sans la phrase de déclenchement.
+
+    Première phrase de _WEB_RESEARCH_PHRASES trouvée → texte qui suit, sans
+    « sur » initial ni ponctuation/espaces de bord. Aucune phrase ou reste
+    vide → message entier.
+
+    Ex. : "fais une recherche approfondie sur le compost ?" → "le compost"
+    """
+    lower = message.lower()
+    for phrase in _WEB_RESEARCH_PHRASES:
+        idx = lower.find(phrase)
+        if idx == -1:
+            continue
+        rest = message[idx + len(phrase):].strip(" \t\n.,;:!?")
+        if rest.lower().startswith("sur "):
+            rest = rest[4:]
+        rest = rest.strip(" \t\n.,;:!?")
+        return rest or message
+    return message
+
+
 # =========================================================
 # CLASSIFIER LLM
 # =========================================================

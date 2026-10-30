@@ -32,7 +32,7 @@ partir de ses LLM, de sa mémoire et de la conversation), va chercher sur intern
 |---|---|---|---|
 | 01 | `01_recherche_autonome.md` | opération `WEB_RESEARCH` (phrases explicites) + `_handle_research` dans `web_router` + tests | ✅ (437 verts, non commité) |
 | 02 | `02_run_live.md` | run live (Nico), messages `run_live/messages.txt` | ✅ critère tenu (2026-10-30), mais rapport tronqué → 03 |
-| 03 | `03_correctif_rapport.md` | plafond du rapport 3000 tokens + sujet sans phrase de déclenchement ; run live `run_live/messages_03.txt` | ⏳ |
+| 03 | `03_correctif_rapport.md` | plafond du rapport 3000 tokens + sujet sans phrase de déclenchement ; run live `run_live/messages_03.txt` | code ✅ (438 verts, non commité) ; run live ⏳ |
 
 ## Dettes
 
@@ -52,3 +52,10 @@ Prochaine étape : run live 02 par Nico (`02_run_live.md`).
 Run live 02 (2026-10-30) : critère tenu, 36 s ; rapport tronqué à 1500 tokens (sans URL) et nom de
 document avec la phrase de déclenchement → tronçon 03 décidé par Nico. Dettes notées : compteur
 `pages=` compte les échecs d'extraction ; rappel `document_recall` d'un inventaire sur une question météo.
+
+Tronçon 03 implémenté (pytest 438 verts), non commité : commit local
+`fix(sprint45) tronçon 03: rapport de recherche à 3000 tokens, sujet sans phrase de déclenchement`
+à poser par l'orchestrateur. `_RESEARCH_REPORT_MAX_TOKENS = 3000` + warning `hit max_tokens` +
+`report_tokens=` dans `web_research OK` ; `extract_research_subject` (classifier) donne le nom
+« Recherche : <sujet> ». Aucun écart au kickoff.
+Prochaine étape : run live 03 par Nico (`03_correctif_rapport.md`, `run_live/messages_03.txt`).
