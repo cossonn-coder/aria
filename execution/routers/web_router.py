@@ -26,12 +26,18 @@
 #   (chemin local) au lieu de Tavily. Le marqueur de lecture partielle
 #   porte alors le chemin du fichier : « lis la suite » le relit du disque.
 #
+# Mémoire des documents lus (sprint 43) : à la première tranche (start == 0)
+#   d'un FILE_READ ou d'un URL_READ réussi, la fiche (nom, source, synthèse)
+#   et le texte intégral extrait sont écrits via writer.write_document.
+#
 # Règle d'architecture :
-#   Ce router n'écrit RIEN en mémoire. L'écriture conversation est faite
-#   par LLMExecutionRouter (règle 1). La lecture de l'historique passe
-#   par le bridge (règle 2).
+#   Ce router n'écrit en mémoire que la fiche document, via memory/writer.py
+#   (règle 1). L'écriture conversation est faite par LLMExecutionRouter.
+#   La lecture de l'historique passe par le bridge (règle 2).
 
+import hashlib
 import re
+from datetime import date
 from pathlib import Path
 
 from execution.routers.execution_base import BaseRouter
@@ -39,6 +45,7 @@ from cognition.cognitive_classifier import detect_url
 from cognition.cognitive_context import CognitiveOperation, URL_PARTIAL_MARKER
 from files.extract import extract_text
 from llm.llm_role import LLMRole
+from memory.writer import write_document
 from web.tavily_search import extract, search
 from logger import get_logger
 
@@ -87,7 +94,7 @@ class WebExecutionRouter(BaseRouter):
             content = payload.get("content") or {}
             return self._read_slice(
                 content["file_path"], 0, content.get("caption") or "",
-                payload.get("metadata", {}),
+                payload.get("metadata", {}), name=content.get("file_name"),
             )
 
         raise ValueError(f"WebExecutionRouter: op_type inconnu '{op_type}'")
@@ -193,7 +200,9 @@ class WebExecutionRouter(BaseRouter):
             })
         return self._read_slice(match.group(1), int(match.group(2)), message, metadata)
 
-    def _read_slice(self, url: str, start: int, message: str, metadata: dict) -> dict:
+    def _read_slice(
+        self, url: str, start: int, message: str, metadata: dict, name: str | None = None,
+    ) -> dict:
         """
         Lit une tranche de la page à partir de `start`, la synthétise et
         délègue la réponse à LLMExecutionRouter.
@@ -201,7 +210,8 @@ class WebExecutionRouter(BaseRouter):
         Appelée avec start > 0 pour « lis la suite » (tronçon 02).
         `url` est une URL http(s) ou, pour FILE_READ, le chemin local du
         fichier reçu (sprint 42) : seuls la source du texte et les
-        libellés changent.
+        libellés changent. `name` : nom d'origine du fichier, porté par
+        la fiche document (à défaut, le titre de la page).
         """
         is_file = not url.startswith(("http://", "https://"))
         source = "du fichier" if is_file else "de la page"
@@ -247,6 +257,23 @@ class WebExecutionRouter(BaseRouter):
             )
             if digest_tokens is not None and digest_tokens >= _DIGEST_MAX_TOKENS:
                 log.warning("url_read digest hit max_tokens=%d url=%s", _DIGEST_MAX_TOKENS, url)
+
+            # ── Fiche document (non bloquante), à la première tranche seulement ──
+            # Nom et source en tête : l'embedder ne lit que ≈ 128 tokens.
+            # Format parsé par le tronçon 02 du sprint 43 : ne pas changer.
+            if start == 0:
+                doc_name = name or page["title"]
+                fiche = (
+                    f"Document « {doc_name} » lu le {date.today().isoformat()}\n"
+                    f"Source : {url}\n"
+                    f"Synthèse : {digest}"
+                )
+                key = hashlib.sha256(url.encode()).hexdigest()[:16]
+                try:
+                    write_document(fiche, text, url, doc_name)
+                    log.info("document_write OK key=%s source=%s chars=%d", key, url, total)
+                except Exception:
+                    log.exception("document_write ERROR key=%s source=%s", key, url)
 
             parts = [
                 f"[Synthèse {source} « {page['title']} » — {url} "

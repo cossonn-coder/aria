@@ -15,7 +15,20 @@
 # externe, coût CPU nul.
 
 import math
+from cognition.cognitive_context import REREAD_PROPOSAL
 from memory.mempalace_bridge import MempalaceBridge
+
+# Extrait injecté d'une fiche document (sprint 43) : la synthèse entière ou
+# presque, contre 400 car. pour les autres souvenirs.
+_DOCUMENT_EXCERPT_CHARS = 1500
+
+# Consigne ajoutée en fin de section si une fiche document est retenue :
+# ARIA propose d'elle-même la relecture (tronçon 02 du sprint 43).
+_REREAD_INSTRUCTION = (
+    "[Consigne : si la réponse demande un détail absent des synthèses de "
+    "documents ci-dessus, dis-le et termine par la phrase exacte : "
+    f"{REREAD_PROPOSAL}<nom du document> » ?]"
+)
 
 
 def _estimate_tokens(text: str) -> int:
@@ -134,17 +147,23 @@ def _build_episodic_section(hits: list, budget: int) -> str:
         return ""
     header = "[Souvenirs pertinents]"
     lines = []
+    has_document = False
     used = _estimate_tokens(header + "\n")
     for hit in hits:
         text = hit.get("text", "").strip()
         if not text:
             continue
-        excerpt = text[:400]
+        # Les hits du bridge portent room mais pas type : on discrimine par room.
+        is_document = hit.get("room") == "documents"
+        excerpt = text[:_DOCUMENT_EXCERPT_CHARS] if is_document else text[:400]
         line = f"- {excerpt}"
         if used + _estimate_tokens(line + "\n") > budget:
             break
         lines.append(line)
         used += _estimate_tokens(line + "\n")
+        has_document = has_document or is_document
     if not lines:
         return ""
+    if has_document:
+        lines.append(_REREAD_INSTRUCTION)
     return header + "\n" + "\n".join(lines)

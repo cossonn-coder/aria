@@ -9,6 +9,7 @@ import math
 from unittest.mock import MagicMock
 import pytest
 
+from cognition.cognitive_context import REREAD_PROPOSAL
 from cognition.context_builder import build_context_block, _estimate_tokens
 from memory.mempalace_bridge import MempalaceBridge
 
@@ -146,3 +147,20 @@ def test_session_takes_priority_over_global():
     # session a 3 hits → fallback non activé → global absent
     assert "hors-sujet" not in result
     assert "session ciblé" in result
+
+
+# ── Fiche document (sprint 43, tronçon 01) ────────────────────────────────────
+
+def test_document_card_injected_beyond_400_chars_with_reread_instruction():
+    fiche = "Document « a.pdf » lu le 2026-10-30\nSource : /tmp/a.pdf\nSynthèse : " + "y" * 1000
+    hits = [{"text": fiche, "distance": 0.3, "room": "documents"}]
+    block = build_context_block("q", make_bridge(), [], {}, global_memories={"hits": hits})
+    assert fiche in block
+    assert REREAD_PROPOSAL in block
+
+
+def test_no_document_card_no_reread_instruction():
+    hits = [{"text": "z" * 1000, "distance": 0.3, "room": "intent_x"}]
+    block = build_context_block("q", make_bridge(), [], {}, global_memories={"hits": hits})
+    assert "z" * 400 in block and "z" * 401 not in block
+    assert REREAD_PROPOSAL not in block

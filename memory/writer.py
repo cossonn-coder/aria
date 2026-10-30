@@ -161,6 +161,46 @@ def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None) ->
     col.upsert(documents=[text], ids=[doc_id], metadatas=[meta])
 
 
+def write_document(fiche: str, text: str, source: str, title: str) -> None:
+    """
+    Stocke un document lu (fichier Telegram ou page web) en un seul upsert :
+      - la fiche (synthèse) dans aria_episodic, room documents → rappelée par le sens ;
+      - le texte intégral extrait dans aria_documents, room <key> → relu par la
+        source uniquement (jamais rappelé par le sens : le recall vise aria_episodic).
+
+    key = sha256(source)[:16] : relire le même fichier ou la même URL remplace
+    fiche et texte. wing/room/type structurels, non overridables (invariant W4).
+    """
+    col = get_collection(config.mempalace_path)
+    key = hashlib.sha256(source.encode()).hexdigest()[:16]
+    now = _now_iso()
+
+    fiche_meta = {
+        "source": source,
+        "title": title,
+        "timestamp": now,
+        "doc_key": key,
+        "wing": "aria_episodic",
+        "room": "documents",
+        "type": "document",
+    }
+    text_meta = {
+        "source": source,
+        "title": title,
+        "timestamp": now,
+        "wing": "aria_documents",
+        "room": key,
+        "type": "document_text",
+    }
+    _validate(fiche_meta)
+    _validate(text_meta)
+    col.upsert(
+        documents=[fiche, text],
+        ids=[f"document_{key}", f"document_text_{key}"],
+        metadatas=[fiche_meta, text_meta],
+    )
+
+
 # ── Écriture sémantique (faits stables) ──────────────────────────────────────
 
 def write_semantic_fact(

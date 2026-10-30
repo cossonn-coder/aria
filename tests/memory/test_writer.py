@@ -290,3 +290,23 @@ def test_write_conversation_reset_structural_fields_not_overridable(fake_col):
     assert meta["room"] == "42"
     assert meta["type"] == "conversation_reset"
     assert meta["timestamp"]
+
+
+# ── write_document — fiche + texte intégral (sprint 43, tronçon 01) ──────────
+
+def test_write_document_two_docs_structural_fields_and_stable_ids(fake_col):
+    w.write_document("fiche", "texte intégral", "/tmp/a.pdf", "a.pdf")
+    w.write_document("fiche bis", "texte bis", "/tmp/a.pdf", "a.pdf")
+
+    first, second = fake_col.calls
+    assert first["ids"] == second["ids"]
+    fiche_id, text_id = first["ids"]
+    key = fiche_id.removeprefix("document_")
+    assert text_id == f"document_text_{key}"
+    fiche_meta, text_meta = first["metadatas"]
+    assert (fiche_meta["wing"], fiche_meta["room"], fiche_meta["type"]) == (
+        "aria_episodic", "documents", "document")
+    assert fiche_meta["doc_key"] == key and fiche_meta["source"] == "/tmp/a.pdf"
+    assert (text_meta["wing"], text_meta["room"], text_meta["type"]) == (
+        "aria_documents", key, "document_text")
+    assert first["documents"] == ["fiche", "texte intégral"]

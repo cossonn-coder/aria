@@ -1,7 +1,7 @@
 # Sprint 43 — état vivant
 
 **Sujet** : #137 mémoire des documents lus (fichiers Telegram et pages web).
-**Phase courante** : conception figée (2026-10-30), prêt pour `/sprint-auto sprint 43`.
+**Phase courante** : implémentation (`/sprint-auto sprint 43`), tronçon 01 fait.
 **Branche** : `feat/sprint43-memoire-documents`.
 **Audit** : `docs/sprint43/audit_memoire_documents.md`.
 
@@ -9,7 +9,7 @@
 
 | # | Kickoff | Objet | État |
 |---|---|---|---|
-| 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ⏳ |
+| 01 | `01_fiche_document.md` | fiche `aria_episodic`/room `documents` + texte intégral `aria_documents` (`write_document`), extrait 1 500 car. + consigne de proposition de relecture | ✅ |
 | 02 | `02_relecture.md` | `DOC_REREAD` : « relis… » ou « oui » après proposition → relecture depuis le palace | ⏳ |
 | 03 | `03_run_live.md` | run live (Nico), `run_live/inventaire.txt` + `messages.txt` | ⏳ |
 
@@ -39,4 +39,9 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 43` (tronçons 01 puis 02), puis run live 03 par Nico.
+Tronçon 01 ✅ (2026-10-30, pytest 422 verts) : `writer.write_document`, fiche écrite par
+`web_router._read_slice` à `start == 0` (nouveau kwarg `name` = nom d'origine du fichier),
+`REREAD_PROPOSAL` dans `cognitive_context.py`, extrait 1 500 car. + consigne dans
+`context_builder._build_episodic_section`. Écart mineur : la ligne de consigne n'est pas
+décomptée du budget épisodique (≈ 50 tokens hors budget).
+Prochaine étape : tronçon 02 (`02_relecture.md`), puis run live 03 par Nico.

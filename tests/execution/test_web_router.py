@@ -10,6 +10,14 @@ import execution.routers.web_router as web_router_mod
 from execution.routers.web_router import WebExecutionRouter
 
 
+@pytest.fixture(autouse=True)
+def write_document_mock(monkeypatch):
+    # Fiche document (sprint 43) : jamais écrite dans le palace par ces tests.
+    mock = MagicMock()
+    monkeypatch.setattr(web_router_mod, "write_document", mock)
+    return mock
+
+
 def _make_router():
     llm_router = MagicMock()
     llm_router.complete.return_value = MagicMock(content="météo Lyon demain")
@@ -188,3 +196,36 @@ def test_file_read_long_file_marks_path_then_resumes_from_disk(tmp_path):
     prompt = router.llm_router.complete.call_args.kwargs["prompt"]
     assert f"caractères {end}-" in prompt
     assert "Fichier :" in prompt
+
+
+# ── Fiche document (sprint 43, tronçon 01) ───────────────────────────────────
+
+def test_file_read_writes_document_card_with_full_text(tmp_path, write_document_mock):
+    p = tmp_path / "uid_rapport.txt"
+    p.write_text("Rapport annuel.\nChiffres clés.", encoding="utf-8")
+    router, _ = _make_router()
+    router.llm_router.complete.return_value = MagicMock(content="LA SYNTHÈSE", usage=None)
+    payload = _file_payload(p)
+    payload["content"]["file_name"] = "rapport.txt"
+
+    router.execute(payload)
+
+    fiche, text, source, title = write_document_mock.call_args.args
+    assert source == str(p)
+    assert title == "rapport.txt"
+    assert text == "Rapport annuel.\nChiffres clés."
+    lines = fiche.splitlines()
+    assert lines[0].startswith("Document « rapport.txt » lu le ")
+    assert lines[1] == f"Source : {p}"
+    assert lines[2] == "Synthèse : LA SYNTHÈSE"
+
+
+def test_read_slice_resume_does_not_write_document(tmp_path, write_document_mock):
+    p = tmp_path / "uid_long.txt"
+    p.write_text(("x" * 999 + "\n") * 250, encoding="utf-8")
+    router, _ = _make_router()
+    router.llm_router.complete.return_value = MagicMock(content="S", usage=None)
+
+    router._read_slice(str(p), 100_000, "oui", {"chat_id": 42})
+
+    write_document_mock.assert_not_called()

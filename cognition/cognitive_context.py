@@ -26,6 +26,11 @@ class CognitiveOperation(Enum):
 # message enrichi (donc dans l'historique) ; relu au tronçon 02 du sprint 23.
 URL_PARTIAL_MARKER = "[Lecture partielle :"
 
+# Début de la phrase par laquelle ARIA propose de relire un document dont la
+# fiche est remontée en mémoire (consigne posée par context_builder) ; le
+# classifier du tronçon 02 du sprint 43 la reconnaît dans le dernier tour.
+REREAD_PROPOSAL = "Veux-tu que je relise « "
+
 
 # TOP_K mémoire par opération
 MEMORY_TOP_K = {
