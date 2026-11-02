@@ -26,7 +26,7 @@
 
 ## Carte des tronçons
 
-- 01 miniatures : 4 places, coup 4, flèche bleue, pseudos (`01_miniatures.md`) ⏳
+- 01 miniatures : 4 places, coup 4, flèche bleue, pseudos (`01_miniatures.md`) ✅
 - 02 plan stratégique : faits structurels + consigne (`02_plan_strategique.md`) ⏳
 - 03 ouvertures et progression : détection, catalogue, room, statistiques, `/ouvertures`, thème Milieu de jeu (`03_ouvertures_progression.md`) ⏳
 - 04 script de migration : 9 fiches supprimées, 57 rangées, testé sur copie (`04_migration.md`) ⏳
@@ -52,4 +52,5 @@
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Audit : `audit_miniatures_erreurs.md`.
-Prochaine étape : `/sprint-auto sprint 46`.
+Tronçon 01 fait (sélection à 4 places dès le coup 4, flèche bleue, `config.chess_usernames`).
+Prochaine étape : tronçon 02, `02_plan_strategique.md` (`/sprint-auto sprint 46`).

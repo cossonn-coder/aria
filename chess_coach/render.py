@@ -4,7 +4,8 @@
 # absent). Glyphes Unicode U+265A-265F de DejaVu Sans, pleins pour les deux
 # camps : remplis de blanc + contour noir pour les blancs, noirs pour les noirs.
 # Flèche verte : le meilleur coup ; flèche orange optionnelle : le coup
-# explosif d'une position de sorte d (sprint 27).
+# explosif d'une position de sorte d (sprint 27) ; flèche bleue optionnelle :
+# le coup joué (sprint 46).
 
 import math
 
@@ -23,6 +24,7 @@ BORDER = (60, 60, 60)
 COORD = (230, 230, 230)
 ARROW = (21, 120, 27, 190)
 ALT_ARROW = (230, 120, 20, 190)
+PLAYED_ARROW = (30, 90, 220, 190)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
@@ -61,11 +63,12 @@ def _draw_arrow(overlay: Image.Image, move: chess.Move, flipped: bool, color=ARR
 
 
 def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
-                    alt_uci: str | None = None) -> str:
+                    alt_uci: str | None = None, played_uci: str | None = None) -> str:
     """Dessine la position `fen` en PNG (480 px) et retourne `out_path`.
 
     orientation == "black" retourne l'échiquier ; best_uci est tracé en flèche
-    verte, alt_uci (coup explosif, facultatif) en flèche orange.
+    verte, alt_uci (coup explosif, facultatif) en flèche orange, played_uci (coup
+    joué, facultatif) en flèche bleue. Coup joué = meilleur coup : seule la bleue reste.
     """
     board = chess.Board(fen)
     flipped = orientation == "black"
@@ -90,9 +93,12 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
 
     # Flèche sous les pièces, en surimpression semi-transparente.
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    _draw_arrow(overlay, chess.Move.from_uci(best_uci), flipped)
+    if played_uci != best_uci:
+        _draw_arrow(overlay, chess.Move.from_uci(best_uci), flipped)
     if alt_uci:
         _draw_arrow(overlay, chess.Move.from_uci(alt_uci), flipped, ALT_ARROW)
+    if played_uci:
+        _draw_arrow(overlay, chess.Move.from_uci(played_uci), flipped, PLAYED_ARROW)
     image = Image.alpha_composite(image, overlay)
     draw = ImageDraw.Draw(image)
 

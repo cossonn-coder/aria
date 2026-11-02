@@ -131,6 +131,7 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
         "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
+    assert render.call_args.kwargs["played_uci"] == ply.uci
     assert "Position 1 (occasion explosive)" in content
     assert "offre la dame (9) ; forçant : menace" in content
     assert "réponse humaine la plus probable : Nxh4 (62 %)" in content

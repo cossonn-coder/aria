@@ -18,6 +18,7 @@ import chess.engine
 import chess.pgn
 
 from chess_coach.motifs import tag_motifs
+from config import config
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -43,8 +44,11 @@ _PV_DISPLAY = 6
 # Options Stockfish de toute l'analyse (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
 
-# Nom de Nico dans les en-têtes White / Black (sprint 39 : plus de pseudo d'échecs).
+# Nom de Nico dans les en-têtes White / Black ; ses pseudos sont dans config.chess_usernames.
 NICO_NAME = "Nico"
+# Budget de miniatures d'une partie, et premier coup montré (sprint 46).
+_CRITICAL_BUDGET = 4
+_CRITICAL_FIRST_MOVE = 4
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
 
 
@@ -149,11 +153,11 @@ def split_pgn(text: str) -> list[str]:
 
 
 def detect_color(headers, message: str) -> tuple[str, str]:
-    """Couleur de Nico : en-tête PGN (« Nico »), puis message (« je joue les noirs »), puis blancs."""
-    name = NICO_NAME.lower()
-    if headers.get("White", "").lower() == name:
+    """Couleur de Nico : en-tête PGN (« Nico » ou un pseudo), puis message (« je joue les noirs »), puis blancs."""
+    names = {name.lower() for name in (NICO_NAME, *config.chess_usernames)}
+    if headers.get("White", "").lower() in names:
         return "white", "header"
-    if headers.get("Black", "").lower() == name:
+    if headers.get("Black", "").lower() in names:
         return "black", "header"
     match = _COLOR_RE.search(message)
     if match:
@@ -404,23 +408,23 @@ def assign_motifs(plies: list, nico_color: str) -> None:
 
 
 def select_critical(plies: list, nico_color: str, explosive=()) -> list:
-    """Sélectionne ≤ 3 positions critiques + ≤ 3 occasions explosives en bonus, ordre chronologique.
+    """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir du coup 4, ordre chronologique.
 
     (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
     assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
     (e) tournant : erreur adverse ≥ 15 suivie d'un coup de Nico à perte < 10,
     partie non décidée avant l'erreur ; (c) coup unique trouvé (meilleur coup,
     écart au 2e ≥ 15). Les c et e ne sont retenues que si la PV du meilleur coup
-    rend l'avantage clair (clear_advantage). Les a/b par score décroissant, puis
-    les e, puis les c remplissent le budget de 3 ; un ply à la fois e et c reste e.
+    rend l'avantage clair (clear_advantage) ; un ply à la fois e et c reste e.
     (d) occasion explosive, fournie par chess_coach.explosive (perte du coup joué
-    < 10, donc jamais a/b) : jusqu'à 3, meilleur score d'abord, s'ajoutent sans
-    rien évincer ; celles dont la position est déjà retenue sont sautées.
+    < 10, donc jamais a/b). Budget unique de 4 : a/b, puis d, puis e, puis c, chaque
+    sorte par score décroissant ; une position déjà prise est sautée. Une position
+    d'avant le coup 4 n'est jamais retenue, quelle que soit sa sorte.
     Aucune position retenue → liste vide.
     """
     errors, turns, uniques = [], [], []
     for p in plies:
-        if p.color != nico_color:
+        if p.color != nico_color or p.move_number < _CRITICAL_FIRST_MOVE:
             continue
         prev = plies[p.ply - 1] if p.ply > 0 else None
         # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
@@ -446,13 +450,14 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
                 uniques.append(CriticalPosition(kind="c", ply=p, score=p.second_gap,
                                                 evidence=evidence[1], line_san=evidence[2]))
 
-    errors.sort(key=lambda c: c.score, reverse=True)
-    turns.sort(key=lambda c: c.score, reverse=True)
-    uniques.sort(key=lambda c: c.score, reverse=True)
-    selected = (errors + turns + uniques)[:3]
-    taken = {c.ply.ply for c in selected}
-    bonus = [d for d in sorted(explosive, key=lambda c: c.score, reverse=True) if d.ply.ply not in taken]
-    selected += bonus[:3]
+    # find_explosive cherche aussi sur les coups 1 à 3 : le filtre s'applique ici.
+    explosives = [d for d in explosive if d.ply.move_number >= _CRITICAL_FIRST_MOVE]
+    selected, taken = [], set()
+    for group in (errors, explosives, turns, uniques):
+        for candidate in sorted(group, key=lambda c: c.score, reverse=True):
+            if candidate.ply.ply not in taken and len(selected) < _CRITICAL_BUDGET:
+                selected.append(candidate)
+                taken.add(candidate.ply.ply)
     return sorted(selected, key=lambda c: c.ply.ply)
 
 

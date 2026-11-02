@@ -4,7 +4,7 @@
 #
 # Pipeline CHESS_ANALYSIS :
 #   PGN collé → chess_coach.analysis.analyze (Stockfish)
-#   → un diagramme PNG par position critique (≤ 3, flèche = meilleur coup)
+#   → un diagramme PNG par position critique (≤ 4, flèche verte = meilleur coup, bleue = coup joué)
 #   → message enrichi des faits moteur (notation anglaise, sprint 27)
 #   → LLMExecutionRouter en REASONING, SANS skip_intent : l'échange suit
 #     le pipeline normal (intent + écriture épisodique), décision Q4.
@@ -609,7 +609,8 @@ class ChessExecutionRouter(BaseRouter):
             # Sorte d : 2e flèche (orange) pour le coup explosif.
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
-                            critical.ply.best_uci, str(out_path), alt_uci=alt_uci)
+                            critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
+                            played_uci=critical.ply.uci)
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)
