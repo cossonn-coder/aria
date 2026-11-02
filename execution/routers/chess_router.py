@@ -4,7 +4,7 @@
 #
 # Pipeline CHESS_ANALYSIS :
 #   PGN collé → chess_coach.analysis.analyze (Stockfish)
-#   → un diagramme PNG par position critique (≤ 3, flèche = meilleur coup)
+#   → un diagramme PNG par position critique (≤ 4, flèche verte = meilleur coup, bleue = coup joué)
 #   → message enrichi des faits moteur (notation anglaise, sprint 27)
 #   → LLMExecutionRouter en REASONING, SANS skip_intent : l'échange suit
 #     le pipeline normal (intent + écriture épisodique), décision Q4.
@@ -27,8 +27,10 @@ import chess
 
 from chess_coach.analysis import analyze, split_pgn
 from chess_coach.explosive import _GAIN_MIN
-from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
+from chess_coach.openings import opening_room
+from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
 from chess_coach.render import render_position
+from chess_coach.structure import structure_line
 from chess_coach.summary import summarize, summary_text
 from config import config
 from cognition.cognitive_context import CognitiveOperation
@@ -75,6 +77,8 @@ _PIECE_FR = {"N": "le cavalier", "B": "le fou", "R": "la tour", "Q": "la dame", 
 _FORCING_FR = {"check": "échec", "capture": "prise", "threat": "menace"}
 
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu de partie", "endgame": "finale"}
+# Classements de la ligne fixe de la progression, hors lignes fusionnées.
+_PHASE_THEMES = ("opening", "middlegame", "endgame")
 
 _TAG_FR = {
     "capture": "prise", "check": "échec", "pawn": "coup de pion", "king": "coup de roi",
@@ -153,7 +157,7 @@ def _anchor(summary: dict) -> str:
     if summary["date"]:
         parts.append(summary["date"])
     if summary["opening"]:
-        parts.append(summary["opening"].replace("-", " "))
+        parts.append(summary["opening"])
     return " ".join(parts)
 
 
@@ -353,8 +357,6 @@ def _trial_text(trial) -> str:
     """Épreuve qui a le plus pesé : « 17.Qb3 trouvé (difficulté ≈1950) »."""
     if trial.label == "résultat":
         return f"{_RESULT_FR[trial.score]} contre {round(trial.difficulty)}"
-    if trial.label == "coups 1-10":
-        return f"coups 1-10 {'réussis' if trial.score else 'ratés'} (difficulté ≈{round(trial.difficulty)})"
     text = (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
             f"(difficulté ≈{round(trial.difficulty, -1):.0f})")
     return f"{text}, {trial.mate}" if trial.mate else text
@@ -380,6 +382,14 @@ def _rating_line(key: str, before, after) -> str:
     return f"{line} · niveau {rating.level}" if key == "global" else line
 
 
+def _phases_line(after) -> str:
+    """Ligne fixe des trois phases, affichée même à variation nulle."""
+    return " · ".join(
+        f"{LABELS[key]} {round(after.ratings[key].value)} ({_signed(after.last_game[key].delta)})"
+        for key in _PHASE_THEMES
+    )
+
+
 def _progression_block(before, after, summary: dict) -> str:
     """Bloc « Progression » écrit par le router (exact par construction).
     Chaîne vide si la partie n'entre pas dans la saison (fiche ignorée)."""
@@ -390,12 +400,13 @@ def _progression_block(before, after, summary: dict) -> str:
              else f"🎮 Progression — saison 1, partie {after.n_games}"]
     lines.append(_rating_line("global", before, after))
     if not first:
+        lines.append(_phases_line(after))
         # Thèmes dont l'épreuve décisive est la même : une seule ligne, segments
         # joints par « · », texte de l'épreuve une fois (ordre de LABELS).
         merged = {}
         for key in LABELS:
             gd = after.last_game[key]
-            if key == "global" or round(gd.delta) == 0:
+            if key == "global" or key in _PHASE_THEMES or round(gd.delta) == 0:
                 continue
             merged.setdefault(gd.top.label, (gd.top, []))[1].append(
                 _rating_line(key, before, after))
@@ -411,11 +422,11 @@ def _progression_block(before, after, summary: dict) -> str:
             reason = _BADGE_REASON[badge]
         lines.append(f"🏆 Badge débloqué : {badge} — {reason}")
     if not first and summary["opening"]:
-        family = opening_family(summary["opening"])
-        stats = after.openings.get((family, summary["nico_color"]))
+        group = game_opening_group(summary)
+        stats = after.openings.get((group, summary["nico_color"]))
         if stats:
             lines.append(
-                f"📖 {family} ({_COLOR_FR[summary['nico_color']]}) : "
+                f"📖 {group} ({_COLOR_FR[summary['nico_color']]}) : "
                 f"{stats.wins} V, {stats.draws} N, {stats.losses} D — {stats.win_rate * 100:.0f} %"
             )
     return "\n".join(lines)
@@ -609,7 +620,8 @@ class ChessExecutionRouter(BaseRouter):
             # Sorte d : 2e flèche (orange) pour le coup explosif.
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
-                            critical.ply.best_uci, str(out_path), alt_uci=alt_uci)
+                            critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
+                            played_uci=critical.ply.uci)
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)
@@ -626,7 +638,8 @@ class ChessExecutionRouter(BaseRouter):
         ).hexdigest()[:16]
         summary = summarize(analysis)
         try:
-            write_chess_game(summary_text(analysis, summary), game_hash, extra=summary)
+            write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
+                             room=opening_room(summary["opening_group"]))
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
@@ -699,6 +712,7 @@ class ChessExecutionRouter(BaseRouter):
                 _pieces_line(p.fen_before),
                 f"  {_material_line(p.fen_before, color)}",
                 f"  {_attacked_line(p.fen_before)}",
+                f"  structure : {structure_line(p.fen_before, color)}",
                 f"  évaluation : {_evaluation(p.win_before)} ({p.win_before:.0f} %)",
             ]
             if p.motifs:
@@ -723,9 +737,11 @@ class ChessExecutionRouter(BaseRouter):
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
             f"exacte « {anchor} » ; puis une entrée pour chacune des {n} positions, de "
             f"Position 1 à Position {n}, aucune omise (Nico voit les diagrammes du même "
-            "numéro), 1 à 3 phrases et 400 caractères : l'idée générale de la position "
-            "seulement (plan, pièce faible, roi exposé…) d'après la ligne « évaluation », les "
-            "motifs et le but du meilleur coup (d'après ses faits) ; n'énumère pas les coups "
+            "numéro), 1 à 3 phrases et 400 caractères : après « Position N — », commence par "
+            "« Plan : » et dis quoi viser dans cette position (pièce à améliorer, colonne à "
+            "occuper, pion ou roi à attaquer) d'après les lignes « structure », « évaluation », "
+            "« motifs » et le but du meilleur coup (d'après ses faits) ; ne nomme une colonne, "
+            "un pion ou un roi que s'il figure dans ces lignes ; n'énumère pas les coups "
             "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
@@ -736,13 +752,13 @@ class ChessExecutionRouter(BaseRouter):
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
-            "matériel / attaquées / faits. Ne recopie ni ne paraphrase « matériel égal » "
+            "matériel / attaquées / structure / faits. Ne recopie ni ne paraphrase « matériel égal » "
             "ou « aucune attaquée ». Notation anglaise : N, B, R, Q, K.]"
         )
         parts = [block, consigne]
         if opening:
             parts.append(
-                f"[Consigne : ouverture jouée : {opening.replace('-', ' ')}. Quand c'est "
+                f"[Consigne : ouverture jouée : {opening}. Quand c'est "
                 "pertinent, relie la position aux idées classiques de cette ouverture en une "
                 "demi-phrase. Un gambit d'ouverture choisi par Nico est un choix assumé, "
                 "pas une faute à corriger.]"
@@ -754,7 +770,7 @@ class ChessExecutionRouter(BaseRouter):
             )
         if any(c.kind == "d" for c in analysis.critical):
             parts.append(
-                "[Consigne : pour chaque occasion explosive : l'idée en une phrase ; la "
+                "[Consigne : pour chaque occasion explosive : d'abord le plan, puis l'idée en une phrase ; la "
                 "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "
                 "au-delà) et l'avantage atteint (critère fourni), expliqué par les pièces "
                 "protégées / vulnérables de la fin de variante ; quelles réponses humaines "

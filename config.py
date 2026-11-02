@@ -85,6 +85,8 @@ class Config:
     board_port: int = 5002
     # URL de l'échiquier renvoyée par /board (sprint 40).
     board_url: str = "http://192.168.1.124:5002"
+    # Pseudos de Nico dans les en-têtes des PGN collés, reconnus en plus de « Nico » (sprint 46).
+    chess_usernames: tuple = ("La_Bagouze", "TardoScoped", "staroflexeur")
 
     def __post_init__(self):
         self.telegram_bot_token = os.getenv("ARIA_BOT_TOKEN", "")

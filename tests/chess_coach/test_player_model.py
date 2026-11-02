@@ -4,7 +4,7 @@
 
 import json
 
-from chess_coach.player_model import build_profile
+from chess_coach.player_model import build_profile, opening_stats
 
 
 def _ply(ply, color, *, loss=0.0, win_before=50.0, difficulty=None, second_gap=None):
@@ -83,6 +83,36 @@ def test_opening_inventory_win_rate():
     assert (stats.wins, stats.losses, stats.win_rate) == (1, 1, 0.5)
 
 
+def test_opening_stats_by_group_and_color_unknown_excluded():
+    games = [
+        {"opening": "Scotch Game: Göring Gambit", "opening_group": "Göring Gambit",
+         "nico_color": "white", "outcome": "win"},
+        {"opening": "Scotch Game: Göring Gambit", "opening_group": "Göring Gambit",
+         "nico_color": "white", "outcome": "draw"},
+        {"opening": "Scotch Game: Göring Gambit", "opening_group": "Göring Gambit",
+         "nico_color": "white", "outcome": "unknown"},
+        {"opening": "Scotch Game: Göring Gambit", "opening_group": "Göring Gambit",
+         "nico_color": "black", "outcome": "loss"},
+        # Sans groupe (slug) : famille. Sans ouverture : ignorée.
+        {"opening": "Dutch-Defense", "nico_color": "white", "outcome": "win"},
+        {"opening": "", "nico_color": "white", "outcome": "win"},
+    ]
+
+    stats = opening_stats(games)
+
+    white = stats[("Göring Gambit", "white")]
+    assert (white.wins, white.draws, white.losses) == (1, 1, 0)
+    assert stats[("Göring Gambit", "black")].losses == 1
+    assert stats[("Dutch Defense", "white")].wins == 1
+    assert len(stats) == 3
+
+
+def test_middlegame_theme_fed_by_middlegame_trial():
+    profile = build_profile([_game((1500, 0.0))])
+    assert profile.ratings["middlegame"].value > 1300
+    assert profile.ratings["endgame"].trials == 0
+
+
 def test_loss_only_lowers_result_and_global():
     profile = build_profile([_game(outcome="loss", elo_opponent=1300, opening="")])
     # Ouverture réussie (+8, K 16) et défaite à égalité (−16, K 32) : le Global baisse.
@@ -93,12 +123,12 @@ def test_loss_only_lowers_result_and_global():
 
 def test_found_move_raises_theme_and_global_is_mean():
     # Fiche sans clé motifs : règle historique (tag hanging) ; Global = moyenne
-    # des seuls thèmes joués (gain de matériel + ouverture).
+    # des seuls thèmes joués (gain de matériel + milieu de jeu + ouverture).
     profile = build_profile([_game((1500, 0.0))])
     r = profile.ratings
     assert r["hanging"].value > 1300
     assert r["result"].value == r["punish"].value == r["fork"].value == 1300
-    assert r["global"].value == (r["hanging"].value + r["opening"].value) / 2
+    assert r["global"].value == (r["hanging"].value + r["middlegame"].value + r["opening"].value) / 3
 
 
 def test_motif_fork_found_raises_fork():
@@ -114,4 +144,5 @@ def test_motif_fork_found_raises_fork():
     assert r["fork"].value > 1300 and r["mates"].value > 1300
     assert r["hanging"].trials == 0
     assert profile.last_game["mates"].top.mate == "mat d'Anastasia"
-    assert r["global"].value == (r["fork"].value + r["mates"].value + r["opening"].value) / 3
+    assert r["global"].value == (r["fork"].value + r["mates"].value + r["middlegame"].value
+                                 + r["opening"].value) / 4

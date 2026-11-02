@@ -12,7 +12,7 @@ from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import SIZE, render_position
+from chess_coach.render import SIZE, _square_center, render_position
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -24,10 +24,13 @@ SCHOLAR_PGN = """je joue les noirs
 
 
 def test_detect_color():
-    # Sprint 39, tronçon 07 : Nico reconnu par son nom, plus de pseudo d'échecs.
+    # Nico reconnu par son nom ou un pseudo (sprint 46), insensible à la casse.
     assert detect_color({"White": "Ami", "Black": "Nico"}, "") == ("black", "header")
     assert detect_color({"White": "Ami", "Black": "Moi"}, "je joue les noirs") == ("black", "message")
-    assert detect_color({"White": "Ami", "Black": "staroflexeur"}, "") == ("white", "default")
+    assert detect_color({"White": "Ami", "Black": "staroflexeur"}, "") == ("black", "header")
+    assert detect_color({"White": "Ami", "Black": "la_bagouze"}, "") == ("black", "header")
+    assert detect_color({"White": "TardoScoped", "Black": "Ami"}, "") == ("white", "header")
+    assert detect_color({"White": "Ami", "Black": "Inconnu"}, "") == ("white", "default")
 
 
 @pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
@@ -37,7 +40,6 @@ def test_analyze_detects_blunder():
     blunder = game.plies[5]
     assert blunder.san == "Nf6"
     assert blunder.quality == "blunder"
-    assert any(c.kind == "a" and c.ply.ply == 5 for c in game.critical)
 
 
 @pytest.mark.parametrize("loss, sacrifice, gain, retained", [
@@ -136,21 +138,47 @@ def test_parse_pgn_indented_headers():
     assert game.headers["Black"] == "staroflexeur"
 
 
-def test_select_critical_explosive_is_bonus():
-    # 3 a/c remplissent le budget ; jusqu'à 3 d s'ajoutent sans rien évincer,
-    # meilleur score d'abord : la plus faible des 4 est écartée.
+def test_select_critical_errors_fill_budget():
+    # 5 erreurs + 1 explosif + 1 coup unique : les 4 plus grosses pertes, en ordre chronologique.
     plies = [_ply(i, 0) for i in range(41)]
-    plies[22], plies[26], plies[30] = _ply(22, 12), _ply(26, 0, second_gap=40), _ply(30, 15)
-    for i in (32, 34, 36, 38):
-        plies[i] = _ply(i, 2)
-    explosive = [CriticalPosition(kind="d", ply=plies[32], score=12.0),
-                 CriticalPosition(kind="d", ply=plies[34], score=11.0),
-                 CriticalPosition(kind="d", ply=plies[36], score=20.0),
-                 CriticalPosition(kind="d", ply=plies[38], score=15.0)]
-    plies[26] = _ply(26, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
+    for i, loss in ((22, 12), (24, 30), (26, 15), (28, 25), (30, 20)):
+        plies[i] = _ply(i, loss)
+    plies[32] = _ply(32, 2)
+    plies[34] = _ply(34, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
+    explosive = [CriticalPosition(kind="d", ply=plies[32], score=50.0)]
     selected = select_critical(plies, "white", explosive)
-    assert [(c.kind, c.ply.ply) for c in selected] == [
-        ("a", 22), ("c", 26), ("a", 30), ("d", 32), ("d", 36), ("d", 38)]
+    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 24), ("a", 26), ("a", 28), ("a", 30)]
+
+
+def test_select_critical_completes_with_other_kinds():
+    # 1 erreur + 1 explosif + 1 tournant + 1 coup unique : les 4, en ordre chronologique.
+    plies = [_ply(i, 0) for i in range(41)]
+    plies[22] = _ply(22, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
+    plies[25] = _ply(25, 20)
+    plies[26] = _ply(26, 3, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
+    plies[30] = _ply(30, 15)
+    plies[32] = _ply(32, 2)
+    explosive = [CriticalPosition(kind="d", ply=plies[32], score=12.0)]
+    selected = select_critical(plies, "white", explosive)
+    assert [(c.kind, c.ply.ply) for c in selected] == [("c", 22), ("e", 26), ("a", 30), ("d", 32)]
+
+
+def test_select_critical_skips_taken_position():
+    # Une position explosive déjà retenue comme erreur n'occupe pas une 2e place.
+    plies = [_ply(i, 0) for i in range(41)]
+    plies[22] = _ply(22, 15)
+    explosive = [CriticalPosition(kind="d", ply=plies[22], score=12.0)]
+    assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white", explosive)] == [("a", 22)]
+
+
+def test_select_critical_starts_at_move_4():
+    # Erreur et explosif du coup 3 écartés, erreur du coup 4 retenue.
+    plies = [_ply(i, 0) for i in range(9)]
+    plies[4], plies[6] = _ply(4, 30), _ply(6, 30)
+    plies[2] = _ply(2, 2, move_number=3)
+    explosive = [CriticalPosition(kind="d", ply=plies[2], score=20.0)]
+    selected = select_critical(plies, "white", explosive)
+    assert [(c.kind, c.ply.move_number) for c in selected] == [("a", 4)]
 
 
 def test_select_critical_empty_without_fallback():
@@ -163,7 +191,7 @@ def test_select_critical_empty_without_fallback():
 def test_select_critical_turning_point(win_before_error, retained):
     # Erreur adverse ≥ 15 puis coup de Nico à perte < 10 → tournant, sauf partie déjà décidée.
     plies = [_ply(0, 0), _ply(1, 20, win_before=win_before_error),
-             _ply(2, 3, fen_before=HANGING_FEN, pv_uci=HANGING_PV)]
+             _ply(2, 3, move_number=20, fen_before=HANGING_FEN, pv_uci=HANGING_PV)]
     selected = select_critical(plies, "white")
     assert [(c.kind, c.ply.ply) for c in selected] == ([("e", 2)] if retained else [])
     if retained:
@@ -171,7 +199,7 @@ def test_select_critical_turning_point(win_before_error, retained):
 
 
 def test_select_critical_unique_threshold_15():
-    plies = [_ply(0, 0, second_gap=16, fen_before=HANGING_FEN, pv_uci=HANGING_PV)]
+    plies = [_ply(0, 0, second_gap=16, move_number=20, fen_before=HANGING_FEN, pv_uci=HANGING_PV)]
     assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white")] == [("c", 0)]
 
 
@@ -198,6 +226,33 @@ def test_render_position_with_explosive_arrow(tmp_path):
     render_position(fen, "black", "g8f6", str(out), alt_uci="g7g6")
     with Image.open(out) as image:
         assert image.size == (SIZE, SIZE)
+
+
+def _arrow_pixel(path, square):
+    with Image.open(path) as image:
+        return image.getpixel(tuple(int(v) for v in _square_center(square, False)))
+
+
+def _is_blue(pixel):
+    return pixel[2] > pixel[0] + 50 and pixel[2] > pixel[1] + 50
+
+
+def _is_green(pixel):
+    return pixel[1] > pixel[0] + 20 and pixel[1] > pixel[2] + 20
+
+
+def test_render_position_played_arrow(tmp_path):
+    # Trajets sur cases vides : e3 pour le coup joué e2e4, d3 pour le meilleur coup d2d4.
+    out = tmp_path / "pos.png"
+    render_position(chess.STARTING_FEN, "white", "d2d4", str(out), played_uci="e2e4")
+    assert _is_blue(_arrow_pixel(out, chess.E3))
+    assert _is_green(_arrow_pixel(out, chess.D3))
+
+    # Coup joué = meilleur coup : seule la bleue reste, aucun pixel vert sur l'image.
+    render_position(chess.STARTING_FEN, "white", "e2e4", str(out), played_uci="e2e4")
+    assert _is_blue(_arrow_pixel(out, chess.E3))
+    with Image.open(out) as image:
+        assert not any(_is_green(pixel) for pixel in image.get_flattened_data())
 
 
 def test_split_pgn_two_games_keeps_preface():

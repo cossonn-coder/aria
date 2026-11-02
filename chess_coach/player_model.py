@@ -42,6 +42,7 @@ LABELS = {
     "mates": "Mats",
     "punish": "Punir les erreurs",
     "opening": "Ouverture",
+    "middlegame": "Milieu de jeu",
     "convert": "Convertir l'avantage",
     "endgame": "Finale",
     "result": "Résultats",
@@ -138,7 +139,7 @@ class Profile:
     ratings: dict = field(default_factory=dict)      # id → Rating
     last_game: dict = field(default_factory=dict)    # id → GameDelta
     badges: dict = field(default_factory=dict)       # nom → libellé de partie
-    openings: dict = field(default_factory=dict)     # (famille, couleur) → OpeningStats
+    openings: dict = field(default_factory=dict)     # (groupe, couleur) → OpeningStats
     n_games: int = 0
 
 
@@ -149,6 +150,29 @@ def opening_family(opening: str) -> str:
         if word in _FAMILY_ENDS:
             return " ".join(words[:i + 1])
     return " ".join(words[:2])
+
+
+def game_opening_group(game: dict) -> str:
+    """Groupe d'une fiche : le sien, sinon la famille du slug (fiche sans détection)."""
+    return game.get("opening_group") or opening_family(game["opening"])
+
+
+def opening_stats(games: list) -> dict:
+    """(groupe, couleur) → OpeningStats sur toutes les fiches reçues, saison ou non.
+    Fiches sans ouverture ignorées, issue inconnue non comptée."""
+    stats = {}
+    for game in games:
+        outcome = game.get("outcome")
+        if not game.get("opening") or outcome not in _RESULT_SCORE:
+            continue
+        entry = stats.setdefault((game_opening_group(game), game["nico_color"]), OpeningStats())
+        if outcome == "win":
+            entry.wins += 1
+        elif outcome == "draw":
+            entry.draws += 1
+        else:
+            entry.losses += 1
+    return stats
 
 
 def _move_label(ply: dict) -> str:
@@ -204,6 +228,8 @@ def _move_themes(plies: list, i: int) -> list:
         themes.append("punish")
     if p["win_before"] >= _CONVERT_MIN_WIN:
         themes.append("convert")
+    if p.get("phase") == "middlegame":
+        themes.append("middlegame")
     if p.get("phase") == "endgame":
         themes.append("endgame")
     return themes
@@ -231,7 +257,7 @@ def _season_games(games: list) -> list:
 def build_profile(games: list) -> Profile:
     """Rejoue les fiches (ordre reçu) et renvoie le profil RPG de Nico."""
     season = _season_games(games)
-    profile = Profile(n_games=len(season))
+    profile = Profile(n_games=len(season), openings=opening_stats(games))
     if not season:
         return profile
 
@@ -239,7 +265,7 @@ def build_profile(games: list) -> Profile:
     ratings = {key: Rating(start) for key in LABELS}
     profile.ratings = ratings
     streak_wins = streak_crush = 0
-    family_count = {}
+    group_count = {}
 
     for game, plies in season:
         color = game["nico_color"]
@@ -311,20 +337,12 @@ def build_profile(games: list) -> Profile:
         if streak_wins >= 3:
             unlocked.append("Série")
 
-        # Inventaire d'ouvertures.
+        # Badge « Répertoire » : 5 parties d'un même groupe d'ouvertures.
         if game.get("opening"):
-            family = opening_family(game["opening"])
-            family_count[family] = family_count.get(family, 0) + 1
-            if family_count[family] >= 5:
+            group = game_opening_group(game)
+            group_count[group] = group_count.get(group, 0) + 1
+            if group_count[group] >= 5:
                 unlocked.append("Répertoire")
-            if outcome in _RESULT_SCORE:
-                stats = profile.openings.setdefault((family, color), OpeningStats())
-                if outcome == "win":
-                    stats.wins += 1
-                elif outcome == "draw":
-                    stats.draws += 1
-                else:
-                    stats.losses += 1
 
         for badge in unlocked:
             profile.badges.setdefault(badge, label)

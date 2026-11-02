@@ -138,13 +138,15 @@ def write_image_artifact(
 
 # ── Écriture épisodique (fiche de partie d'échecs) ───────────────────────────
 
-def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None) -> None:
+def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None,
+                     room: str = "chess") -> None:
     """
     Stocke la fiche d'une partie d'échecs analysée dans aria_episodic.
 
     doc_id = chess_game_<game_hash> : renvoyer la même partie remplace sa
     fiche (upsert). game_hash est calculé par le caller à partir des coups
-    joués. wing/room/type sont structurels et non overridables (invariant W4).
+    joués. room = room de l'ouverture, passée par le caller. wing/room/type sont
+    structurels et non overridables par extra (invariant W4).
     """
     col = get_collection(config.mempalace_path)
     doc_id = f"chess_game_{game_hash}"
@@ -152,13 +154,36 @@ def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None) ->
     meta = {
         **(extra or {}),
         "wing": "aria_episodic",
-        "room": "chess",
+        "room": room,
         "type": "chess_game",
         "timestamp": _now_iso(),
         "source": "chess_router",
     }
     _validate(meta)
     col.upsert(documents=[text], ids=[doc_id], metadatas=[meta])
+
+
+def update_chess_game_opening(doc_id: str, room: str, opening: str, opening_group: str, eco: str) -> None:
+    """
+    Range une fiche existante dans la room de son ouverture (migration sprint 46).
+
+    Seuls ces champs sont passés : ChromaDB fusionne les métadonnées, donc
+    timestamp (chronologie, #97), plies_json et document restent intacts,
+    sans ré-embedding.
+    """
+    col = get_collection(config.mempalace_path)
+    col.update(ids=[doc_id], metadatas=[{
+        "room": room,
+        "opening": opening,
+        "opening_group": opening_group,
+        "eco": eco,
+    }])
+
+
+def delete_chess_games(doc_ids: list[str]) -> None:
+    """Supprime des fiches de parties (migration sprint 46 : analysées du mauvais camp)."""
+    col = get_collection(config.mempalace_path)
+    col.delete(ids=doc_ids)
 
 
 def write_document(fiche: str, text: str, source: str, title: str) -> None:
