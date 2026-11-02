@@ -14,6 +14,8 @@
 - Nico, 2026-11-02 : « stats globales » = toutes les parties enregistrées de l'ouverture, sans plafond ; pas de ligne toutes ouvertures confondues. Réponse prise pour l'OK de figer.
 - Par défaut annoncés à Nico : recherche sans accent ni casse, liste si plusieurs correspondances, une section par couleur, partie trop courte exclue de la moyenne du coup N, 5 dernières triées par date de partie, à défaut d'analyse.
 
+- Nico, 2026-11-02 : hors kickoff, marge Stockfish portée à 60 s dans `analyze_game` et `find_explosive` (3 analyses perdues sur `TimeoutError` le 2026-11-02). Cause du gel non prouvée, pression mémoire suspectée.
+
 ## Carte des tronçons
 
 - 01 `/ouvertures <nom>` (`01_stats_ouverture.md`) ✅
