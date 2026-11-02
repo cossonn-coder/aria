@@ -74,8 +74,9 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
     assert "1re ligne exacte « Partie contre Ami »" in delegated["content"]
     assert "Niveau" in delegated["content"]
-    # Tronçon 15 : entrée = idée générale seule, nombre exact d'entrées, sans historique.
-    assert "idée générale de la position" in delegated["content"]
+    # Sprint 46 : l'entrée est un plan, nombre exact d'entrées, sans historique.
+    assert "commence par « Plan : »" in delegated["content"]
+    assert "  structure : " in delegated["content"]
     assert "1 à 3 phrases" in delegated["content"]
     assert "de Position 1 à Position 2, aucune omise" in delegated["content"]
     assert delegated["metadata"]["skip_history"] is True
@@ -86,7 +87,7 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     # Tronçon 13 : faits coup par coup du meilleur coup et état de la position.
     assert "  faits : 17...d6 18.Nf3" in delegated["content"]
     assert "  évaluation : équilibre (50 %)" in delegated["content"]
-    assert "matériel / attaquées / faits. Ne recopie ni ne paraphrase" in delegated["content"]
+    assert "matériel / attaquées / structure / faits. Ne recopie ni ne paraphrase" in delegated["content"]
     assert "idées classiques de cette ouverture" not in delegated["content"]
     write_game.assert_called_once()
     assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"

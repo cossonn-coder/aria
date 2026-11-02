@@ -29,6 +29,7 @@ from chess_coach.analysis import analyze, split_pgn
 from chess_coach.explosive import _GAIN_MIN
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
 from chess_coach.render import render_position
+from chess_coach.structure import structure_line
 from chess_coach.summary import summarize, summary_text
 from config import config
 from cognition.cognitive_context import CognitiveOperation
@@ -700,6 +701,7 @@ class ChessExecutionRouter(BaseRouter):
                 _pieces_line(p.fen_before),
                 f"  {_material_line(p.fen_before, color)}",
                 f"  {_attacked_line(p.fen_before)}",
+                f"  structure : {structure_line(p.fen_before, color)}",
                 f"  évaluation : {_evaluation(p.win_before)} ({p.win_before:.0f} %)",
             ]
             if p.motifs:
@@ -724,9 +726,11 @@ class ChessExecutionRouter(BaseRouter):
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
             f"exacte « {anchor} » ; puis une entrée pour chacune des {n} positions, de "
             f"Position 1 à Position {n}, aucune omise (Nico voit les diagrammes du même "
-            "numéro), 1 à 3 phrases et 400 caractères : l'idée générale de la position "
-            "seulement (plan, pièce faible, roi exposé…) d'après la ligne « évaluation », les "
-            "motifs et le but du meilleur coup (d'après ses faits) ; n'énumère pas les coups "
+            "numéro), 1 à 3 phrases et 400 caractères : après « Position N — », commence par "
+            "« Plan : » et dis quoi viser dans cette position (pièce à améliorer, colonne à "
+            "occuper, pion ou roi à attaquer) d'après les lignes « structure », « évaluation », "
+            "« motifs » et le but du meilleur coup (d'après ses faits) ; ne nomme une colonne, "
+            "un pion ou un roi que s'il figure dans ces lignes ; n'énumère pas les coups "
             "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
@@ -737,7 +741,7 @@ class ChessExecutionRouter(BaseRouter):
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
-            "matériel / attaquées / faits. Ne recopie ni ne paraphrase « matériel égal » "
+            "matériel / attaquées / structure / faits. Ne recopie ni ne paraphrase « matériel égal » "
             "ou « aucune attaquée ». Notation anglaise : N, B, R, Q, K.]"
         )
         parts = [block, consigne]
@@ -755,7 +759,7 @@ class ChessExecutionRouter(BaseRouter):
             )
         if any(c.kind == "d" for c in analysis.critical):
             parts.append(
-                "[Consigne : pour chaque occasion explosive : l'idée en une phrase ; la "
+                "[Consigne : pour chaque occasion explosive : d'abord le plan, puis l'idée en une phrase ; la "
                 "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "
                 "au-delà) et l'avantage atteint (critère fourni), expliqué par les pièces "
                 "protégées / vulnérables de la fin de variante ; quelles réponses humaines "
