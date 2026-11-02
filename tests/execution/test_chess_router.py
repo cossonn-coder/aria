@@ -8,6 +8,7 @@ import json
 from unittest.mock import MagicMock
 
 import chess
+import pytest
 
 import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
@@ -24,6 +25,12 @@ def _ply(ply, move_number, san, best_san, best_uci):
         pv_san=[best_san, "Nf3"], second_gap=None, quality="mistake",
         phase="middlegame", tags=["check"], clock=None, eval_before_cp=0, eval_after_cp=80,
     )
+
+
+@pytest.fixture(autouse=True)
+def no_opening_detection(monkeypatch):
+    # Coups factices (a7a6 répété), non rejouables depuis la position initiale.
+    monkeypatch.setattr("chess_coach.summary.detect_opening", lambda ucis: None)
 
 
 def _season_game(doc_id):
@@ -251,6 +258,50 @@ def test_progression_block_level_up_and_new_badge():
             "17.Qb3 trouvé (difficulté ≈1950)") in block
     assert "🏆 Badge débloqué : Tueur de géant — victoire contre un adversaire à 1452 (+107)" in block
     assert "Série" not in block
+
+
+def test_progression_block_phases_fixed_line_not_merged():
+    keys = chess_router_mod.LABELS
+    before = Profile(n_games=3, ratings={k: Rating(1400.0) for k in keys})
+    after = Profile(
+        n_games=4, ratings={**{k: Rating(1400.0) for k in keys}, "opening": Rating(1652.0),
+                            "middlegame": Rating(1412.0), "endgame": Rating(1380.0)},
+        last_game={**{k: GameDelta() for k in keys},
+                   "opening": GameDelta(5.0, Trial("coups 1-10", 1400.0, 1.0, 5.0)),
+                   "middlegame": GameDelta(-3.0, Trial("19.Bg5", 1240.0, 0.0, -3.0))},
+    )
+
+    block = chess_router_mod._progression_block(before, after, {"opening": "", "nico_color": "white"})
+
+    lines = block.splitlines()
+    assert lines[2] == "Ouverture 1652 (+5) · Milieu de jeu 1412 (−3) · Finale 1380 (+0)"
+    assert "19.Bg5" not in block and "coups 1-10" not in block
+    assert sum("Ouverture" in line for line in lines) == 1
+
+
+def test_game_written_in_opening_room(monkeypatch, tmp_path):
+    p = _ply(1, 17, "Ng4+", "d6", "d7d6")
+    analysis = GameAnalysis(headers={"White": "Ami", "Black": "staroflexeur"}, nico_color="black",
+                            color_source="header", plies=[p],
+                            critical=[CriticalPosition(kind="a", ply=p, score=p.loss)])
+    monkeypatch.setattr("chess_coach.summary.detect_opening",
+                        lambda ucis: ("C44", "Scotch Game: Göring Gambit"))
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    write_game = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {"chat_id": 42}}
+    )
+
+    assert write_game.call_args.kwargs["room"] == "chess_goring-gambit"
+    assert write_game.call_args.kwargs["extra"]["opening_group"] == "Göring Gambit"
 
 
 def test_progression_block_merges_themes_on_same_move():

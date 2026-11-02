@@ -66,6 +66,20 @@ def test_parties_text_last_five_newest_first():
     assert meta_commands.parties_text([]) == "Aucune partie enregistrée."
 
 
+def test_openings_text_format_order_and_unknown_line():
+    goring = {"opening": "x", "opening_group": "Göring Gambit", "nico_color": "white"}
+    games = [{**goring, "outcome": o} for o in ["win"] * 5 + ["loss"] * 3]
+    games += [{"opening": "x", "opening_group": "Dutch Defense", "nico_color": "black", "outcome": "draw"},
+              {**goring, "outcome": "unknown"}]
+
+    assert meta_commands.openings_text(games).splitlines() == [
+        "Göring Gambit (blancs) : 5 V, 0 N, 3 D — 62 % [8 parties]",
+        "Dutch Defense (noirs) : 0 V, 1 N, 0 D — 0 % [1 partie]",
+        "Issue inconnue, non comptée : 1 fiche(s)",
+    ]
+    assert meta_commands.openings_text([]) == meta_commands.NO_OPENINGS
+
+
 def test_status_text():
     status = {
         "started_at": datetime(2026, 10, 29, 8, 0),

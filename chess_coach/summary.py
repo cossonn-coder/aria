@@ -16,6 +16,7 @@ import math
 import statistics
 
 from chess_coach.analysis import GameAnalysis
+from chess_coach.openings import detect_opening, opening_group
 
 _OPENING_PLIES = 12
 _ERROR_QUALITIES = ("mistake", "blunder")
@@ -113,6 +114,10 @@ def summarize(analysis: GameAnalysis) -> dict:
     nico_key = "White" if color == "white" else "Black"
     eco_url = _header(headers, "ECOUrl")
     opening = _header(headers, "Opening") or (eco_url.rstrip("/").rsplit("/", 1)[-1] if eco_url else "")
+    # Partie à position de départ imposée (en-tête FEN, Chess960) : ses coups ne se
+    # rejouent pas depuis la position initiale, donc pas de détection.
+    detected = None if "FEN" in headers else detect_opening([p.uci for p in plies])
+    detected_eco, detected_name = detected or ("", "")
 
     summary = {
         "date": _header(headers, "Date") or _header(headers, "UTCDate"),
@@ -125,8 +130,9 @@ def summarize(analysis: GameAnalysis) -> dict:
         "outcome": outcome,
         "termination": _header(headers, "Termination"),
         "time_control": _header(headers, "TimeControl"),
-        "eco": _header(headers, "ECO"),
-        "opening": opening,
+        "eco": _header(headers, "ECO") or detected_eco,
+        "opening": detected_name or opening,
+        "opening_group": opening_group(detected_name) if detected_name else None,
         "opening_line": " ".join(p.san for p in plies[:_OPENING_PLIES]),
         "n_plies": len(plies),
     }

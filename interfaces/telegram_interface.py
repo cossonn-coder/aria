@@ -392,6 +392,11 @@ class TelegramInterface(BaseInterface):
         games = await asyncio.to_thread(self.bridge.load_chess_games)
         await self._deliver(update.effective_chat.id, meta_commands.parties_text(games))
 
+    async def _cmd_ouvertures(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=ouvertures")
+        games = await asyncio.to_thread(self.bridge.load_chess_games)
+        await self._deliver(update.effective_chat.id, meta_commands.openings_text(games))
+
     async def _cmd_oublie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         Marqueur de coupure : la clé est str(chat_id), la même que celle

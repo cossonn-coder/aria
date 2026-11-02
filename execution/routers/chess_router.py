@@ -27,7 +27,8 @@ import chess
 
 from chess_coach.analysis import analyze, split_pgn
 from chess_coach.explosive import _GAIN_MIN
-from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, opening_family
+from chess_coach.openings import opening_room
+from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
 from chess_coach.render import render_position
 from chess_coach.structure import structure_line
 from chess_coach.summary import summarize, summary_text
@@ -76,6 +77,8 @@ _PIECE_FR = {"N": "le cavalier", "B": "le fou", "R": "la tour", "Q": "la dame", 
 _FORCING_FR = {"check": "échec", "capture": "prise", "threat": "menace"}
 
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu de partie", "endgame": "finale"}
+# Classements de la ligne fixe de la progression, hors lignes fusionnées.
+_PHASE_THEMES = ("opening", "middlegame", "endgame")
 
 _TAG_FR = {
     "capture": "prise", "check": "échec", "pawn": "coup de pion", "king": "coup de roi",
@@ -154,7 +157,7 @@ def _anchor(summary: dict) -> str:
     if summary["date"]:
         parts.append(summary["date"])
     if summary["opening"]:
-        parts.append(summary["opening"].replace("-", " "))
+        parts.append(summary["opening"])
     return " ".join(parts)
 
 
@@ -354,8 +357,6 @@ def _trial_text(trial) -> str:
     """Épreuve qui a le plus pesé : « 17.Qb3 trouvé (difficulté ≈1950) »."""
     if trial.label == "résultat":
         return f"{_RESULT_FR[trial.score]} contre {round(trial.difficulty)}"
-    if trial.label == "coups 1-10":
-        return f"coups 1-10 {'réussis' if trial.score else 'ratés'} (difficulté ≈{round(trial.difficulty)})"
     text = (f"{trial.label} {'trouvé' if trial.score else 'raté'} "
             f"(difficulté ≈{round(trial.difficulty, -1):.0f})")
     return f"{text}, {trial.mate}" if trial.mate else text
@@ -381,6 +382,14 @@ def _rating_line(key: str, before, after) -> str:
     return f"{line} · niveau {rating.level}" if key == "global" else line
 
 
+def _phases_line(after) -> str:
+    """Ligne fixe des trois phases, affichée même à variation nulle."""
+    return " · ".join(
+        f"{LABELS[key]} {round(after.ratings[key].value)} ({_signed(after.last_game[key].delta)})"
+        for key in _PHASE_THEMES
+    )
+
+
 def _progression_block(before, after, summary: dict) -> str:
     """Bloc « Progression » écrit par le router (exact par construction).
     Chaîne vide si la partie n'entre pas dans la saison (fiche ignorée)."""
@@ -391,12 +400,13 @@ def _progression_block(before, after, summary: dict) -> str:
              else f"🎮 Progression — saison 1, partie {after.n_games}"]
     lines.append(_rating_line("global", before, after))
     if not first:
+        lines.append(_phases_line(after))
         # Thèmes dont l'épreuve décisive est la même : une seule ligne, segments
         # joints par « · », texte de l'épreuve une fois (ordre de LABELS).
         merged = {}
         for key in LABELS:
             gd = after.last_game[key]
-            if key == "global" or round(gd.delta) == 0:
+            if key == "global" or key in _PHASE_THEMES or round(gd.delta) == 0:
                 continue
             merged.setdefault(gd.top.label, (gd.top, []))[1].append(
                 _rating_line(key, before, after))
@@ -412,11 +422,11 @@ def _progression_block(before, after, summary: dict) -> str:
             reason = _BADGE_REASON[badge]
         lines.append(f"🏆 Badge débloqué : {badge} — {reason}")
     if not first and summary["opening"]:
-        family = opening_family(summary["opening"])
-        stats = after.openings.get((family, summary["nico_color"]))
+        group = game_opening_group(summary)
+        stats = after.openings.get((group, summary["nico_color"]))
         if stats:
             lines.append(
-                f"📖 {family} ({_COLOR_FR[summary['nico_color']]}) : "
+                f"📖 {group} ({_COLOR_FR[summary['nico_color']]}) : "
                 f"{stats.wins} V, {stats.draws} N, {stats.losses} D — {stats.win_rate * 100:.0f} %"
             )
     return "\n".join(lines)
@@ -628,7 +638,8 @@ class ChessExecutionRouter(BaseRouter):
         ).hexdigest()[:16]
         summary = summarize(analysis)
         try:
-            write_chess_game(summary_text(analysis, summary), game_hash, extra=summary)
+            write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
+                             room=opening_room(summary["opening_group"]))
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
@@ -747,7 +758,7 @@ class ChessExecutionRouter(BaseRouter):
         parts = [block, consigne]
         if opening:
             parts.append(
-                f"[Consigne : ouverture jouée : {opening.replace('-', ' ')}. Quand c'est "
+                f"[Consigne : ouverture jouée : {opening}. Quand c'est "
                 "pertinent, relie la position aux idées classiques de cette ouverture en une "
                 "demi-phrase. Un gambit d'ouverture choisi par Nico est un choix assumé, "
                 "pas une faute à corriger.]"

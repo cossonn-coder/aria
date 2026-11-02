@@ -278,6 +278,11 @@ def test_write_chess_game_structural_fields_and_dedup(fake_col):
     assert meta["nico_color"] == "black"
 
 
+def test_write_chess_game_room_from_caller_not_overridable(fake_col):
+    w.write_chess_game("fiche", "abc123", extra={"room": "wrong"}, room="chess_goring-gambit")
+    assert fake_col.last_meta["room"] == "chess_goring-gambit"
+
+
 # ── write_conversation_reset — marqueur /oublie (sprint 40, tronçon 03) ─────
 
 def test_write_conversation_reset_structural_fields_not_overridable(fake_col):

@@ -12,6 +12,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from chess_coach.player_model import opening_stats
 from chess_coach.summary import _COLOR_FR, _OUTCOME_FR
 from config import config
 from intent.intent_store import STORE_PATH
@@ -55,6 +56,7 @@ COMMANDS.update({
     "llm": "Derniers appels LLM",
     "intents": "Intents actifs",
     "parties": "Dernières parties d'échecs",
+    "ouvertures": "Statistiques par ouverture",
 })
 
 # Racine du projet : cwd des appels git.
@@ -74,6 +76,7 @@ NO_ERRORS = "Aucune erreur récente."
 NO_LLM = "Aucun appel LLM récent."
 NO_INTENTS = "Aucun intent actif."
 NO_PARTIES = "Aucune partie enregistrée."
+NO_OPENINGS = "Aucune partie enregistrée : pas de statistiques d'ouverture."
 
 
 def _run(args: list[str]) -> str:
@@ -153,6 +156,24 @@ def parties_text(games: list[dict]) -> str:
             _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
             game.get("opening") or "ouverture inconnue",
         ]))
+    return "\n".join(lines)
+
+
+# ── /ouvertures ──────────────────────────────────────────────────────────────
+
+def openings_text(games: list[dict]) -> str:
+    """Une ligne par (groupe, couleur), du plus joué au moins joué, puis les issues inconnues."""
+    if not games:
+        return NO_OPENINGS
+    lines = []
+    stats = opening_stats(games)
+    for (group, color), s in sorted(stats.items(), key=lambda item: -item[1].games):
+        lines.append(
+            f"{group} ({_COLOR_FR[color]}) : {s.wins} V, {s.draws} N, {s.losses} D — "
+            f"{s.win_rate * 100:.0f} % [{s.games} partie{'s' if s.games > 1 else ''}]"
+        )
+    unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
+    lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
     return "\n".join(lines)
 
 

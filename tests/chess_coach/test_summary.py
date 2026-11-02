@@ -5,8 +5,17 @@
 
 import json
 
+import pytest
+
+import chess_coach.summary as summary_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.summary import summarize, summary_text
+
+
+@pytest.fixture
+def no_detection(monkeypatch):
+    # Coups factices, non rejouables depuis la position initiale.
+    monkeypatch.setattr(summary_mod, "detect_opening", lambda ucis: None)
 
 
 def _ply(ply, move_number, color, san, uci, quality, loss, win_before, clock):
@@ -41,7 +50,9 @@ def test_summarize_nominal():
     assert all(v is None or isinstance(v, (str, int, float, bool)) for v in s.values())
     assert s["outcome"] == "win"
     assert s["opponent"] == "Ami" and s["elo_nico"] == 1307 and s["elo_opponent"] == 1272
-    assert s["opening"] == "Dutch-Defense"
+    # Nom détecté à partir des coups (1.e4 f5), prioritaire sur le slug ; ECO d'en-tête prioritaire.
+    assert s["opening"] == "Duras Gambit" and s["opening_group"] == "Duras Gambit"
+    assert s["eco"] == "A80"
     assert s["opening_line"] == "e4 f5 Qh5+ g6"
     assert (s["nico_best"], s["nico_blunder"], s["nico_mistake"]) == (1, 1, 0)
     assert s["first_error_nico"] == 2 and s["first_error_opponent"] == 2
@@ -59,7 +70,21 @@ def test_summarize_nominal():
     assert "Nico (noirs, 1307) contre Ami (1272)" in text and "victoire" in text
 
 
-def test_accuracy_lichess_and_worst_move():
+def test_position_setup_keeps_header_opening_without_detection():
+    # En-tête FEN : les coups ne partent pas de la position initiale, pas de détection.
+    plies = [_ply(0, 1, "white", "Ke2", "e1e2", "best", 0.0, 50.0, None)]
+    analysis = GameAnalysis(
+        headers={"FEN": "4k3/8/8/8/8/8/8/4K3 w - - 0 1", "Result": "1/2-1/2",
+                 "ECOUrl": "https://www.chess.com/openings/Dutch-Defense"},
+        nico_color="white", color_source="header", plies=plies, critical=[],
+    )
+
+    s = summarize(analysis)
+
+    assert s["opening"] == "Dutch-Defense" and s["opening_group"] is None and s["eco"] == ""
+
+
+def test_accuracy_lichess_and_worst_move(no_detection):
     # Nico (blancs) : 9 coups propres (perte 2) et une gaffe de 80 pts au coup 9.
     plies = []
     for i in range(20):
@@ -81,7 +106,7 @@ def test_accuracy_lichess_and_worst_move():
     assert s["best_move"] is None and s["best_move_p"] is None
 
 
-def test_best_move_is_rarest_played_move():
+def test_best_move_is_rarest_played_move(no_detection):
     # Trois coups de Nico : banal (p 0,6), rare et bon (p 0,1, perte 1), plus rare mais perdant (p 0,05, perte 8).
     plies = []
     for i, (played_p, loss) in enumerate([(0.6, 0.0), (0.1, 1.0), (0.05, 8.0)]):
