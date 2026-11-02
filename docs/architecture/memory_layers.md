@@ -7,7 +7,7 @@ filesystem documenté dans `docs/architecture/chromadb_palace.md`.
 
 ## État post-sprint-4
 
-- `aria_episodic` : interactions, images reçues, images générées.
+- `aria_episodic` : interactions, images reçues, images générées, fiches de parties d'échecs (`type=chess_game`, une room `chess_<ouverture>` par ouverture depuis le sprint 46).
   Types `interaction|image_input|image_generated`. ~408 entrées.
   Indexé par `intent_id` (room).
 - `aria_semantic` : faits stables sur l'utilisateur (allergies,

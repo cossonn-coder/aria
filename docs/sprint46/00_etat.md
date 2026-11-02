@@ -1,6 +1,6 @@
 # Sprint 46 — état vivant
 
-**Phase courante** : B/C — conception figée, prête pour `/sprint-auto sprint 46`.
+**Phase courante** : CLOS le 2026-11-02 (tag `sprint-46`), run live OK par Nico.
 **Branche** : `feat/sprint46-miniatures-ouvertures` (depuis `main`, tag `sprint-45`).
 
 ## Décisions arrêtées
@@ -31,7 +31,7 @@
 - 02 plan stratégique : faits structurels + consigne (`02_plan_strategique.md`) ✅
 - 03 ouvertures et progression : détection, catalogue, room, statistiques, `/ouvertures`, thème Milieu de jeu (`03_ouvertures_progression.md`) ✅
 - 04 script de migration : 9 fiches supprimées, 57 rangées, testé sur copie (`04_migration.md`) ✅
-- 05 run live par Nico, migration comprise (`05_run_live.md`, parties : `run_live_parties.txt`) ⏳
+- 05 run live par Nico, migration comprise (`05_run_live.md`, parties : `run_live_parties.txt`) ✅
 
 ## Questions ouvertes
 
@@ -39,23 +39,14 @@
 
 ## Dettes
 
-- Ferme si run live OK : #149 (résidu → stratégie rose / piège cyan ci-dessous), #126 reste ouverte.
-- Nouvelles, à inscrire au kickoff suivant :
+- Fermée : #149 (résidu → #157), #126 reste ouverte.
+- Nouvelles, inscrites au kickoff du sprint 47 (#157 à #164), dont :
   - Stratégie rose et piège cyan non calculés sur une partie envoyée (Q1).
   - Document indexé des fiches migrées non réécrit (« ouverture inconnue » possible), métadonnées seules.
   - 13 fiches `color_source=default`, blancs : camp invérifiable, le nom des blancs n'est pas stocké.
   - `find_explosive` cherche encore sur les coups 1-3, écartés ensuite par `select_critical`.
   - Pression au temps ignorée : `clock` et `errors_low_clock` sont calculés mais jamais relus (profil, réponse du LLM). Prochain sprint, pas prioritaire (Nico, 2026-11-02).
 
-## À la clôture
-
-`CLAUDE.md` (« room `chess` » → une room par ouverture), `docs/architecture/memory_layers.md`.
-
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Audit : `audit_miniatures_erreurs.md`.
-Tronçon 01 fait (sélection à 4 places dès le coup 4, flèche bleue, `config.chess_usernames`).
-Tronçon 02 fait (`chess_coach/structure.py`, ligne `structure :` du bloc enrichi, consigne « Plan : »).
-Tronçon 03 fait (`chess_coach/openings.py` + table Lichess `chess_coach/data/openings.tsv`, fiche `opening_group`, room par ouverture, `opening_stats`, `/ouvertures`, thème `middlegame` et ligne fixe des phases). Variation nulle affichée « (+0) » (`_signed`), partie à en-tête FEN : pas de détection.
-Tronçon 04 fait (`update_chess_game_opening`, `delete_chess_games`, `scripts/migrate_chess_rooms.py`). Vérifié sur copie du 2026-11-02 : 66 → 57 fiches, 9 suppressions conformes à la liste, 23 rooms, 0 non reconnue, seconde exécution sans écriture ; `load_chess_games` et `build_profile` tournent ; 786 autres entrées, documents et embeddings identiques à la sauvegarde. Migration prod non lancée.
-Prochaine étape : tronçon 05, run live par Nico (`05_run_live.md`).
+Sprint clos. Suite : `docs/sprint47/context_kickoff_sprint_47.md`, puis `/conception sprint 47`.

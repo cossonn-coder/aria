@@ -118,7 +118,7 @@ Si tu hésites, tu ne pushes pas.
 voir `docs/architecture/memory_layers.md`) :
 
 - `aria_episodic` : interactions, images et fiches de parties d'échecs
-  (`type=chess_game`, room `chess`). Actif.
+  (`type=chess_game`, une room `chess_<ouverture>` par ouverture). Actif.
 - `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
@@ -152,12 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 45 clos (tag `sprint-45`, recherche autonome : opération `WEB_RESEARCH` sur phrases
-explicites, plan de 3 à 5 requêtes → Tavily → 3 pages lues → rapport conservé comme document lu,
-relu par « relis la recherche sur… » ; voir `docs/sprint45/00_etat.md`).
-Prochain : **sprint 46**, sujet à choisir par Nico.
-Kickoff : `docs/sprint46/context_kickoff_sprint_46.md`.
-Prochaine étape : `/conception sprint 46`.
+Sprint 46 clos (tag `sprint-46`, analyse de parties : 4 miniatures centrées sur les erreurs, flèche bleue
+du coup joué, plan stratégique, détection d'ouverture, une room par ouverture, `/ouvertures`, thème
+Milieu de jeu ; voir `docs/sprint46/00_etat.md`).
+Prochain : **sprint 47**, sujet à choisir par Nico.
+Kickoff : `docs/sprint47/context_kickoff_sprint_47.md`.
+Prochaine étape : `/conception sprint 47`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
