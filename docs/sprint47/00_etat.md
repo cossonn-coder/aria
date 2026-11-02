@@ -1,6 +1,6 @@
 # Sprint 47 — état vivant
 
-**Phase courante** : tronçon 01 fait, reste le run live (tronçon 02).
+**Phase courante** : sprint clos (tag `sprint-47`).
 **Branche** : `feat/sprint47-topo-ouverture` (depuis `main`).
 
 ## Décisions arrêtées
@@ -19,7 +19,7 @@
 ## Carte des tronçons
 
 - 01 `/ouvertures <nom>` (`01_stats_ouverture.md`) ✅
-- 02 run live par Nico (`02_run_live.md`, messages : `run_live_messages.txt`) ⏳
+- 02 run live par Nico (`02_run_live.md`, messages : `run_live_messages.txt`) ✅ par Nico, 2026-11-02 : 6 envois sur 7 conformes au tableau, sans erreur au journal ; `/ouvertures goring` non envoyé, couvert par les tests ; marge de 60 s non éprouvée au run (aucune partie envoyée)
 
 ## Questions ouvertes
 
@@ -27,9 +27,9 @@
 
 ## Dettes
 
-- Nouvelles, inscrites au kickoff du sprint 47 : #169 noms français d'ouvertures, #170 aucune horloge dans les fiches.
+- Nouvelles, inscrites au kickoff du sprint 47 : #169 noms français d'ouvertures, #170 aucune horloge dans les fiches, #171 gel de Stockfish, #172 moteur de `/board` jamais refermé.
 - #81 (déviations de répertoire) reste ouverte : mesure négative dans l'audit.
 
 ## §REPRISE
 
-Tronçon 01 implémenté : `opening_report_text` dans `interfaces/meta_commands.py`, `_cmd_ouvertures` lit ses arguments. Suite : tronçon 02, run live par Nico (`02_run_live.md`, messages : `run_live_messages.txt`).
+Sprint clos. Suite : `/conception sprint 48` (`docs/sprint48/context_kickoff_sprint_48.md`).

@@ -152,12 +152,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 46 clos (tag `sprint-46`, analyse de parties : 4 miniatures centrées sur les erreurs, flèche bleue
-du coup joué, plan stratégique, détection d'ouverture, une room par ouverture, `/ouvertures`, thème
-Milieu de jeu ; voir `docs/sprint46/00_etat.md`).
-Prochain : **sprint 47**, sujet à choisir par Nico.
-Kickoff : `docs/sprint47/context_kickoff_sprint_47.md`.
-Prochaine étape : `/conception sprint 47`.
+Sprint 47 clos (tag `sprint-47`, `/ouvertures <nom>` : statistiques d'une ouverture par couleur, sans LLM ;
+marge Stockfish de 60 s ; voir `docs/sprint47/00_etat.md`).
+Prochain : **sprint 48**, sujet à choisir par Nico.
+Kickoff : `docs/sprint48/context_kickoff_sprint_48.md`.
+Prochaine étape : `/conception sprint 48`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
