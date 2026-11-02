@@ -9,10 +9,11 @@
 
 import json
 import subprocess
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
-from chess_coach.player_model import opening_stats
+from chess_coach.player_model import game_opening_group, opening_stats
 from chess_coach.summary import _COLOR_FR, _OUTCOME_FR
 from config import config
 from intent.intent_store import STORE_PATH
@@ -56,7 +57,7 @@ COMMANDS.update({
     "llm": "Derniers appels LLM",
     "intents": "Intents actifs",
     "parties": "Dernières parties d'échecs",
-    "ouvertures": "Statistiques par ouverture",
+    "ouvertures": "Statistiques par ouverture (/ouvertures nom)",
 })
 
 # Racine du projet : cwd des appels git.
@@ -175,6 +176,99 @@ def openings_text(games: list[dict]) -> str:
     unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
     lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
     return "\n".join(lines)
+
+
+# ── /ouvertures <nom> ────────────────────────────────────────────────────────
+
+RECENT_GAMES = 5
+# Issue → libellé des lignes de détail, dans l'ordre d'affichage.
+_OUTCOME_LABELS = {"win": "victoires", "draw": "nulles", "loss": "défaites"}
+_OUTCOME_LETTERS = {"win": "V", "draw": "N", "loss": "D"}
+
+
+def _plain(text: str) -> str:
+    """Texte sans accents ni casse, pour comparer un nom d'ouverture à une requête."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def _decimal(value: float) -> str:
+    """Une décimale, avec une virgule."""
+    return f"{value:.1f}".replace(".", ",")
+
+
+def _record(games: list[dict]) -> str:
+    """« 8 V, 3 D — 73 % » : les catégories à zéro sont omises."""
+    outcomes = [game["outcome"] for game in games]
+    parts = ", ".join(
+        f"{outcomes.count(outcome)} {letter}" for outcome, letter in _OUTCOME_LETTERS.items() if outcome in outcomes
+    )
+    return f"{parts} — {outcomes.count('win') / len(games) * 100:.0f} %"
+
+
+def _per_outcome_line(title: str, games: list[dict], value, fmt) -> list[str]:
+    """Ligne « titre : victoires x, défaites y » ; value(fiche) rend None si pas de donnée.
+    Une issue sans donnée est omise ; sans aucune donnée, pas de ligne du tout."""
+    parts = []
+    for outcome, label in _OUTCOME_LABELS.items():
+        values = [value(g) for g in games if g["outcome"] == outcome]
+        values = [v for v in values if v is not None]
+        if values:
+            parts.append(f"{label} {fmt(sum(values) / len(values))}")
+    return [f"{title} : {', '.join(parts)}"] if parts else []
+
+
+def _win_at_move(game: dict, move_number: int) -> float | None:
+    """win_before du coup de Nico au numéro donné ; None si la partie ne l'atteint pas."""
+    for ply in json.loads(game.get("plies_json") or "[]"):
+        if ply["color"] == game["nico_color"] and ply["move_number"] == move_number:
+            return ply["win_before"]
+    return None
+
+
+def _game_date_key(game: dict) -> tuple[str, str]:
+    """Clé de tri chronologique : date de partie, à défaut d'analyse ; puis timestamp."""
+    timestamp = game.get("timestamp") or ""
+    return (game.get("date") or timestamp[:10]).replace(".", "-"), timestamp
+
+
+def _color_section(group: str, color: str, games: list[dict]) -> str:
+    """Rapport d'une ouverture pour une couleur : une ligne absente si pas de donnée."""
+    count = len(games)
+    lines = [f"{group} ({_COLOR_FR[color]}) : {_record(games)} [{count} partie{'s' if count > 1 else ''}]"]
+    plies = [g["n_plies"] / 2 for g in games if g.get("n_plies")]
+    if plies:
+        lines.append(f"Coups par partie en moyenne : {_decimal(sum(plies) / len(plies))}")
+    lines += _per_outcome_line("Elo adverse moyen", games, lambda g: g.get("elo_opponent") or None, lambda v: f"{v:.0f}")
+    for move_number in (10, 20):
+        lines += _per_outcome_line(
+            f"% de gain au coup {move_number}", games, lambda g: _win_at_move(g, move_number), _decimal,
+        )
+    if count > RECENT_GAMES:
+        recent = sorted(games, key=_game_date_key)[-RECENT_GAMES:]
+        lines.append(f"{RECENT_GAMES} dernières : {_record(recent)}")
+    return "\n".join(lines)
+
+
+def opening_report_text(games: list[dict], query: str) -> str:
+    """Statistiques de l'ouverture désignée par query, une section par couleur, la plus jouée d'abord."""
+    by_group: dict[str, list[dict]] = {}
+    for game in games:
+        if game.get("opening") and game.get("outcome") in _OUTCOME_LABELS:
+            by_group.setdefault(game_opening_group(game), []).append(game)
+
+    wanted = _plain(query)
+    matches = [g for g in by_group if _plain(g) == wanted] or [g for g in by_group if wanted in _plain(g)]
+    if not matches:
+        return f"Aucune ouverture ne correspond à « {query} ». Liste : /ouvertures"
+    if len(matches) > 1:
+        return f"Plusieurs ouvertures correspondent : {', '.join(sorted(matches))}."
+
+    by_color: dict[str, list[dict]] = {}
+    for game in by_group[matches[0]]:
+        by_color.setdefault(game["nico_color"], []).append(game)
+    sections = sorted(by_color.items(), key=lambda item: -len(item[1]))
+    return "\n\n".join(_color_section(matches[0], color, g) for color, g in sections)
 
 
 # ── /status ──────────────────────────────────────────────────────────────────

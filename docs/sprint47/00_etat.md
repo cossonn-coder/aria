@@ -1,6 +1,6 @@
 # Sprint 47 — état vivant
 
-**Phase courante** : conception figée, prête pour `/sprint-auto sprint 47`.
+**Phase courante** : tronçon 01 fait, reste le run live (tronçon 02).
 **Branche** : `feat/sprint47-topo-ouverture` (depuis `main`).
 
 ## Décisions arrêtées
@@ -16,7 +16,7 @@
 
 ## Carte des tronçons
 
-- 01 `/ouvertures <nom>` (`01_stats_ouverture.md`) ⏳
+- 01 `/ouvertures <nom>` (`01_stats_ouverture.md`) ✅
 - 02 run live par Nico (`02_run_live.md`, messages : `run_live_messages.txt`) ⏳
 
 ## Questions ouvertes
@@ -30,4 +30,4 @@
 
 ## §REPRISE
 
-Conception figée. Suite : `/sprint-auto sprint 47`, en lisant `CLAUDE.md`, ce fichier et le kickoff du tronçon.
+Tronçon 01 implémenté : `opening_report_text` dans `interfaces/meta_commands.py`, `_cmd_ouvertures` lit ses arguments. Suite : tronçon 02, run live par Nico (`02_run_live.md`, messages : `run_live_messages.txt`).
