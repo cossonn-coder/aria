@@ -39,6 +39,7 @@ def test_detect_keeps_last_known_position_and_transposition():
     ("Caro-Kann Defense: von Hennig Gambit", "von Hennig Gambit"),
     ("Tarrasch Defense: von Hennig Gambit", "von Hennig Gambit"),
     ("Englund Gambit: Hartlaub-Charlick Gambit", "Hartlaub-Charlick Gambit"),
+    ("King's Pawn Game: Busch-Gass Gambit, Chiodini Gambit", "Busch-Gass Gambit"),
     ("Ruy Lopez: Steinitz Defense", "Ruy Lopez"),
 ])
 def test_opening_group(name, label):

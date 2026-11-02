@@ -34,6 +34,7 @@ OPENING_CATALOG = {
     "von Popiel Gambit": ("Blackmar-Diemer Gambit: von Popiel Gambit",),
     "von Hennig Gambit": ("Caro-Kann Defense: von Hennig Gambit", "Tarrasch Defense: von Hennig Gambit"),
     "Hartlaub-Charlick Gambit": ("Englund Gambit: Hartlaub-Charlick Gambit",),
+    "Busch-Gass Gambit": ("King's Pawn Game: Busch-Gass Gambit",),
 }
 
 

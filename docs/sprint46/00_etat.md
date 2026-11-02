@@ -23,6 +23,7 @@
 - Q9 Anomalie : 8 fiches ont `La_Bagouze` en adversaire et 1 `TardoScoped`, Nico aux blancs par défaut, donc analysées du mauvais camp. **Décision de Nico : les 9 sont supprimées** à la migration (sauvegarde préalable).
 - Q10 Pseudos reconnus : `La_Bagouze`, `TardoScoped`, `staroflexeur` (remplace Q5 : liste `config.chess_usernames`, en plus de `Nico`).
 - 2026-11-02 : OK de Nico pour figer.
+- Run live : ajout de Busch-Gass au catalogue (Nico joue cette ouverture et contre elle). Pas de distinction accepté / décliné : la table n'a aucune ligne pour 3.b4.
 
 ## Carte des tronçons
 
@@ -44,6 +45,7 @@
   - Document indexé des fiches migrées non réécrit (« ouverture inconnue » possible), métadonnées seules.
   - 13 fiches `color_source=default`, blancs : camp invérifiable, le nom des blancs n'est pas stocké.
   - `find_explosive` cherche encore sur les coups 1-3, écartés ensuite par `select_critical`.
+  - Pression au temps ignorée : `clock` et `errors_low_clock` sont calculés mais jamais relus (profil, réponse du LLM). Prochain sprint, pas prioritaire (Nico, 2026-11-02).
 
 ## À la clôture
 
