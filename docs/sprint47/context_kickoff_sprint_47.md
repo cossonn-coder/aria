@@ -158,6 +158,10 @@ ARIA — Kickoff sprint 47 (ouverture)
 | 162 | Recherche explosive lancée même quand 4 erreurs remplissent les places : 51,0 s sur 66,4 s sur la partie 1 [n=1] ; 82 % du temps d'analyse [546,6 s sur 668,9 s, n=8] ; autres usages du résultat à vérifier avant de la sauter | ouvert (sprint 46) |
 | 163 | Busch-Gass : accepté et décliné non distingués, la table Lichess n'a aucune ligne pour 3.b4 | ouvert (sprint 46), cosmétique |
 | 164 | « Roqué » déduit de la case du roi (le FEN n'a pas d'historique) : un roi venu à pied en g1 est dit roqué | ouvert (sprint 46), cosmétique |
+| 165 | Relier ARIA à la suite Nextcloud (mails via Nextcloud Mail + Gmail, notes et listes via l'API Notes) : faisable, arbitrages rendus, reporté par Nico. Étude et reprise : `docs/backlog/etude_applications_smartphone.md` | ouvert (2026-11-02), attend les préalables de Nico (installer Mail, mot de passe d'application) |
+| 166 | Route `/send` de l'échiquier sans authentification sur `0.0.0.0:5002` : tout texte est traité comme un message de Nico, sans contrôle PGN. Sans gravité aujourd'hui, **bloquant avant #165** (un mail pourrait partir en son nom) | ouvert (2026-11-02) |
+| 167 | Mot-clé `génère` trop large (sous-chaîne) : « génère une note », « génère une liste », « génère un plan » partent en génération d'image [détection exécutée sur ces 3 phrases, classification complète non lancée] | ouvert (2026-11-02) |
+| 168 | Mot de passe Nextcloud en clair dans `~/.config/systemd/user/nextcloud-sync.service` | ouvert (2026-11-02) |
 
 ─────────────────────────────────────────────────────────────────────────
 
