@@ -27,7 +27,7 @@ ARIA — Kickoff sprint 47 (ouverture)
 
 ## Cible sprint 47
 
-À choisir par Nico en `/conception sprint 47`. Noté par Nico : pression au temps (#161), pas prioritaire.
+`/ouvertures <nom>` : statistiques d'une ouverture (choix de Nico, 2026-11-02), voir `docs/sprint47/00_etat.md`. Noté par Nico : pression au temps (#161), pas prioritaire.
 
 ─────────────────────────────────────────────────────────────────────────
 
@@ -162,6 +162,8 @@ ARIA — Kickoff sprint 47 (ouverture)
 | 166 | Route `/send` de l'échiquier sans authentification sur `0.0.0.0:5002` : tout texte est traité comme un message de Nico, sans contrôle PGN. Sans gravité aujourd'hui, **bloquant avant #165** (un mail pourrait partir en son nom) | ouvert (2026-11-02) |
 | 167 | Mot-clé `génère` trop large (sous-chaîne) : « génère une note », « génère une liste », « génère un plan » partent en génération d'image [détection exécutée sur ces 3 phrases, classification complète non lancée] | ouvert (2026-11-02) |
 | 168 | Mot de passe Nextcloud en clair dans `~/.config/systemd/user/nextcloud-sync.service` | ouvert (2026-11-02) |
+| 169 | `/ouvertures <nom>` : noms de groupes en anglais, `hollandaise` ou `française` ne trouvent rien | ouvert (sprint 47) |
+| 170 | Aucune des 73 fiches n'a d'horloge (`clock` vide) [relevé 2026-11-02], cause non recherchée : préalable à #161 | ouvert (sprint 47) |
 
 ─────────────────────────────────────────────────────────────────────────
 

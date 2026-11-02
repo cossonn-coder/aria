@@ -43,6 +43,9 @@ _PV_DISPLAY = 6
 
 # Options Stockfish de toute l'analyse (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
+# Marge de réponse de Stockfish, en secondes, au-delà du temps demandé (10 s par défaut).
+# La machine peut geler plus de 10 s sous pression mémoire : mieux vaut attendre que perdre l'analyse.
+ENGINE_TIMEOUT = 60
 
 # Nom de Nico dans les en-têtes White / Black ; ses pseudos sont dans config.chess_usernames.
 NICO_NAME = "Nico"
@@ -239,7 +242,7 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
 
     # Une analyse par position : (cp point de vue du trait, infos multipv).
     evaluations = []
-    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+    with chess.engine.SimpleEngine.popen_uci(engine_path, timeout=ENGINE_TIMEOUT) as engine:
         engine.configure(ENGINE_OPTIONS)
         for board in boards:
             if board.is_game_over():

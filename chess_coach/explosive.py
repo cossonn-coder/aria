@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import chess
 import chess.engine
 
-from chess_coach.analysis import _CLEAR_MAX, ENGINE_OPTIONS, _MATE_SCORE, CriticalPosition, _win, clear_advantage
+from chess_coach.analysis import _CLEAR_MAX, ENGINE_OPTIONS, ENGINE_TIMEOUT, _MATE_SCORE, CriticalPosition, _win, clear_advantage
 from chess_coach.difficulty import DEFAULT_ELO, _load, reply_distribution
 from logger import get_logger
 
@@ -405,7 +405,7 @@ def find_explosive(plies: list, nico_color: str, engine_path: str,
         if p.color == nico_color and _WIN_MIN <= p.win_before <= _WIN_MAX and p.loss < 10
     ]
     found = []
-    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+    with chess.engine.SimpleEngine.popen_uci(engine_path, timeout=ENGINE_TIMEOUT) as engine:
         engine.configure(ENGINE_OPTIONS)
         for p in eligible:
             explosive = _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci, elo, models_dir)

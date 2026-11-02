@@ -1,0 +1,20 @@
+===== Message 1 =====
+/ouvertures
+
+===== Message 2 =====
+/ouvertures göring gambit
+
+===== Message 3 =====
+/ouvertures goring
+
+===== Message 4 =====
+/ouvertures dutch
+
+===== Message 5 =====
+/ouvertures scandinavian
+
+===== Message 6 =====
+/ouvertures gambit
+
+===== Message 7 =====
+/ouvertures hollandaise

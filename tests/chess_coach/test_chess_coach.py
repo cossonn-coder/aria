@@ -262,3 +262,30 @@ def test_split_pgn_two_games_keeps_preface():
     assert len(games) == 2
     assert all(g.startswith("je joue les noirs\n\n[Event") for g in games)
     assert [parse_pgn(g).headers["White"] for g in games] == ["X", "Y"]
+
+
+def test_analysis_engines_use_long_timeout(monkeypatch):
+    """Les deux moteurs de l'analyse d'une partie laissent 60 s de marge à Stockfish."""
+    import chess.engine
+    import chess.pgn
+
+    from chess_coach.analysis import analyze_game
+    from chess_coach.explosive import find_explosive
+
+    class Opened(Exception):
+        pass
+
+    timeouts = []
+
+    def fake_popen(path, timeout=None):
+        timeouts.append(timeout)
+        raise Opened
+
+    monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen)
+    # Maia est chargé avant le moteur : sans ce bouchon, le test téléchargerait le modèle.
+    monkeypatch.setattr("chess_coach.explosive._load", lambda models_dir: None)
+    with pytest.raises(Opened):
+        analyze_game(chess.pgn.Game(), "white", "stockfish")
+    with pytest.raises(Opened):
+        find_explosive([], "white", "stockfish", 1500, "maia")
+    assert timeouts == [60, 60]
