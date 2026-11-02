@@ -24,6 +24,12 @@ class FakeCollection:
             "metadatas": metadatas,
         })
 
+    def update(self, ids, metadatas):
+        self.calls.append({"ids": ids, "metadatas": metadatas})
+
+    def delete(self, ids):
+        self.calls.append({"ids": ids})
+
     @property
     def last_meta(self) -> dict:
         return self.calls[-1]["metadatas"][0]
@@ -315,3 +321,21 @@ def test_write_document_two_docs_structural_fields_and_stable_ids(fake_col):
     assert (text_meta["wing"], text_meta["room"], text_meta["type"]) == (
         "aria_documents", key, "document_text")
     assert first["documents"] == ["fiche", "texte intégral"]
+
+
+# ── Migration des fiches de parties (sprint 46) ──────────────────────────────
+
+def test_update_chess_game_opening_passes_only_these_fields(fake_col):
+    w.update_chess_game_opening("chess_game_x", "chess_goring-gambit", "Scotch Game: Göring Gambit",
+                                "Göring Gambit", "C44")
+    assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{
+        "room": "chess_goring-gambit",
+        "opening": "Scotch Game: Göring Gambit",
+        "opening_group": "Göring Gambit",
+        "eco": "C44",
+    }]}]
+
+
+def test_delete_chess_games_deletes_ids(fake_col):
+    w.delete_chess_games(["chess_game_a", "chess_game_b"])
+    assert fake_col.calls == [{"ids": ["chess_game_a", "chess_game_b"]}]

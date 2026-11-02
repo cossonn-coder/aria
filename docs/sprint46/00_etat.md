@@ -29,7 +29,7 @@
 - 01 miniatures : 4 places, coup 4, flèche bleue, pseudos (`01_miniatures.md`) ✅
 - 02 plan stratégique : faits structurels + consigne (`02_plan_strategique.md`) ✅
 - 03 ouvertures et progression : détection, catalogue, room, statistiques, `/ouvertures`, thème Milieu de jeu (`03_ouvertures_progression.md`) ✅
-- 04 script de migration : 9 fiches supprimées, 57 rangées, testé sur copie (`04_migration.md`) ⏳
+- 04 script de migration : 9 fiches supprimées, 57 rangées, testé sur copie (`04_migration.md`) ✅
 - 05 run live par Nico, migration comprise (`05_run_live.md`, parties : `run_live_parties.txt`) ⏳
 
 ## Questions ouvertes
@@ -55,4 +55,5 @@ Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Audit : `
 Tronçon 01 fait (sélection à 4 places dès le coup 4, flèche bleue, `config.chess_usernames`).
 Tronçon 02 fait (`chess_coach/structure.py`, ligne `structure :` du bloc enrichi, consigne « Plan : »).
 Tronçon 03 fait (`chess_coach/openings.py` + table Lichess `chess_coach/data/openings.tsv`, fiche `opening_group`, room par ouverture, `opening_stats`, `/ouvertures`, thème `middlegame` et ligne fixe des phases). Variation nulle affichée « (+0) » (`_signed`), partie à en-tête FEN : pas de détection.
-Prochaine étape : tronçon 04, `04_migration.md` (`/sprint-auto sprint 46`).
+Tronçon 04 fait (`update_chess_game_opening`, `delete_chess_games`, `scripts/migrate_chess_rooms.py`). Vérifié sur copie du 2026-11-02 : 66 → 57 fiches, 9 suppressions conformes à la liste, 23 rooms, 0 non reconnue, seconde exécution sans écriture ; `load_chess_games` et `build_profile` tournent ; 786 autres entrées, documents et embeddings identiques à la sauvegarde. Migration prod non lancée.
+Prochaine étape : tronçon 05, run live par Nico (`05_run_live.md`).
