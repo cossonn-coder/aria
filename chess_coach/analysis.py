@@ -9,8 +9,10 @@
 
 import io
 import math
+import queue
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import chess
@@ -42,11 +44,20 @@ _ACTIVITY_GAP = 10
 # Longueur de ligne affichée pour les sortes a / b (inchangée).
 _PV_DISPLAY = 6
 
-# Options Stockfish de toute l'analyse (sprint 27) : la machine a 16 cœurs.
+# Options Stockfish du live et de position_eval (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
 # Marge de réponse de Stockfish, en secondes, au-delà du temps demandé (10 s par défaut).
 # La machine peut geler plus de 10 s sous pression mémoire : mieux vaut attendre que perdre l'analyse.
 ENGINE_TIMEOUT = 60
+# Parties envoyées (sprint 49) : nœuds fixes, 1 thread et hash vidé à chaque appel rendent
+# le résultat reproductible ; 8 Stockfish en parallèle compensent la perte de vitesse.
+STABLE_ENGINE_OPTIONS = {"Threads": 1, "Hash": 16}
+_STABLE_ENGINES = 8
+# Nœuds accordés par seconde demandée : les durées des appelants deviennent des nœuds.
+_NODES_PER_SECOND = 590000
+# Plafond en secondes, jamais atteint en marche normale : python-chess n'applique aucun
+# timeout sans limite de temps, un gel de Stockfish bloquerait l'analyse sans fin.
+_STABLE_TIME_CAP = 60
 
 # Nom de Nico dans les en-têtes White / Black ; ses pseudos sont dans config.chess_usernames.
 NICO_NAME = "Nico"
@@ -236,6 +247,54 @@ def _quality(played_uci: str, best_uci: str, loss: float) -> str:
     return "correct"
 
 
+class FixedNodesEngine:
+    """Enveloppe d'un SimpleEngine : le temps demandé devient un nombre fixe de nœuds.
+
+    Les appelants n'utilisent que engine.analyse(board, Limit(time=…), **kwargs).
+    game=object() change de « partie » à chaque appel, ce qui vide le hash : le
+    résultat d'une position ne dépend pas de celles analysées avant elle.
+    """
+
+    def __init__(self, engine):
+        self._engine = engine
+
+    def analyse(self, board, limit, **kwargs):
+        fixed = chess.engine.Limit(nodes=int(limit.time * _NODES_PER_SECOND), time=_STABLE_TIME_CAP)
+        return self._engine.analyse(board, fixed, game=object(), **kwargs)
+
+
+def run_on_engines(engine_path: str, work, items: list) -> list:
+    """Applique work(engine, item) sur 8 Stockfish en parallèle, résultats dans l'ordre d'items.
+
+    Chaque moteur ne sert qu'un appel à la fois ; tous sont fermés, y compris sur exception.
+    """
+    if not items:
+        return []
+    engines, idle = [], queue.SimpleQueue()
+
+    def open_engine(_):
+        engine = chess.engine.SimpleEngine.popen_uci(engine_path, timeout=ENGINE_TIMEOUT)
+        engines.append(engine)
+        engine.configure(STABLE_ENGINE_OPTIONS)
+        idle.put(FixedNodesEngine(engine))
+
+    def run(item):
+        engine = idle.get()
+        try:
+            return work(engine, item)
+        finally:
+            idle.put(engine)
+
+    try:
+        with ThreadPoolExecutor(max_workers=_STABLE_ENGINES) as pool:
+            # Ouverture parallèle : à la suite, les 8 démarrages coûtent 31 à 41 s [2 mesures, machine chargée].
+            list(pool.map(open_engine, range(_STABLE_ENGINES)))
+            return list(pool.map(run, items))
+    finally:
+        for engine in engines:
+            engine.close()
+
+
 def analyze_game(game, nico_color: str, engine_path: str, time_per_position: float = 0.15) -> list:
     """Analyse chaque position de la partie (N+1 positions) et qualifie chaque demi-coup.
 
@@ -245,17 +304,14 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
     nodes = list(game.mainline())
     boards = [game.board()] + [node.board() for node in nodes]
 
-    # Une analyse par position : (cp point de vue du trait, infos multipv).
-    evaluations = []
-    with chess.engine.SimpleEngine.popen_uci(engine_path, timeout=ENGINE_TIMEOUT) as engine:
-        engine.configure(ENGINE_OPTIONS)
-        for board in boards:
-            if board.is_game_over():
-                evaluations.append((_terminal_cp(board), []))
-                continue
-            infos = engine.analyse(board, chess.engine.Limit(time=time_per_position), multipv=2)
-            cp = infos[0]["score"].relative.score(mate_score=_MATE_SCORE)
-            evaluations.append((cp, infos))
+    def evaluate(engine, board):
+        """Une analyse par position : (cp point de vue du trait, infos multipv)."""
+        if board.is_game_over():
+            return _terminal_cp(board), []
+        infos = engine.analyse(board, chess.engine.Limit(time=time_per_position), multipv=2)
+        return infos[0]["score"].relative.score(mate_score=_MATE_SCORE), infos
+
+    evaluations = run_on_engines(engine_path, evaluate, boards)
 
     plies = []
     for i, node in enumerate(nodes):
@@ -439,6 +495,20 @@ def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start
     return max(floor, first_move)
 
 
+def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
+    """Erreurs de Nico (sortes a et b) à partir de first_move, voir select_critical."""
+    errors = []
+    for p in plies:
+        if p.color != nico_color or p.move_number < first_move:
+            continue
+        # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
+        if p.loss >= (20 if p.move_number <= 10 else 10):
+            prev = plies[p.ply - 1] if p.ply > 0 else None
+            kind = "b" if prev is not None and prev.loss >= 20 else "a"
+            errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
+    return errors
+
+
 def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = _CRITICAL_FIRST_MOVE) -> list:
     """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir de first_move, ordre chronologique.
 
@@ -454,17 +524,14 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     d'avant first_move n'est jamais retenue, quelle que soit sa sorte.
     Aucune position retenue → liste vide.
     """
-    errors, turns, uniques = [], [], []
+    errors = _critical_errors(plies, nico_color, first_move)
+    error_plies = {c.ply.ply for c in errors}
+    turns, uniques = [], []
     for p in plies:
-        if p.color != nico_color or p.move_number < first_move:
+        if p.color != nico_color or p.move_number < first_move or p.ply in error_plies:
             continue
         prev = plies[p.ply - 1] if p.ply > 0 else None
-        # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
-        threshold = 20 if p.move_number <= 10 else 10
-        if p.loss >= threshold:
-            kind = "b" if prev is not None and prev.loss >= 20 else "a"
-            errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
-        elif prev is not None and prev.loss >= 15 and p.loss < 10 and 100 - prev.win_before <= 90:
+        if prev is not None and prev.loss >= 15 and p.loss < 10 and 100 - prev.win_before <= 90:
             evidence = _evidence(p)
             if evidence is not None:
                 turns.append(CriticalPosition(kind="e", ply=p, score=prev.loss,
@@ -482,7 +549,7 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
                 uniques.append(CriticalPosition(kind="c", ply=p, score=p.second_gap,
                                                 evidence=evidence[1], line_san=evidence[2]))
 
-    # find_explosive cherche sur toute la partie : le filtre s'applique ici.
+    # Les occasions fournies peuvent précéder first_move : le filtre vaut pour toutes.
     explosives = [d for d in explosive if d.ply.move_number >= first_move]
     selected, taken = [], set()
     for group in (errors, explosives, turns, uniques):
@@ -521,8 +588,14 @@ def analyze(text: str, message: str, engine_path: str,
     from chess_coach.explosive import find_explosive
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
     opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
-    explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir)
     first_move = first_shown_move(plies, nico_color, past_games, "FEN" not in headers)
+    # Les erreurs passent d'abord : si elles remplissent le budget, aucune occasion ne serait retenue.
+    errors = len(_critical_errors(plies, nico_color, first_move))
+    if errors >= _CRITICAL_BUDGET:
+        log.info("chess_explosive skipped: %d errors fill the budget", errors)
+        explosive = []
+    else:
+        explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir, first_move)
     critical = select_critical(plies, nico_color, explosive, first_move)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s first_move=%d critical=%s duration=%.1fs",

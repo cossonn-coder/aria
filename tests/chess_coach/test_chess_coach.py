@@ -333,8 +333,101 @@ def test_analysis_engines_use_long_timeout(monkeypatch):
     monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen)
     # Maia est chargé avant le moteur : sans ce bouchon, le test téléchargerait le modèle.
     monkeypatch.setattr("chess_coach.explosive._load", lambda models_dir: None)
+    # Ouverture parallèle : chaque appel peut tenter plusieurs moteurs, tous à 60 s.
     with pytest.raises(Opened):
         analyze_game(chess.pgn.Game(), "white", "stockfish")
+    assert timeouts and set(timeouts) == {60}
+    timeouts.clear()
     with pytest.raises(Opened):
-        find_explosive([], "white", "stockfish", 1500, "maia")
-    assert timeouts == [60, 60]
+        find_explosive([_ply(0, 0)], "white", "stockfish", 1500, "maia")
+    assert timeouts and set(timeouts) == {60}
+
+
+@pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
+def test_analyze_game_reproducible():
+    """Nœuds fixes (sprint 49) : la même partie analysée deux fois donne le même résultat."""
+    from chess_coach.analysis import analyze_game
+
+    def measures():
+        plies = analyze_game(parse_pgn(SCHOLAR_PGN), "black", STOCKFISH)
+        return [(p.best_uci, p.win_before, p.quality) for p in plies]
+
+    assert measures() == measures()
+
+
+def test_run_on_engines_closes_all_on_failure(monkeypatch):
+    """Une exception pendant le travail ne laisse aucun des 8 moteurs ouvert."""
+    import chess.engine
+
+    from chess_coach.analysis import run_on_engines
+
+    class FakeEngine:
+        closed = False
+
+        def configure(self, options):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def fake_popen(path, timeout=None):
+        opened.append(FakeEngine())
+        return opened[-1]
+
+    def fail(engine, item):
+        raise ValueError
+
+    monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen)
+    with pytest.raises(ValueError):
+        run_on_engines("stockfish", fail, [1, 2])
+    assert len(opened) == 8 and all(e.closed for e in opened)
+
+
+def test_fixed_nodes_engine_converts_time_and_keeps_cap():
+    """Le temps demandé devient des nœuds, avec un plafond de temps et un hash vidé."""
+    from chess_coach.analysis import FixedNodesEngine
+
+    class Recorder:
+        def analyse(self, board, limit, **kwargs):
+            self.limit, self.kwargs = limit, kwargs
+
+    recorder = Recorder()
+    FixedNodesEngine(recorder).analyse(chess.Board(), chess.engine.Limit(time=0.5), multipv=5)
+    assert (recorder.limit.nodes, recorder.limit.time) == (295000, 60)
+    assert recorder.kwargs["multipv"] == 5 and "game" in recorder.kwargs
+
+
+def _analyze_with_errors(monkeypatch, error_count):
+    """analyze sur une partie simulée à error_count erreurs ; rend les first_move passés à find_explosive."""
+    plies = [_ply(i, 15 if i % 2 == 1 and 23 <= i < 23 + 2 * error_count else 0) for i in range(41)]
+    calls = []
+
+    def fake_find(plies, color, path, elo, models_dir, first_move):
+        calls.append(first_move)
+        return []
+
+    monkeypatch.setattr("chess_coach.analysis.analyze_game", lambda game, color, path: plies)
+    monkeypatch.setattr("chess_coach.analysis.assign_motifs", lambda plies, color: None)
+    monkeypatch.setattr("chess_coach.explosive.find_explosive", fake_find)
+    analyze('[White "Ami"]\n[Black "Nico"]\n1. e4 *\n', "", "stockfish")
+    return calls
+
+
+def test_analyze_skips_explosive_when_errors_fill_budget(monkeypatch):
+    assert _analyze_with_errors(monkeypatch, 4) == []
+    assert len(_analyze_with_errors(monkeypatch, 3)) == 1
+
+
+def test_find_explosive_starts_at_first_move(monkeypatch):
+    """Aucune recherche avant first_move (#160)."""
+    from chess_coach import explosive
+
+    plies = [_ply(2 * i, 0) for i in range(6)]
+    searched = []
+    monkeypatch.setattr(explosive, "_load", lambda models_dir: None)
+    monkeypatch.setattr(explosive, "run_on_engines",
+                        lambda path, work, items: searched.extend(p.move_number for p in items) or [None] * len(items))
+    explosive.find_explosive(plies, "white", "stockfish", 1500, "maia", first_move=4)
+    assert searched == [4, 5, 6]

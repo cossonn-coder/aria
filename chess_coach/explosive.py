@@ -9,7 +9,7 @@
 # (sacrifice ou piège), soit rapportait plus que le meilleur coup face à un
 # humain de l'Elo adverse. Espérance humaine E(coup) = Σ P_maia(réponse) ×
 # % de gain de Nico après la réponse ; le gain d'espérance classe les candidats.
-# Seconde passe moteur sur toute la partie, sans budget de temps.
+# Seconde passe moteur à partir du premier coup montré, sans budget de temps.
 # Module pur : aucun import mémoire / LLM / exécution.
 
 import time
@@ -18,13 +18,14 @@ from dataclasses import dataclass, field
 import chess
 import chess.engine
 
-from chess_coach.analysis import _CLEAR_MAX, ENGINE_OPTIONS, ENGINE_TIMEOUT, _MATE_SCORE, CriticalPosition, _win, clear_advantage
+from chess_coach.analysis import _CLEAR_MAX, _MATE_SCORE, CriticalPosition, _win, clear_advantage, run_on_engines
 from chess_coach.difficulty import DEFAULT_ELO, _load, reply_distribution
 from logger import get_logger
 
 log = get_logger(__name__)
 
-# Threads=8 + limites en temps : deux rejeux du même PGN peuvent différer (accepté).
+# Parties envoyées : ces durées sont converties en nœuds fixes (run_on_engines),
+# résultat reproductible. Live : temps réel, deux passes peuvent différer (accepté).
 # Durées d'analyse : référence MultiPV / candidats par forme, puis approfondissement.
 _ROOT_TIME = 0.5
 _DEEP_TIME = 0.3
@@ -384,8 +385,8 @@ def _search_position(engine, board: chess.Board, played_uci: str, first_best_uci
 
 
 def find_explosive(plies: list, nico_color: str, engine_path: str,
-                   opponent_elo: int | None, models_dir: str | None) -> list:
-    """Positions critiques de sorte d (une par coup de Nico au plus), toute la partie.
+                   opponent_elo: int | None, models_dir: str | None, first_move: int = 1) -> list:
+    """Positions critiques de sorte d (une par coup de Nico au plus), à partir de first_move.
 
     Maia indisponible (models_dir None ou échec de chargement) → aucune
     occasion, l'analyse continue.
@@ -402,15 +403,15 @@ def find_explosive(plies: list, nico_color: str, engine_path: str,
     elo = opponent_elo or DEFAULT_ELO
     eligible = [
         p for p in plies
-        if p.color == nico_color and _WIN_MIN <= p.win_before <= _WIN_MAX and p.loss < 10
+        if p.color == nico_color and p.move_number >= first_move and _WIN_MIN <= p.win_before <= _WIN_MAX and p.loss < 10
     ]
-    found = []
-    with chess.engine.SimpleEngine.popen_uci(engine_path, timeout=ENGINE_TIMEOUT) as engine:
-        engine.configure(ENGINE_OPTIONS)
-        for p in eligible:
-            explosive = _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci, elo, models_dir)
-            if explosive is not None:
-                found.append(CriticalPosition(kind="d", ply=p, score=explosive.score, explosive=explosive))
+
+    def search(engine, p):
+        return _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci, elo, models_dir)
+
+    results = run_on_engines(engine_path, search, eligible)
+    found = [CriticalPosition(kind="d", ply=p, score=explosive.score, explosive=explosive)
+             for p, explosive in zip(eligible, results) if explosive is not None]
     log.info(
         "chess_explosive positions=%d/%d found=%d duration=%.1fs",
         len(eligible), len(eligible), len(found), time.monotonic() - started,
