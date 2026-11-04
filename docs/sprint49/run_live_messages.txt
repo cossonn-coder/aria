@@ -1,0 +1,31 @@
+Sprint 49 — run live. Un bloc par envoi.
+
+===== Envoi 1 — partie déjà enregistrée : attendu, un seul message « déjà envoyée » =====
+
+[Event "Run live sprint 46"]
+[Date "2026-11-01"]
+[White "La_Bagouze"]
+[Black "kushtrimchess"]
+[Result "1-0"]
+[WhiteElo "1624"]
+[BlackElo "1696"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. c3 d3 5. Bxd3 d6 6. O-O Be6 7. Bg5 Be7 8. Qd2 Bxg5 9. Nxg5 Nf6 10. Nxe6 fxe6 11. Qc2 O-O 12. Qb3 Qc8 13. Nd2 Kh8 14. Nf3 h6 15. Bb5 e5 16. Rfe1 a6 17. Bc4 Ne7 18. Be6 Qd8 19. Qxb7 Rb8 20. Qxa6 Rxb2 21. Rab1 Rb8 22. Qa4 Ng6 23. g3 Re8 24. Bf7 1-0
+
+===== Envoi 2 — TA partie récente, jamais envoyée, avec au moins 4 erreurs : à coller toi-même =====
+
+(PGN à coller. Les anciennes parties de test sont refusées désormais comme doublons.)
+
+===== Envoi 3 — TA partie récente, jamais envoyée, avec peu d'erreurs : à coller toi-même =====
+
+(PGN à coller.)
+
+===== Envoi 4 — le PGN de l'envoi 3, sans rien changer : attendu, « déjà envoyée » =====
+
+===== Échiquier A — coups à jouer, case « Meilleur coup » cochée, dès le 1er coup : bleu à chaque coup =====
+
+e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6
+
+===== Échiquier B — position avec seul coup : après ces coups, g6 est le seul coup légal, vert, pas de bleu en plus =====
+
+e4 f5 Qh5+
