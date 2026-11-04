@@ -1,6 +1,6 @@
 # Sprint 49 — état vivant (analyse stable, meilleur coup, miniatures, doublons)
 
-**Phase** : conception figée le 2026-11-04, prête pour `/sprint-auto sprint 49`.
+**Phase** : sprint clos (tag `sprint-49`).
 **Branche** : `feat/sprint49-analyse-stable` (depuis `main`).
 **Audit** : `audit_analyse_stable.md`. L'étude AggroChess close sans code reste dans `audit_aggrochess.md`.
 
@@ -33,7 +33,7 @@ Une analyse reproductible et pas plus lente ; un meilleur coup immédiat et sans
 - 02 échiquier live (`02_echiquier_live.md`) ✅ (tête publiée à la première passe seulement : `best` reste celui des autres flèches ensuite)
 - 03 miniatures (`03_miniatures.md`) ✅ (pastille sur la flèche, à la base de la pointe : prise et reprise sur la même case restent lisibles ; n° 1 bleu si coup joué = meilleur coup)
 - 04 doublons (`04_doublons.md`) ✅ (date du message = envoi, `timestamp` de la fiche, pas la date de la partie)
-- 05 run live par Nico (`05_run_live.md`, messages : `run_live_messages.txt`) ⏳
+- 05 run live par Nico (`05_run_live.md`, messages : `run_live_messages.txt`) ✅ (« tout est ok », 2026-11-04 [validation globale, sans détail par point ; durées non relevées])
 
 ## Questions ouvertes
 
@@ -41,14 +41,9 @@ Une analyse reproductible et pas plus lente ; un meilleur coup immédiat et sans
 
 ## Dettes
 
-Fermées si le run live confirme : #85, #108 (partie envoyée), #97 (renvoyer ne touche plus la fiche), #160, #162. #125 partielle.
-Nouvelles, à inscrire à la clôture :
-- Interruption de la recherche live pendant un appel moteur (jusqu'à 4,8 s à ×8 [calcul]).
-- Texte LLM variable d'une analyse à l'autre.
-- `/eval` et le worker donnent deux meilleurs coups de profondeurs différentes.
-- Aucun moyen de réanalyser une partie déjà envoyée (après une amélioration de l'analyse).
-Au tableau : `test_explosive_early_queen_nf6` (#85) n'existe plus.
+- Résolues : #85, #97, #160, #162 ; #108 pour les parties envoyées. #125 partielle.
+- Nouvelles, inscrites au kickoff du sprint 50 : #179 à #185.
 
 ## §REPRISE
 
-Tronçons 01 à 04 faits et commités. Reste le run live par Nico : `05_run_live.md`, messages dans `run_live_messages.txt`. Prochaine étape : run live, puis clôture après son OK.
+Sprint clos. Suite : `/conception sprint 50` (`docs/sprint50/context_kickoff_sprint_50.md`).
