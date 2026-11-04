@@ -19,6 +19,7 @@
 #   « Progression » (sprint 28, tronçon 03), écrit par le router sous le texte LLM.
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from uuid import uuid4
@@ -577,7 +578,8 @@ class ChessExecutionRouter(BaseRouter):
         if len(games) > 1:
             return self._execute_many(games, metadata)
 
-        analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir)
+        analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir,
+                           self._past_games())
         if analysis is None:
             log.warning("chess_router PGN unreadable")
             return self.llm_execution_router.execute({
@@ -587,6 +589,15 @@ class ChessExecutionRouter(BaseRouter):
             })
         return self._execute_game(analysis, message, metadata)
 
+    def _past_games(self) -> list:
+        """(couleur de Nico, coups UCI) des fiches ; palace indisponible → aucune, l'analyse continue."""
+        try:
+            return [(g["nico_color"], [p["uci"] for p in json.loads(g["plies_json"])])
+                    for g in self.mempalace_bridge.load_chess_games()]
+        except Exception:
+            log.exception("chess_past_games ERROR")
+            return []
+
     def _execute_many(self, games: list[str], metadata: dict) -> dict:
         """Une analyse complète par partie, puis fusion en une seule réponse.
 
@@ -595,7 +606,8 @@ class ChessExecutionRouter(BaseRouter):
         """
         texts, images, ok = [], [], 0
         for k, game in enumerate(games, 1):
-            analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir)
+            analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir,
+                               self._past_games())
             if analysis is None:
                 log.warning("chess_router PGN unreadable game=%d", k)
                 texts.append(f"Partie {k} — PGN illisible")
@@ -762,6 +774,20 @@ class ChessExecutionRouter(BaseRouter):
                 "pertinent, relie la position aux idées classiques de cette ouverture en une "
                 "demi-phrase. Un gambit d'ouverture choisi par Nico est un choix assumé, "
                 "pas une faute à corriger.]"
+            )
+        if n == 0:
+            # Partie entièrement dans le répertoire : rien à numéroter.
+            parts.append(
+                "[Consigne : aucune position à commenter dans cette partie : n'écris aucune entrée "
+                "« Position », seulement la 1re ligne et la ligne « Niveau : ».]"
+            )
+        if summary["opening_group"] == "Göring Gambit" and color == "white":
+            parts.append(
+                "[Consigne : dans ce Göring, Nico sacrifie un ou deux pions (d4, c3) pour ouvrir les "
+                "colonnes c et d et les diagonales a1-h8 et a2-g8 à ses fous, et lancer une attaque "
+                "forte sur plusieurs plans avec fous, dame, cavaliers (Nf3, Nd5) et tours. Tu peux "
+                "nommer ces colonnes et diagonales. Ne présente jamais la reprise du pion sacrifié "
+                "comme l'idée du Göring : reprendre en d4 du cavalier, c'est la Scotch normale.]"
             )
         if any(c.kind == "e" for c in analysis.critical):
             parts.append(

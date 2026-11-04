@@ -18,6 +18,7 @@ import chess.engine
 import chess.pgn
 
 from chess_coach.motifs import tag_motifs
+from chess_coach.openings import detect_opening, opening_group
 from config import config
 from logger import get_logger
 
@@ -52,6 +53,10 @@ NICO_NAME = "Nico"
 # Budget de miniatures d'une partie, et premier coup montré (sprint 46).
 _CRITICAL_BUDGET = 4
 _CRITICAL_FIRST_MOVE = 4
+# Göring joué par Nico : ses 6 premiers coups sont le concept du gambit, pas une décision.
+_GORING_FIRST_MOVE = 7
+# Un coup est une habitude de répertoire dès 2 parties précédentes avec les mêmes coups.
+_KNOWN_MOVE_GAMES = 2
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
 
 
@@ -410,8 +415,32 @@ def assign_motifs(plies: list, nico_color: str) -> None:
             p.motifs = tag_motifs(prev.fen_before, prev.uci, p.pv_uci[:result[0]])
 
 
-def select_critical(plies: list, nico_color: str, explosive=()) -> list:
-    """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir du coup 4, ordre chronologique.
+def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start: bool = True) -> int:
+    """Premier coup de Nico qui peut recevoir une miniature : le début de la nouveauté.
+
+    past_games : (couleur de Nico, coups UCI) des autres parties. Un coup est connu
+    si Nico l'a déjà joué dans ≥ 2 parties après exactement les mêmes coups. La
+    nouveauté est le premier coup de Nico non connu, qu'il dévie lui-même ou que
+    l'adversaire l'ait sorti du répertoire. Le renvoi d'une même partie ne compte pas.
+    Tout est connu → coup au-delà de la fin : aucune miniature.
+    """
+    ucis = [p.uci for p in plies]
+    known_lines = [line for color, line in past_games if color == nico_color and line != ucis]
+    first_move = next(
+        (p.move_number for p in plies if p.color == nico_color
+         and sum(line[:p.ply + 1] == ucis[:p.ply + 1] for line in known_lines) < _KNOWN_MOVE_GAMES),
+        plies[-1].move_number + 1,
+    )
+    floor = _CRITICAL_FIRST_MOVE
+    if standard_start and nico_color == "white":
+        detected = detect_opening(ucis)
+        if detected is not None and opening_group(detected[1]) == "Göring Gambit":
+            floor = _GORING_FIRST_MOVE
+    return max(floor, first_move)
+
+
+def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = _CRITICAL_FIRST_MOVE) -> list:
+    """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir de first_move, ordre chronologique.
 
     (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
     assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
@@ -422,12 +451,12 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
     (d) occasion explosive, fournie par chess_coach.explosive (perte du coup joué
     < 10, donc jamais a/b). Budget unique de 4 : a/b, puis d, puis e, puis c, chaque
     sorte par score décroissant ; une position déjà prise est sautée. Une position
-    d'avant le coup 4 n'est jamais retenue, quelle que soit sa sorte.
+    d'avant first_move n'est jamais retenue, quelle que soit sa sorte.
     Aucune position retenue → liste vide.
     """
     errors, turns, uniques = [], [], []
     for p in plies:
-        if p.color != nico_color or p.move_number < _CRITICAL_FIRST_MOVE:
+        if p.color != nico_color or p.move_number < first_move:
             continue
         prev = plies[p.ply - 1] if p.ply > 0 else None
         # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
@@ -453,8 +482,8 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
                 uniques.append(CriticalPosition(kind="c", ply=p, score=p.second_gap,
                                                 evidence=evidence[1], line_san=evidence[2]))
 
-    # find_explosive cherche aussi sur les coups 1 à 3 : le filtre s'applique ici.
-    explosives = [d for d in explosive if d.ply.move_number >= _CRITICAL_FIRST_MOVE]
+    # find_explosive cherche sur toute la partie : le filtre s'applique ici.
+    explosives = [d for d in explosive if d.ply.move_number >= first_move]
     selected, taken = [], set()
     for group in (errors, explosives, turns, uniques):
         for candidate in sorted(group, key=lambda c: c.score, reverse=True):
@@ -465,11 +494,11 @@ def select_critical(plies: list, nico_color: str, explosive=()) -> list:
 
 
 def analyze(text: str, message: str, engine_path: str,
-            maia_models_dir: str | None = None) -> GameAnalysis | None:
+            maia_models_dir: str | None = None, past_games=()) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
 
     maia_models_dir : dossier des poids Maia-2 ; None → pas de difficulté ni
-    d'occasion explosive.
+    d'occasion explosive. past_games : voir first_shown_move.
     """
     started = time.monotonic()
     game = parse_pgn(text)
@@ -493,10 +522,11 @@ def analyze(text: str, message: str, engine_path: str,
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
     opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
     explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir)
-    critical = select_critical(plies, nico_color, explosive)
+    first_move = first_shown_move(plies, nico_color, past_games, "FEN" not in headers)
+    critical = select_critical(plies, nico_color, explosive, first_move)
     log.info(
-        "chess_analysis OK plies=%d nico=%s source=%s critical=%s duration=%.1fs",
-        len(plies), nico_color, source,
+        "chess_analysis OK plies=%d nico=%s source=%s first_move=%d critical=%s duration=%.1fs",
+        len(plies), nico_color, source, first_move,
         [f"{c.kind}:{c.ply.move_number}{'.' if c.ply.color == 'white' else '...'}{c.ply.san}" for c in critical],
         time.monotonic() - started,
     )
