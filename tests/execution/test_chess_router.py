@@ -451,3 +451,28 @@ def test_multi_games_grouped_answer(monkeypatch, tmp_path):
     assert result["text"].startswith("Partie 1 — A – staroflexeur (0-1)\nexplication")
     assert "\n\nPartie 2 — B – staroflexeur (0-1)\nexplication" in result["text"]
     assert write_game.call_count == 2
+
+
+def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
+    # Le plan d'un Göring vient de l'idée du gambit, pas de la reprise du pion (Scotch).
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]
+    analysis = GameAnalysis(headers={"White": "staroflexeur", "Black": "Ami"}, nico_color="white",
+                            color_source="header", plies=plies, critical=[])
+    real_summarize = chess_router_mod.summarize
+    monkeypatch.setattr(chess_router_mod, "summarize",
+                        lambda a: {**real_summarize(a), "opening_group": "Göring Gambit"})
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "[White \"staroflexeur\"] 1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "colonnes c et d et les diagonales a1-h8 et a2-g8" in content
+    assert "c'est la Scotch normale" in content

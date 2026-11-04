@@ -54,18 +54,28 @@ def test_intents_text_lists_active_only():
     assert meta_commands.intents_text(data) == "échecs — analyser la partie\nlecture"
 
 
-def test_parties_text_last_five_newest_first():
-    games = [
-        {"date": f"2026.10.{i:02d}", "nico_color": "white", "opponent": f"adv{i}",
-         "outcome": "win", "opening": "Italienne"}
-        for i in range(1, 7)
+def test_parties_text_all_games_of_the_day_with_stats():
+    # 6 parties du jour (plus de 5), les deux formats de date, une fiche sans date, une d'hier.
+    game = {"nico_color": "white", "outcome": "win", "opening": "Italian Game"}
+    games = [{**game, "date": "2026.11.03", "opponent": "hier"}]
+    games += [{**game, "date": "2026.11.04", "opponent": f"adv{i}"} for i in range(1, 5)]
+    games.append({**game, "date": "", "timestamp": "2026-11-04T09:00:00+00:00", "opponent": "sans_date"})
+    games.append({**game, "date": "2026-11-04", "opponent": "adv6", "elo_opponent": 1500,
+                  "nico_color": "black", "outcome": "loss", "opening": "Dutch Defense"})
+    assert meta_commands.parties_text(games, today="2026-11-04").splitlines() == [
+        "Aujourd'hui : 5 V, 1 D — 83 %",
+        "",
+        "Italian Game (blancs) : 5 V, 0 N, 0 D — 100 % [5 parties]",
+        "Dutch Defense (noirs) : 0 V, 0 N, 1 D — 0 % [1 partie]",
+        "",
+        "noirs · contre adv6 (1500) · défaite · Dutch Defense",
+        "blancs · contre sans_date · victoire · Italian Game",
+        "blancs · contre adv4 · victoire · Italian Game",
+        "blancs · contre adv3 · victoire · Italian Game",
+        "blancs · contre adv2 · victoire · Italian Game",
+        "blancs · contre adv1 · victoire · Italian Game",
     ]
-    games[-1].update(elo_opponent=1500, nico_color="black", outcome="loss")
-    lines = meta_commands.parties_text(games).splitlines()
-    assert len(lines) == 5
-    assert lines[0] == "2026.10.06 · noirs · contre adv6 (1500) · défaite · Italienne"
-    assert lines[-1].startswith("2026.10.02")
-    assert meta_commands.parties_text([]) == "Aucune partie enregistrée."
+    assert meta_commands.parties_text(games, today="2026-11-05") == "Aucune partie aujourd'hui."
 
 
 def test_openings_text_format_order_and_unknown_line():

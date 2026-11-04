@@ -56,7 +56,7 @@ COMMANDS.update({
     "errors": "Avertissements et erreurs récents",
     "llm": "Derniers appels LLM",
     "intents": "Intents actifs",
-    "parties": "Dernières parties d'échecs",
+    "parties": "Parties d'échecs du jour et leur bilan",
     "ouvertures": "Statistiques par ouverture (/ouvertures nom)",
 })
 
@@ -71,12 +71,10 @@ LOGS_MAX = 200
 JOURNAL_SCAN = 2000
 ERRORS_SHOWN = 20
 LLM_SHOWN = 10
-PARTIES_SHOWN = 5
-
 NO_ERRORS = "Aucune erreur récente."
 NO_LLM = "Aucun appel LLM récent."
 NO_INTENTS = "Aucun intent actif."
-NO_PARTIES = "Aucune partie enregistrée."
+NO_PARTIES = "Aucune partie aujourd'hui."
 NO_OPENINGS = "Aucune partie enregistrée : pas de statistiques d'ouverture."
 
 
@@ -141,17 +139,26 @@ def intents_text(data: dict) -> str:
 
 # ── /parties ─────────────────────────────────────────────────────────────────
 
-def parties_text(games: list[dict]) -> str:
-    """5 dernières fiches (liste croissante) : date, couleur, adversaire, issue, ouverture."""
+def _game_day(game: dict) -> str:
+    """Jour AAAA-MM-JJ d'une fiche : date du PGN (« . » ou « - »), sinon jour d'analyse."""
+    return (game.get("date") or game.get("timestamp") or "")[:10].replace(".", "-")
+
+
+def parties_text(games: list[dict], today: str | None = None) -> str:
+    """Parties du jour : bilan, stats d'ouvertures, puis une ligne par partie, la plus récente d'abord."""
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    games = [game for game in games if _game_day(game) == today]
     if not games:
         return NO_PARTIES
-    lines = []
-    for game in reversed(games[-PARTIES_SHOWN:]):
+    lines = [f"Aujourd'hui : {_record(games)}", ""]
+    opening_lines = _opening_stat_lines(games)
+    if opening_lines:
+        lines += opening_lines + [""]
+    for game in reversed(games):
         opponent = game.get("opponent") or "?"
         if game.get("elo_opponent"):
             opponent += f" ({game['elo_opponent']})"
         lines.append(" · ".join([
-            game.get("date") or "date inconnue",
             _COLOR_FR.get(game.get("nico_color"), "?"),
             f"contre {opponent}",
             _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
@@ -162,17 +169,20 @@ def parties_text(games: list[dict]) -> str:
 
 # ── /ouvertures ──────────────────────────────────────────────────────────────
 
+def _opening_stat_lines(games: list[dict]) -> list[str]:
+    """Une ligne par (groupe, couleur), du plus joué au moins joué."""
+    return [
+        f"{group} ({_COLOR_FR[color]}) : {s.wins} V, {s.draws} N, {s.losses} D — "
+        f"{s.win_rate * 100:.0f} % [{s.games} partie{'s' if s.games > 1 else ''}]"
+        for (group, color), s in sorted(opening_stats(games).items(), key=lambda item: -item[1].games)
+    ]
+
+
 def openings_text(games: list[dict]) -> str:
-    """Une ligne par (groupe, couleur), du plus joué au moins joué, puis les issues inconnues."""
+    """Stats d'ouvertures de toutes les fiches, puis les issues inconnues."""
     if not games:
         return NO_OPENINGS
-    lines = []
-    stats = opening_stats(games)
-    for (group, color), s in sorted(stats.items(), key=lambda item: -item[1].games):
-        lines.append(
-            f"{group} ({_COLOR_FR[color]}) : {s.wins} V, {s.draws} N, {s.losses} D — "
-            f"{s.win_rate * 100:.0f} % [{s.games} partie{'s' if s.games > 1 else ''}]"
-        )
+    lines = _opening_stat_lines(games)
     unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
     lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
     return "\n".join(lines)

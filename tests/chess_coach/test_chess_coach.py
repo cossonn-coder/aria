@@ -8,7 +8,8 @@ import chess
 import pytest
 from PIL import Image
 
-from chess_coach.analysis import CriticalPosition, PlyAnalysis, analyze, detect_color, parse_pgn, select_critical
+from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect_color, first_shown_move,
+                                  parse_pgn, select_critical)
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
@@ -179,6 +180,54 @@ def test_select_critical_starts_at_move_4():
     explosive = [CriticalPosition(kind="d", ply=plies[2], score=20.0)]
     selected = select_critical(plies, "white", explosive)
     assert [(c.kind, c.ply.move_number) for c in selected] == [("a", 4)]
+
+
+def _line_plies(sans: str) -> list:
+    # Demi-coups d'une suite SAN, pour first_shown_move (seuls ply, couleur, numéro et uci comptent).
+    board, plies = chess.Board(), []
+    for i, san in enumerate(sans.split()):
+        move = board.parse_san(san)
+        plies.append(_ply(i, 0))
+        plies[-1].uci = move.uci()
+        board.push(move)
+    return plies
+
+
+GORING = "e4 e5 Nf3 Nc6 d4 exd4 c3 dxc3 Bc4 Nf6 Nxc3 Bb4 O-O O-O"
+ITALIAN = "e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O"
+
+
+def _ucis(sans: str) -> list:
+    return [p.uci for p in _line_plies(sans)]
+
+
+def test_first_shown_move_goring_floor_without_history():
+    # Sans historique, le Göring des blancs ne montre rien avant le coup 7.
+    assert first_shown_move(_line_plies(GORING), "white") == 7
+    assert first_shown_move(_line_plies(GORING), "white", standard_start=False) == 4
+    assert first_shown_move(_line_plies(ITALIAN), "white") == 4
+
+
+def test_first_shown_move_repertoire_until_novelty():
+    plies = _line_plies(ITALIAN)
+    ucis = [p.uci for p in plies]
+    # 2 autres parties partagent les 8 premiers demi-coups : le coup 5 (d3) est le 1er non connu.
+    other = _ucis("e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4 exd4")
+    assert first_shown_move(plies, "white", [("white", other)] * 2) == 5
+    # Une seule partie précédente, ou l'autre couleur, ne fait pas une habitude.
+    assert first_shown_move(plies, "white", [("white", other)]) == 4
+    assert first_shown_move(plies, "white", [("black", other)] * 2) == 4
+    # Le renvoi de la même partie ne compte pas ; tout connu → aucune miniature.
+    assert first_shown_move(plies, "white", [("white", ucis)] * 2) == 4
+    assert first_shown_move(plies, "white", [("white", ucis + ["a2a3"])] * 2) == 7
+
+
+def test_select_critical_respects_first_move():
+    # Le budget libéré par les coups d'habitude profite aux positions d'après.
+    plies = [_ply(i, 0) for i in range(21)]
+    plies[6], plies[12], plies[14] = _ply(6, 30), _ply(12, 30), _ply(14, 30)
+    selected = select_critical(plies, "white", first_move=7)
+    assert [c.ply.ply for c in selected] == [12, 14]
 
 
 def test_select_critical_empty_without_fallback():
