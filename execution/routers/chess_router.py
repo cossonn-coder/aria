@@ -26,7 +26,7 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze, split_pgn
+from chess_coach.analysis import analyze, parse_pgn, split_pgn
 from chess_coach.explosive import _GAIN_MIN
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
@@ -283,9 +283,18 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
     )
 
 
+def _told_moves(label: str, p, moves: list) -> str:
+    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits."""
+    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
+    return f"{label} : " + " ; ".join(
+        f"{move} {', '.join(facts)}" if facts else move for move, facts in items
+    ) + "."
+
+
 def _variant_line(critical) -> str:
-    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15) : coups
-    séparés par « ; », chacun suivi de ses faits. Vide si la ligne n'a aucun coup."""
+    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
+    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis une seconde
+    ligne pour celle du meilleur coup (les autres sortes la donnent déjà)."""
     p = critical.ply
     if critical.kind in ("c", "e"):
         moves = critical.line_san
@@ -295,10 +304,10 @@ def _variant_line(critical) -> str:
         moves = p.pv_san
     if not moves:
         return ""
-    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
-    return "Variante : " + " ; ".join(
-        f"{label} {', '.join(facts)}" if facts else label for label, facts in items
-    ) + "."
+    line = _told_moves("Variante", p, moves)
+    if critical.kind == "d" and p.pv_san:
+        line += "\n" + _told_moves("Variante du meilleur coup", p, p.pv_san)
+    return line
 
 
 def _evaluation(win: float) -> str:
@@ -479,6 +488,11 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     return lines
 
 
+def _win_drop(before: float, after: float, drop: float) -> str:
+    """« 62 % → 41 % (−21 pts) » : % de gain de Nico, comme la courbe et la page."""
+    return f"{before:.0f} % → {after:.0f} % (−{drop:.0f} pts)"
+
+
 def _caption(index: int, critical, plies: list) -> str:
     p = critical.ply
     if critical.kind == "e":
@@ -489,7 +503,8 @@ def _caption(index: int, critical, plies: list) -> str:
                 f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
     if critical.kind == "c":
         return (f"Position {index} — coup {p.move_number} : "
-                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué")
+                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
+                f"2e meilleur coup : {_win_drop(p.win_before, p.win_before - p.second_gap, p.second_gap)}")
     if critical.kind == "d":
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
                 f"joué {_move_label(p.move_number, p.color, p.san)}, "
@@ -497,7 +512,8 @@ def _caption(index: int, critical, plies: list) -> str:
                 f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
             f"joué {_move_label(p.move_number, p.color, p.san)}, "
-            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}")
+            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
+            f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
 
 
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
@@ -556,6 +572,27 @@ def _split_entries(text: str, images: list) -> tuple:
     return remaining, new_images
 
 
+def _game_hash(ucis) -> str:
+    """Identité d'une partie : hash des coups seuls (pas des en-têtes), le même PGN
+    recopié sans en-têtes reste la même partie, doc_id chess_game_<hash>."""
+    return hashlib.sha256("".join(ucis).encode()).hexdigest()[:16]
+
+
+def _pgn_hash(text: str) -> str | None:
+    """Hash calculé sans moteur, avant l'analyse (None si PGN illisible)."""
+    game = parse_pgn(text)
+    return _game_hash(m.uci() for m in game.mainline_moves()) if game else None
+
+
+def _duplicate_text(game: dict) -> str:
+    """Réponse à une partie déjà enregistrée : une phrase écrite par le code.
+    La date est celle de l'envoi (timestamp de la fiche), pas celle de la partie."""
+    opponent = game.get("opponent")
+    date = game.get("timestamp", "")[:10]
+    return (f"Cette partie{f' contre {opponent}' if opponent else ''} a déjà été envoyée"
+            f"{f' le {date}' if date else ''}.")
+
+
 class ChessExecutionRouter(BaseRouter):
     """
     Effecteur « coach d'échecs » du pipeline d'exécution.
@@ -578,6 +615,12 @@ class ChessExecutionRouter(BaseRouter):
         if len(games) > 1:
             return self._execute_many(games, metadata)
 
+        game_hash = _pgn_hash(message)
+        known = self._known_games().get(f"chess_game_{game_hash}")
+        if known is not None:
+            log.info("chess_router duplicate hash=%s", game_hash)
+            return {"text": _duplicate_text(known)}
+
         analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir,
                            self._past_games())
         if analysis is None:
@@ -598,14 +641,29 @@ class ChessExecutionRouter(BaseRouter):
             log.exception("chess_past_games ERROR")
             return []
 
+    def _known_games(self) -> dict:
+        """Fiches par doc_id ; palace indisponible → aucune, l'analyse continue."""
+        try:
+            return {g["id"]: g for g in self.mempalace_bridge.load_chess_games()}
+        except Exception:
+            log.exception("chess_known_games ERROR")
+            return {}
+
     def _execute_many(self, games: list[str], metadata: dict) -> dict:
         """Une analyse complète par partie, puis fusion en une seule réponse.
 
         Images concaténées (légende préfixée « Partie k — »), puis un bloc de
-        texte par partie sous son titre ; une partie illisible tient une ligne.
+        texte par partie sous son titre ; une partie illisible ou déjà envoyée
+        tient une ligne.
         """
         texts, images, ok = [], [], 0
+        known = self._known_games()
         for k, game in enumerate(games, 1):
+            game_hash = _pgn_hash(game)
+            if f"chess_game_{game_hash}" in known:
+                log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
+                texts.append(f"Partie {k} — déjà envoyée")
+                continue
             analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir,
                                self._past_games())
             if analysis is None:
@@ -613,6 +671,8 @@ class ChessExecutionRouter(BaseRouter):
                 texts.append(f"Partie {k} — PGN illisible")
                 continue
             result = self._execute_game(analysis, game, metadata)
+            # La même partie plus loin dans ce message est aussi un doublon.
+            known[f"chess_game_{game_hash}"] = {}
             ok += 1
             h = analysis.headers
             title = f"Partie {k} — {h.get('White', '?')} – {h.get('Black', '?')} ({h.get('Result', '*')})"
@@ -633,7 +693,8 @@ class ChessExecutionRouter(BaseRouter):
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
-                            played_uci=critical.ply.uci)
+                            played_uci=critical.ply.uci,
+                            best_line_uci=critical.ply.pv_uci[:3])
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)
@@ -643,11 +704,7 @@ class ChessExecutionRouter(BaseRouter):
             images.append({"path": str(out_path), "caption": caption})
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
-        # Hash des coups seuls (pas des en-têtes) : le même PGN recopié sans
-        # en-têtes reste la même partie → même doc_id → la fiche est remplacée.
-        game_hash = hashlib.sha256(
-            "".join(p.uci for p in analysis.plies).encode()
-        ).hexdigest()[:16]
+        game_hash = _game_hash(p.uci for p in analysis.plies)
         summary = summarize(analysis)
         try:
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,

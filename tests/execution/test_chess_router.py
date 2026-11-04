@@ -14,7 +14,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
-from execution.routers.chess_router import ChessExecutionRouter, _move_facts, _variant_line
+from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -136,7 +136,8 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
         "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)\n"
-        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5."
+        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5.\n"
+        "Variante du meilleur coup : 4...Nc6 ; 5.Bb5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
     assert render.call_args.kwargs["played_uci"] == ply.uci
@@ -423,6 +424,42 @@ def test_variant_line_capture_and_check():
     assert line == "Variante : 4.Bxf7+ prend pion f7, échec ; 4...Kxf7 reprend ; 5.Ng5+ échec."
 
 
+def test_caption_error_shows_eval_drop():
+    ply = _ply(7, 4, "Bg4", "Bxf7+", "c4f7")
+    ply.win_before, ply.win_after, ply.loss = 62.0, 41.0, 21.0
+    caption = _caption(1, CriticalPosition(kind="a", ply=ply, score=21.0), [ply])
+    assert caption.endswith("évaluation : 62 % → 41 % (−21 pts)")
+
+
+def test_caption_only_move_shows_second_best_gap():
+    ply = _ply(7, 4, "Bg4", "Bg4", "c8g4")
+    ply.win_before, ply.second_gap = 72.0, 24.0
+    caption = _caption(1, CriticalPosition(kind="c", ply=ply, score=24.0), [ply])
+    assert caption.endswith("2e meilleur coup : 72 % → 48 % (−24 pts)")
+
+
+def test_render_receives_first_three_pv_moves(monkeypatch, tmp_path):
+    ply = _ply(1, 17, "Ng4+", "d6", "d7d6")
+    ply.pv_uci = ["d7d6", "g1f3", "b8c6", "f1c4"]
+    analysis = GameAnalysis(headers={}, nico_color="black", color_source="header", plies=[ply],
+                            critical=[CriticalPosition(kind="a", ply=ply, score=ply.loss)])
+    render = MagicMock(side_effect=lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", render)
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    assert render.call_args.kwargs["best_line_uci"] == ["d7d6", "g1f3", "b8c6"]
+
+
 def test_multi_games_grouped_answer(monkeypatch, tmp_path):
     def _analysis(white, uci):
         p = _ply(1, 17, "Ng4+", "d6", "d7d6")
@@ -451,6 +488,82 @@ def test_multi_games_grouped_answer(monkeypatch, tmp_path):
     assert result["text"].startswith("Partie 1 — A – staroflexeur (0-1)\nexplication")
     assert "\n\nPartie 2 — B – staroflexeur (0-1)\nexplication" in result["text"]
     assert write_game.call_count == 2
+
+
+_GAME_A = '[White "A"]\n\n1. e4 e5 0-1'
+_GAME_B = '[White "B"]\n\n1. d4 d5 0-1'
+_HASH_A = hashlib.sha256(b"e2e4e7e5").hexdigest()[:16]
+
+
+def _duplicate_router(monkeypatch, tmp_path, games):
+    """Router dont le palace contient `games` ; retourne (router, analyze, write, llm)."""
+    def _analysis(text, *a):
+        p = _ply(1, 17, "Ng4+", "d6", "d7d6")
+        return GameAnalysis(headers={"White": "A" if '"A"' in text else "B", "Black": "staroflexeur"},
+                            nico_color="black", color_source="header", plies=[p],
+                            critical=[CriticalPosition(kind="a", ply=p, score=p.loss)])
+    analyze = MagicMock(side_effect=_analysis)
+    write_game = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "analyze", analyze)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = games
+    router = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge)
+    return router, analyze, write_game, llm_exec
+
+
+def test_known_game_answers_without_analysis(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00"}
+    router, analyze, write_game, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    # En-têtes différents, mêmes coups : même partie.
+    result = router.execute({"content": '[White "Autre"]\n\n1. e4 e5 1-0', "metadata": {}})
+
+    assert result == {"text": "Cette partie contre X a déjà été envoyée le 2026-10-31."}
+    analyze.assert_not_called()
+    write_game.assert_not_called()
+    llm_exec.execute.assert_not_called()
+
+
+def test_new_game_keeps_pipeline(monkeypatch, tmp_path):
+    fiche = {"id": "chess_game_autre", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00"}
+    router, analyze, write_game, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    result = router.execute({"content": _GAME_A, "metadata": {}})
+
+    analyze.assert_called_once()
+    write_game.assert_called_once()
+    assert len(result["images"]) == 1
+
+
+def test_multi_games_known_and_repeated(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}"}
+    router, analyze, write_game, _ = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    # Partie 1 connue, partie 2 nouvelle, partie 3 = partie 2.
+    result = router.execute({"content": f"{_GAME_A}\n\n{_GAME_B}\n\n{_GAME_B}", "metadata": {}})
+
+    assert analyze.call_count == 1
+    assert write_game.call_count == 1
+    assert result["text"].startswith("Partie 1 — déjà envoyée\n\nPartie 2 — ")
+    assert result["text"].endswith("\n\nPartie 3 — déjà envoyée")
+    assert [i["caption"][:21] for i in result["images"]] == ["Partie 2 — Position 1"]
+
+
+def test_multi_games_all_known_text_only(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}"}
+    router, analyze, _, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    result = router.execute({"content": f"{_GAME_A}\n\n{_GAME_A}", "metadata": {}})
+
+    assert result["text"] == "Partie 1 — déjà envoyée\n\nPartie 2 — déjà envoyée"
+    assert result["images"] == []
+    analyze.assert_not_called()
+    llm_exec.execute.assert_not_called()
 
 
 def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):

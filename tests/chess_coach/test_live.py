@@ -61,6 +61,22 @@ def test_forced_move_detected(monkeypatch):
     assert len(searched) == 1
 
 
+def test_head_published_before_human_moves(monkeypatch):
+    # Sprint 49 : best et forced publiés dès l'analyse de tête, avant Maia.
+    heads = []
+
+    def human(*args):
+        assert len(heads) == 1
+        return {"trap": None, "strategy": None}
+
+    monkeypatch.setattr(live, "_human_moves", human)
+    monkeypatch.setattr(live, "_search_position", lambda *args: None)
+    engine = FakeEngine([_info("e2e4", 0), _info("d2d4", -300)])
+    analyse_pass(EngineProxy(engine, 1, lambda: False, heads.append), chess.STARTING_FEN, 1500, "")
+    assert heads == [{"best": {"uci": "e2e4", "san": "e4", "pv_san": ["e4"]},
+                      "forced": {"uci": "e2e4", "san": "e4"}}]
+
+
 def test_no_forced_move_when_gap_small(monkeypatch):
     outcome, _ = _pass([_info("e2e4", 0), _info("d2d4", -20)], monkeypatch)
     assert outcome["forced"] is None

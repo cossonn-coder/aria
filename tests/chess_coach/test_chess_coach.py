@@ -2,6 +2,7 @@
 #
 # Cas nominaux du paquet chess_coach (sprint 26, tronçon 01).
 
+import math
 from pathlib import Path
 
 import chess
@@ -13,7 +14,7 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import SIZE, _square_center, render_position
+from chess_coach.render import ARROW_HEAD, SIZE, _square_center, render_position
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -304,6 +305,34 @@ def test_render_position_played_arrow(tmp_path):
         assert not any(_is_green(pixel) for pixel in image.get_flattened_data())
 
 
+def _badge_pixel(path, from_square, to_square):
+    """Centre de la pastille : à la base de la pointe de la flèche."""
+    x1, y1 = _square_center(from_square, False)
+    x2, y2 = _square_center(to_square, False)
+    length = math.hypot(x2 - x1, y2 - y1)
+    t = ARROW_HEAD / length
+    # Décalé de 6 px vers le haut-gauche, hors du chiffre, dans le disque.
+    with Image.open(path) as image:
+        return image.getpixel((int(x2 - t * (x2 - x1)) - 6, int(y2 - t * (y2 - y1)) - 6))
+
+
+def test_render_position_best_line_numbered(tmp_path):
+    # Variante 1.e4 e5 2.Nf3 : flèches vertes sur e3, e6 ; pastilles au-dessus des pièces.
+    out = tmp_path / "pos.png"
+    line = ["e2e4", "e7e5", "g1f3"]
+    render_position(chess.STARTING_FEN, "white", "e2e4", str(out), best_line_uci=line)
+    assert _is_green(_arrow_pixel(out, chess.E3))
+    assert _is_green(_arrow_pixel(out, chess.E6))
+    assert _is_green(_badge_pixel(out, chess.G1, chess.F3))
+
+    # Coup joué = meilleur coup : la bleue porte le n° 1, les vertes suivent.
+    render_position(chess.STARTING_FEN, "white", "e2e4", str(out), played_uci="e2e4", best_line_uci=line)
+    assert _is_blue(_arrow_pixel(out, chess.E3))
+    assert _is_blue(_badge_pixel(out, chess.E2, chess.E4))
+    assert _is_green(_arrow_pixel(out, chess.E6))
+    assert _is_green(_badge_pixel(out, chess.E7, chess.E5))
+
+
 def test_split_pgn_two_games_keeps_preface():
     text = ('je joue les noirs\n[Event "A"]\n[White "X"]\n\n1. e4 e5 *\n\n'
             '[Event "B"]\n  [White "Y"]\n\n  1. d4 d5 *\n')
@@ -333,8 +362,101 @@ def test_analysis_engines_use_long_timeout(monkeypatch):
     monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen)
     # Maia est chargé avant le moteur : sans ce bouchon, le test téléchargerait le modèle.
     monkeypatch.setattr("chess_coach.explosive._load", lambda models_dir: None)
+    # Ouverture parallèle : chaque appel peut tenter plusieurs moteurs, tous à 60 s.
     with pytest.raises(Opened):
         analyze_game(chess.pgn.Game(), "white", "stockfish")
+    assert timeouts and set(timeouts) == {60}
+    timeouts.clear()
     with pytest.raises(Opened):
-        find_explosive([], "white", "stockfish", 1500, "maia")
-    assert timeouts == [60, 60]
+        find_explosive([_ply(0, 0)], "white", "stockfish", 1500, "maia")
+    assert timeouts and set(timeouts) == {60}
+
+
+@pytest.mark.skipif(not Path(STOCKFISH).exists(), reason="Stockfish absent")
+def test_analyze_game_reproducible():
+    """Nœuds fixes (sprint 49) : la même partie analysée deux fois donne le même résultat."""
+    from chess_coach.analysis import analyze_game
+
+    def measures():
+        plies = analyze_game(parse_pgn(SCHOLAR_PGN), "black", STOCKFISH)
+        return [(p.best_uci, p.win_before, p.quality) for p in plies]
+
+    assert measures() == measures()
+
+
+def test_run_on_engines_closes_all_on_failure(monkeypatch):
+    """Une exception pendant le travail ne laisse aucun des 8 moteurs ouvert."""
+    import chess.engine
+
+    from chess_coach.analysis import run_on_engines
+
+    class FakeEngine:
+        closed = False
+
+        def configure(self, options):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def fake_popen(path, timeout=None):
+        opened.append(FakeEngine())
+        return opened[-1]
+
+    def fail(engine, item):
+        raise ValueError
+
+    monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci", fake_popen)
+    with pytest.raises(ValueError):
+        run_on_engines("stockfish", fail, [1, 2])
+    assert len(opened) == 8 and all(e.closed for e in opened)
+
+
+def test_fixed_nodes_engine_converts_time_and_keeps_cap():
+    """Le temps demandé devient des nœuds, avec un plafond de temps et un hash vidé."""
+    from chess_coach.analysis import FixedNodesEngine
+
+    class Recorder:
+        def analyse(self, board, limit, **kwargs):
+            self.limit, self.kwargs = limit, kwargs
+
+    recorder = Recorder()
+    FixedNodesEngine(recorder).analyse(chess.Board(), chess.engine.Limit(time=0.5), multipv=5)
+    assert (recorder.limit.nodes, recorder.limit.time) == (295000, 60)
+    assert recorder.kwargs["multipv"] == 5 and "game" in recorder.kwargs
+
+
+def _analyze_with_errors(monkeypatch, error_count):
+    """analyze sur une partie simulée à error_count erreurs ; rend les first_move passés à find_explosive."""
+    plies = [_ply(i, 15 if i % 2 == 1 and 23 <= i < 23 + 2 * error_count else 0) for i in range(41)]
+    calls = []
+
+    def fake_find(plies, color, path, elo, models_dir, first_move):
+        calls.append(first_move)
+        return []
+
+    monkeypatch.setattr("chess_coach.analysis.analyze_game", lambda game, color, path: plies)
+    monkeypatch.setattr("chess_coach.analysis.assign_motifs", lambda plies, color: None)
+    monkeypatch.setattr("chess_coach.explosive.find_explosive", fake_find)
+    analyze('[White "Ami"]\n[Black "Nico"]\n1. e4 *\n', "", "stockfish")
+    return calls
+
+
+def test_analyze_skips_explosive_when_errors_fill_budget(monkeypatch):
+    assert _analyze_with_errors(monkeypatch, 4) == []
+    assert len(_analyze_with_errors(monkeypatch, 3)) == 1
+
+
+def test_find_explosive_starts_at_first_move(monkeypatch):
+    """Aucune recherche avant first_move (#160)."""
+    from chess_coach import explosive
+
+    plies = [_ply(2 * i, 0) for i in range(6)]
+    searched = []
+    monkeypatch.setattr(explosive, "_load", lambda models_dir: None)
+    monkeypatch.setattr(explosive, "run_on_engines",
+                        lambda path, work, items: searched.extend(p.move_number for p in items) or [None] * len(items))
+    explosive.find_explosive(plies, "white", "stockfish", 1500, "maia", first_move=4)
+    assert searched == [4, 5, 6]

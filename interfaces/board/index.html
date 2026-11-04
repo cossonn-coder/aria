@@ -175,8 +175,6 @@ let state = null;
 // Map FEN → {move, best} avec le meilleur coup de la même passe (gardés jusqu'à « Nouvelle partie »).
 let positionFen = null;
 const saved = { explosive: new Map(), trap: new Map(), strategy: new Map() };
-// Flèche bleue rationnée : FEN → camp au trait ("w" / "b") des positions où elle a été dessinée.
-const blueDrawn = new Map();
 // Partie chargée depuis un PGN (sprint 38) : FEN de départ, coups SAN, Map FEN → coup joué
 // (mêmes clés que saved) et courbe wins du serveur.
 let game = null;
@@ -259,39 +257,30 @@ async function newPosition() {
   positionId = (await response.json()).id;
 }
 
-// Flèche bleue permise dans la position analysée : déjà dessinée ici (passe plus profonde,
-// retour en arrière), ou coup n° ≥ 10, moins de 3 bleues pour ce camp dans la partie et
-// aucune à son coup précédent (position deux demi-coups plus tôt).
-function blueAllowed() {
-  if (blueDrawn.has(positionFen)) return true;
-  const [, turn, , , , number] = positionFen.split(" ");
-  const count = [...blueDrawn.values()].filter((side) => side === turn).length;
-  const history = chess.history({ verbose: true });
-  const previous = history[history.length - 2];
-  return Number(number) >= 10 && count < 3 && !(previous && blueDrawn.has(previous.before));
+// Meilleur coup de la position affichée : celui du worker, sinon celui déjà reçu de /eval
+// ou /game (SAN converti en cases) ; null si aucun n'est connu.
+function bestMove() {
+  if (state && state.best) return state.best;
+  const known = evals.get(chess.fen());
+  const move = known && chess.moves({ verbose: true }).find((m) => m.san === known.best);
+  return move ? { uci: move.from + move.to } : null;
 }
 
-// Flèches, une par coup, par priorité : seul coup (vert) > explosif (orange) > piège (cyan)
-// > stratégie (rose), un coup déjà dessiné étant sauté ; le meilleur coup (bleu) en dernier
-// recours, seulement si aucune autre flèche n'est dessinée et si le rationnement le permet.
+// Flèches, une par coup, par priorité : seul coup (vert) > meilleur coup (bleu) > explosif
+// (orange) > piège (cyan) > stratégie (rose), un coup déjà dessiné étant sauté. Le bleu
+// remplace donc la flèche du même coup, sauf le seul coup affiché, qui reste vert.
 function drawShapes() {
   const shapes = [];
-  if (state) {
-    const layers = [[state.forced, "show-forced", "green"], [state.explosive, "show-explosive", "orange"],
-                    [state.trap, "show-trap", "cyan"], [state.strategy, "show-strategy", "pink"]];
-    const drawn = new Set();
-    for (const [move, box, brush] of layers) {
-      if (!move || !$(box).checked || drawn.has(move.uci)) continue;
-      drawn.add(move.uci);
-      shapes.push({ orig: move.uci.slice(0, 2), dest: move.uci.slice(2, 4), brush });
-    }
-    if (!shapes.length && state.best && $("show-best").checked && blueAllowed()) {
-      const uci = state.best.uci;
-      shapes.push({ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "blue" });
-      blueDrawn.set(positionFen, positionFen.split(" ")[1]);
-    }
+  const layers = [[state && state.forced, "show-forced", "green"], [bestMove(), "show-best", "blue"],
+                  [state && state.explosive, "show-explosive", "orange"],
+                  [state && state.trap, "show-trap", "cyan"], [state && state.strategy, "show-strategy", "pink"]];
+  const drawn = new Set();
+  for (const [move, box, brush] of layers) {
+    if (!move || !$(box).checked || drawn.has(move.uci)) continue;
+    drawn.add(move.uci);
+    shapes.push({ orig: move.uci.slice(0, 2), dest: move.uci.slice(2, 4), brush });
   }
-  // Pièce du coup joué dans la partie chargée : cerclée de blanc (après le test du bleu).
+  // Pièce du coup joué dans la partie chargée : cerclée de blanc.
   const played = playedMove();
   if (played) shapes.push({ orig: played.from, brush: "white" });
   ground.setAutoShapes(shapes);
@@ -768,6 +757,7 @@ function evalLine() {
       const response = await fetch("/eval", { method: "POST", body: JSON.stringify({ fen }) });
       evals.set(fen, await response.json());
       refreshGame();
+      if (fen === chess.fen()) drawShapes();
     }).catch(() => evalAsked.delete(fen));
   }
 }
@@ -903,7 +893,6 @@ async function loadGame(cursor = 0) {
   if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
   $("name-white").value = headers.White && headers.White !== "?" ? headers.White : "";
   $("name-black").value = headers.Black && headers.Black !== "?" ? headers.Black : "";
-  blueDrawn.clear();
   $("show-best").checked = false;
   evals.clear();
   evalAsked.clear();
@@ -921,6 +910,7 @@ async function loadGame(cursor = 0) {
     game.message = "courbe indisponible";
   }
   refreshGame();
+  drawShapes();
 }
 
 // Survol de la ligne d'état « coup explosif » (plus robuste que le survol d'une flèche SVG) ;
@@ -949,7 +939,6 @@ $("new").addEventListener("click", () => {
   evals.clear();
   evalAsked.clear();
   refreshGame();
-  blueDrawn.clear();
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   newPosition();
 });

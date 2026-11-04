@@ -58,6 +58,68 @@ def test_position_then_state_replaces_previous():
         server.server_close()
 
 
+def _wait_state(worker, condition):
+    for _ in range(200):
+        state = worker.state()
+        if condition(state):
+            return state
+        time.sleep(0.01)
+    raise AssertionError(state)
+
+
+def test_head_visible_before_end_of_pass():
+    # Sprint 49 : best visible pendant que la passe tourne ; une tête périmée n'écrit rien ailleurs.
+    release, stale_written = threading.Event(), threading.Event()
+    head = {"best": {"uci": "e2e4", "san": "e4", "pv_san": ["e4"]}, "forced": None}
+
+    def fake_pass(proxy, fen, elo, models_dir):
+        if fen == _AFTER_E4:
+            threading.Event().wait()
+        proxy.on_head(head)
+        release.wait(5)
+        proxy.on_head({"best": {"uci": "stale", "san": "?", "pv_san": []}, "forced": None})
+        stale_written.set()
+        return {"result": "none", "explosive": None, **head}
+
+    worker = BoardWorker(lambda: object(), "", run_pass=fake_pass)
+    threading.Thread(target=worker.run, daemon=True).start()
+    worker.submit(chess.STARTING_FEN, 1200, 1800)
+    state = _wait_state(worker, lambda s: s["best"] is not None)
+    assert state["result"] == "pending" and state["running"]
+    assert state["best"]["uci"] == "e2e4"
+
+    # Nouvelle position pendant que l'ancienne passe tourne : son état reste vierge.
+    worker.submit(_AFTER_E4, 1200, 1800)
+    release.set()
+    assert stale_written.wait(5)
+    assert worker.state()["best"] is None
+
+
+def test_return_to_finished_position_keeps_result():
+    # Sprint 49 : retour sur une position terminée : même résultat, aucune passe relancée.
+    calls = []
+
+    def fake_pass(proxy, fen, elo, models_dir):
+        calls.append(fen)
+        return {"result": "none", "explosive": None, "best": {"uci": fen.split()[1], "n": len(calls)}}
+
+    worker = BoardWorker(lambda: object(), "", run_pass=fake_pass)
+    threading.Thread(target=worker.run, daemon=True).start()
+    first_id = worker.submit(chess.STARTING_FEN, 1200, 1800)
+    final = _wait_state(worker, lambda s: s["id"] == first_id and not s["running"])
+    other_id = worker.submit(_AFTER_E4, 1200, 1800)
+    _wait_state(worker, lambda s: s["id"] == other_id and not s["running"])
+    count = len(calls)
+
+    worker.submit(chess.STARTING_FEN, 1200, 1800)
+    # L'état reprend le résultat dès le retour, sans passer par « pending ».
+    state = worker.state()
+    assert state["best"] == final["best"] and state["result"] == "none"
+    assert state["pass"] == 4 and not state["running"]
+    time.sleep(0.05)
+    assert len(calls) == count
+
+
 def test_index_serves_chessboard_page(monkeypatch):
     # Sprint 35, tronçon 02 : la page servie importe chessground (Maia non chargé en test).
     monkeypatch.setattr("interfaces.board_interface._load_maia_in_background", lambda: None)
@@ -84,6 +146,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 41, tronçon 01 : page mobile (viewport, Mini App, barre d'éval, onglets, barre du bas).
         assert 'name="viewport"' in page and "telegram-web-app.js" in page
         assert 'id="evalbar"' in page and 'id="tabs"' in page and 'id="bottombar"' in page
+        # Sprint 49, tronçon 02 : flèche bleue sans rationnement.
+        assert "blueAllowed" not in page
     finally:
         server.shutdown()
         server.server_close()
