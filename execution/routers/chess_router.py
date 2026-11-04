@@ -283,9 +283,18 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
     )
 
 
+def _told_moves(label: str, p, moves: list) -> str:
+    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits."""
+    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
+    return f"{label} : " + " ; ".join(
+        f"{move} {', '.join(facts)}" if facts else move for move, facts in items
+    ) + "."
+
+
 def _variant_line(critical) -> str:
-    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15) : coups
-    séparés par « ; », chacun suivi de ses faits. Vide si la ligne n'a aucun coup."""
+    """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
+    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis une seconde
+    ligne pour celle du meilleur coup (les autres sortes la donnent déjà)."""
     p = critical.ply
     if critical.kind in ("c", "e"):
         moves = critical.line_san
@@ -295,10 +304,10 @@ def _variant_line(critical) -> str:
         moves = p.pv_san
     if not moves:
         return ""
-    items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
-    return "Variante : " + " ; ".join(
-        f"{label} {', '.join(facts)}" if facts else label for label, facts in items
-    ) + "."
+    line = _told_moves("Variante", p, moves)
+    if critical.kind == "d" and p.pv_san:
+        line += "\n" + _told_moves("Variante du meilleur coup", p, p.pv_san)
+    return line
 
 
 def _evaluation(win: float) -> str:
@@ -479,6 +488,11 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     return lines
 
 
+def _win_drop(before: float, after: float, drop: float) -> str:
+    """« 62 % → 41 % (−21 pts) » : % de gain de Nico, comme la courbe et la page."""
+    return f"{before:.0f} % → {after:.0f} % (−{drop:.0f} pts)"
+
+
 def _caption(index: int, critical, plies: list) -> str:
     p = critical.ply
     if critical.kind == "e":
@@ -489,7 +503,8 @@ def _caption(index: int, critical, plies: list) -> str:
                 f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
     if critical.kind == "c":
         return (f"Position {index} — coup {p.move_number} : "
-                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué")
+                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
+                f"2e meilleur coup : {_win_drop(p.win_before, p.win_before - p.second_gap, p.second_gap)}")
     if critical.kind == "d":
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
                 f"joué {_move_label(p.move_number, p.color, p.san)}, "
@@ -497,7 +512,8 @@ def _caption(index: int, critical, plies: list) -> str:
                 f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
             f"joué {_move_label(p.move_number, p.color, p.san)}, "
-            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}")
+            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
+            f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
 
 
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
@@ -633,7 +649,8 @@ class ChessExecutionRouter(BaseRouter):
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
-                            played_uci=critical.ply.uci)
+                            played_uci=critical.ply.uci,
+                            best_line_uci=critical.ply.pv_uci[:3])
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)

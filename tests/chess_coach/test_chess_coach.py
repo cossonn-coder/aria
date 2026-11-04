@@ -2,6 +2,7 @@
 #
 # Cas nominaux du paquet chess_coach (sprint 26, tronçon 01).
 
+import math
 from pathlib import Path
 
 import chess
@@ -13,7 +14,7 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import SIZE, _square_center, render_position
+from chess_coach.render import ARROW_HEAD, SIZE, _square_center, render_position
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -302,6 +303,34 @@ def test_render_position_played_arrow(tmp_path):
     assert _is_blue(_arrow_pixel(out, chess.E3))
     with Image.open(out) as image:
         assert not any(_is_green(pixel) for pixel in image.get_flattened_data())
+
+
+def _badge_pixel(path, from_square, to_square):
+    """Centre de la pastille : à la base de la pointe de la flèche."""
+    x1, y1 = _square_center(from_square, False)
+    x2, y2 = _square_center(to_square, False)
+    length = math.hypot(x2 - x1, y2 - y1)
+    t = ARROW_HEAD / length
+    # Décalé de 6 px vers le haut-gauche, hors du chiffre, dans le disque.
+    with Image.open(path) as image:
+        return image.getpixel((int(x2 - t * (x2 - x1)) - 6, int(y2 - t * (y2 - y1)) - 6))
+
+
+def test_render_position_best_line_numbered(tmp_path):
+    # Variante 1.e4 e5 2.Nf3 : flèches vertes sur e3, e6 ; pastilles au-dessus des pièces.
+    out = tmp_path / "pos.png"
+    line = ["e2e4", "e7e5", "g1f3"]
+    render_position(chess.STARTING_FEN, "white", "e2e4", str(out), best_line_uci=line)
+    assert _is_green(_arrow_pixel(out, chess.E3))
+    assert _is_green(_arrow_pixel(out, chess.E6))
+    assert _is_green(_badge_pixel(out, chess.G1, chess.F3))
+
+    # Coup joué = meilleur coup : la bleue porte le n° 1, les vertes suivent.
+    render_position(chess.STARTING_FEN, "white", "e2e4", str(out), played_uci="e2e4", best_line_uci=line)
+    assert _is_blue(_arrow_pixel(out, chess.E3))
+    assert _is_blue(_badge_pixel(out, chess.E2, chess.E4))
+    assert _is_green(_arrow_pixel(out, chess.E6))
+    assert _is_green(_badge_pixel(out, chess.E7, chess.E5))
 
 
 def test_split_pgn_two_games_keeps_preface():
