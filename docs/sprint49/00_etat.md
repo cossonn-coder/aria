@@ -42,7 +42,7 @@ Une analyse reproductible et pas plus lente ; un meilleur coup immédiat et sans
 ## Dettes
 
 - Résolues : #85, #97, #160, #162 ; #108 pour les parties envoyées. #125 partielle.
-- Nouvelles, inscrites au kickoff du sprint 50 : #179 à #185.
+- Nouvelles, inscrites au kickoff du sprint 50 : #179 à #186.
 
 ## §REPRISE
 

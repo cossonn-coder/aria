@@ -173,6 +173,7 @@ ARIA — Kickoff sprint 50 (ouverture)
 | 183 | Échiquier : meilleur coup publié sans attendre la fin de passe à la 1re passe seulement ; ensuite, il change en fin de passe (pour éviter le mélange avec l'explosif de la passe précédente). Condition dans `_publish_head` | ouvert (sprint 49), à arbitrer si gênant |
 | 184 | Miniatures : les pastilles numérotées de deux coups de même trajectoire finale peuvent se chevaucher | ouvert (sprint 49), non observé au run live [validation globale, sans détail par point] |
 | 185 | « déjà envoyée » : pour une partie renvoyée avant le sprint 49, la date affichée est celle du dernier envoi (`timestamp` réécrit par l'ancien upsert) | ouvert (sprint 49), cosmétique |
+| 186 | Échiquier : `TimeoutError` Stockfish dans `_deepen` (`board_analysis error id=33 pass=1`, 22:53:52 le 2026-11-04) précédé d'un `board_eval` à 13,88 s [n=1, pendant un pytest, cause non établie] ; flèches revenues sur les coups suivants d'après Nico. Recoupe #171, #172 | ouvert (sprint 49), à observer |
 
 ─────────────────────────────────────────────────────────────────────────
 
