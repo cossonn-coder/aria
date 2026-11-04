@@ -30,7 +30,7 @@ Une analyse reproductible et pas plus lente ; un meilleur coup immédiat et sans
 ## Carte des tronçons
 
 - 01 parties envoyées stables (`01_parties_stables.md`) ✅ (ouverture des 8 moteurs en parallèle : à la suite, 31 à 41 s [2 mesures, machine chargée])
-- 02 échiquier live (`02_echiquier_live.md`) ⏳
+- 02 échiquier live (`02_echiquier_live.md`) ✅ (tête publiée à la première passe seulement : `best` reste celui des autres flèches ensuite)
 - 03 miniatures (`03_miniatures.md`) ⏳
 - 04 doublons (`04_doublons.md`) ⏳
 - 05 run live par Nico (`05_run_live.md`, messages : `run_live_messages.txt`) ⏳
@@ -51,4 +51,4 @@ Au tableau : `test_explosive_early_queen_nf6` (#85) n'existe plus.
 
 ## §REPRISE
 
-Tronçon 01 fait, non commité à ce stade. Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (02, `02_echiquier_live.md`). Prochaine étape : `/sprint-auto sprint 49`.
+Tronçons 01 et 02 faits, 02 non commité à ce stade. Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (03, `03_miniatures.md`). Prochaine étape : `/sprint-auto sprint 49`.

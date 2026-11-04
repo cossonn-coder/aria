@@ -5,7 +5,8 @@
 # Sert la page de l'échiquier, reçoit la position affichée et expose le
 # résultat courant de l'analyse live (chess_coach.live). Un worker unique
 # enchaîne les passes ×1, ×2, ×4, ×8 sur la dernière position reçue ; une
-# nouvelle position abandonne la passe en cours.
+# nouvelle position abandonne la passe en cours. Le résultat de chaque position
+# est gardé : y revenir le rend aussitôt et reprend aux passes restantes (sprint 49).
 # Hors kernel : aucune écriture mémoire, aucun router, aucun LLM.
 
 import json
@@ -36,6 +37,7 @@ class BoardWorker:
     État : id (numéro de position), pass (passe en cours, ou dernière passe
     quand running est faux), passes, running, result (dernière passe terminée),
     explosive, forced, best, trap (piège cyan), strategy (stratégie rose), error.
+    best et forced arrivent dès l'analyse de tête de la première passe.
     """
 
     def __init__(self, open_engine, models_dir: str, run_pass=analyse_pass):
@@ -45,6 +47,8 @@ class BoardWorker:
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._position = None
+        # (fen, elo) → (résultat de la dernière passe terminée, numéro de cette passe).
+        self._finished = {}
         self._state = self._initial(0)
 
     @staticmethod
@@ -61,6 +65,10 @@ class BoardWorker:
             elo = elo_black if chess.Board(fen).turn == chess.WHITE else elo_white
             self._position = (position_id, fen, elo)
             self._state = self._initial(position_id)
+            if (fen, elo) in self._finished:
+                outcome, number = self._finished[(fen, elo)]
+                self._state.update(outcome)
+                self._state.update({"pass": number, "running": number < len(FACTORS)})
         self._wake.set()
         return position_id
 
@@ -71,6 +79,13 @@ class BoardWorker:
     def _stale(self, position_id: int) -> bool:
         with self._lock:
             return self._state["id"] != position_id
+
+    def _publish_head(self, position_id: int, head: dict):
+        """Tête de passe dans l'état. Seulement avant le premier résultat : ensuite
+        best reste celui de la passe des autres flèches (blocs sauvegardés de la page)."""
+        with self._lock:
+            if self._state["id"] == position_id and self._state["result"] == "pending":
+                self._state.update(head)
 
     def run(self):
         """Boucle du worker : moteur ouvert à la première position, gardé ensuite."""
@@ -85,13 +100,16 @@ class BoardWorker:
             self._analyse(engine, position_id, fen, elo)
 
     def _analyse(self, engine, position_id: int, fen: str, elo: int):
-        """Passes successives sur une position ; chacune remplace la précédente."""
-        for number, factor in enumerate(FACTORS, start=1):
+        """Passes restantes sur une position ; chacune remplace la précédente."""
+        with self._lock:
+            done = self._finished[(fen, elo)][1] if (fen, elo) in self._finished else 0
+        for number, factor in enumerate(FACTORS[done:], start=done + 1):
             with self._lock:
                 if self._state["id"] != position_id:
                     return
                 self._state["pass"] = number
-            proxy = EngineProxy(engine, factor, lambda: self._stale(position_id))
+            proxy = EngineProxy(engine, factor, lambda: self._stale(position_id),
+                                lambda head: self._publish_head(position_id, head))
             start = time.monotonic()
             try:
                 outcome = self._run_pass(proxy, fen, elo, self._models_dir)
@@ -111,6 +129,7 @@ class BoardWorker:
                     return
                 self._state.update(outcome)
                 self._state["running"] = number < len(FACTORS)
+                self._finished[(fen, elo)] = (outcome, number)
             log.info(f"board_analysis id={position_id} pass={number} result={outcome['result']} "
                      f"duration={time.monotonic() - start:.1f}s")
 

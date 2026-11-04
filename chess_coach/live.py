@@ -44,13 +44,15 @@ class EngineProxy:
     """Enveloppe d'un SimpleEngine : interruption et temps multiplié par factor.
 
     explosive.py n'appelle que engine.analyse(board, Limit(time=…), **kwargs) :
-    c'est le seul point à intercepter.
+    c'est le seul point à intercepter. on_head reçoit {"best", "forced"} dès
+    l'analyse de tête, sans attendre la fin de la passe (sprint 49).
     """
 
-    def __init__(self, engine, factor: float, is_stale):
+    def __init__(self, engine, factor: float, is_stale, on_head=lambda head: None):
         self._engine = engine
         self._factor = factor
         self._is_stale = is_stale
+        self.on_head = on_head
 
     def analyse(self, board, limit, **kwargs):
         if self._is_stale():
@@ -143,6 +145,7 @@ def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
         forced = {"uci": best.uci(), "san": board.san(best)}
     best_dict = {"uci": best.uci(), "san": board.san(best),
                  "pv_san": _san_line(board, head[0]["pv"][:_REPLY_LINE_PLIES + 1])}
+    proxy.on_head({"best": best_dict, "forced": forced})
     human = _human_moves(proxy, board, elo, models_dir)
 
     if not _WIN_MIN <= win_best <= _WIN_MAX:
