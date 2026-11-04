@@ -32,7 +32,7 @@ Une analyse reproductible et pas plus lente ; un meilleur coup immédiat et sans
 - 01 parties envoyées stables (`01_parties_stables.md`) ✅ (ouverture des 8 moteurs en parallèle : à la suite, 31 à 41 s [2 mesures, machine chargée])
 - 02 échiquier live (`02_echiquier_live.md`) ✅ (tête publiée à la première passe seulement : `best` reste celui des autres flèches ensuite)
 - 03 miniatures (`03_miniatures.md`) ✅ (pastille sur la flèche, à la base de la pointe : prise et reprise sur la même case restent lisibles ; n° 1 bleu si coup joué = meilleur coup)
-- 04 doublons (`04_doublons.md`) ⏳
+- 04 doublons (`04_doublons.md`) ✅ (date du message = envoi, `timestamp` de la fiche, pas la date de la partie)
 - 05 run live par Nico (`05_run_live.md`, messages : `run_live_messages.txt`) ⏳
 
 ## Questions ouvertes
@@ -51,4 +51,4 @@ Au tableau : `test_explosive_early_queen_nf6` (#85) n'existe plus.
 
 ## §REPRISE
 
-Tronçons 01, 02 et 03 faits, 03 non commité à ce stade. Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (04, `04_doublons.md`). Prochaine étape : `/sprint-auto sprint 49`.
+Tronçons 01 à 04 faits et commités. Reste le run live par Nico : `05_run_live.md`, messages dans `run_live_messages.txt`. Prochaine étape : run live, puis clôture après son OK.

@@ -490,6 +490,82 @@ def test_multi_games_grouped_answer(monkeypatch, tmp_path):
     assert write_game.call_count == 2
 
 
+_GAME_A = '[White "A"]\n\n1. e4 e5 0-1'
+_GAME_B = '[White "B"]\n\n1. d4 d5 0-1'
+_HASH_A = hashlib.sha256(b"e2e4e7e5").hexdigest()[:16]
+
+
+def _duplicate_router(monkeypatch, tmp_path, games):
+    """Router dont le palace contient `games` ; retourne (router, analyze, write, llm)."""
+    def _analysis(text, *a):
+        p = _ply(1, 17, "Ng4+", "d6", "d7d6")
+        return GameAnalysis(headers={"White": "A" if '"A"' in text else "B", "Black": "staroflexeur"},
+                            nico_color="black", color_source="header", plies=[p],
+                            critical=[CriticalPosition(kind="a", ply=p, score=p.loss)])
+    analyze = MagicMock(side_effect=_analysis)
+    write_game = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "analyze", analyze)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = games
+    router = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge)
+    return router, analyze, write_game, llm_exec
+
+
+def test_known_game_answers_without_analysis(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00"}
+    router, analyze, write_game, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    # En-têtes différents, mêmes coups : même partie.
+    result = router.execute({"content": '[White "Autre"]\n\n1. e4 e5 1-0', "metadata": {}})
+
+    assert result == {"text": "Cette partie contre X a déjà été envoyée le 2026-10-31."}
+    analyze.assert_not_called()
+    write_game.assert_not_called()
+    llm_exec.execute.assert_not_called()
+
+
+def test_new_game_keeps_pipeline(monkeypatch, tmp_path):
+    fiche = {"id": "chess_game_autre", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00"}
+    router, analyze, write_game, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    result = router.execute({"content": _GAME_A, "metadata": {}})
+
+    analyze.assert_called_once()
+    write_game.assert_called_once()
+    assert len(result["images"]) == 1
+
+
+def test_multi_games_known_and_repeated(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}"}
+    router, analyze, write_game, _ = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    # Partie 1 connue, partie 2 nouvelle, partie 3 = partie 2.
+    result = router.execute({"content": f"{_GAME_A}\n\n{_GAME_B}\n\n{_GAME_B}", "metadata": {}})
+
+    assert analyze.call_count == 1
+    assert write_game.call_count == 1
+    assert result["text"].startswith("Partie 1 — déjà envoyée\n\nPartie 2 — ")
+    assert result["text"].endswith("\n\nPartie 3 — déjà envoyée")
+    assert [i["caption"][:21] for i in result["images"]] == ["Partie 2 — Position 1"]
+
+
+def test_multi_games_all_known_text_only(monkeypatch, tmp_path):
+    fiche = {"id": f"chess_game_{_HASH_A}"}
+    router, analyze, _, llm_exec = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    result = router.execute({"content": f"{_GAME_A}\n\n{_GAME_A}", "metadata": {}})
+
+    assert result["text"] == "Partie 1 — déjà envoyée\n\nPartie 2 — déjà envoyée"
+    assert result["images"] == []
+    analyze.assert_not_called()
+    llm_exec.execute.assert_not_called()
+
+
 def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     # Le plan d'un Göring vient de l'idée du gambit, pas de la reprise du pion (Scotch).
     plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]
