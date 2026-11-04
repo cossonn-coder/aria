@@ -23,6 +23,8 @@ ARIA — Kickoff sprint 49 (ouverture)
 
 À choisir par Nico. Noté par Nico : pression au temps (#161), pas prioritaire.
 
+Étude AggroChess close sans code le 2026-11-04 : moteur écarté, détecteur jugé satisfaisant (`docs/sprint49/audit_aggrochess.md`).
+
 ─────────────────────────────────────────────────────────────────────────
 
 ## Dettes ouvertes au 2026-11-04 (post sprint 48)
@@ -163,6 +165,9 @@ ARIA — Kickoff sprint 49 (ouverture)
 | 173 | Erreur répétée dans le répertoire : dès la 3e fois, plus de miniature ; signalé à Nico, pas d'exception pour les grosses pertes | ouvert (sprint 48), à arbitrer si gênant |
 | 174 | Répertoire comparé sur la suite exacte des coups : une transposition compte comme une nouveauté | ouvert (sprint 48) |
 | 175 | `/parties` : jour lu dans la date du PGN ; une partie après minuit peut tomber la veille si le site date en UTC [non vérifié] | ouvert (sprint 48), à observer |
+| 176 | Coup explosif : une pièce déjà attaquée laissée en prise n'est pas reconnue comme sacrifice (Byrne-Fischer 17...Fe6) ; non couvert non plus par la mesure de rappel du sprint 49 | ouvert (étude AggroChess), `docs/sprint49/audit_aggrochess.md` §7 |
+| 177 | Coup explosif : un seul coup par position, choisi au gain d'espérance ; un sacrifice sain peut céder la place à un coup calme (Fxh7+ / Nb3 une passe sur deux) [2 passes] | ouvert (étude AggroChess) ; recoupe #108 |
+| 178 | Coup explosif : 27.Qd5!! rejeté de justesse, recherche partagée à 15,7 pts pour une limite de 15 (`1q3kr1/2r1b1pp/p2NPn2/1pQ3N1/8/5PP1/PPP4P/3R1RK1 w`), cas de test si le sujet revient ; recherche à part mesurée : 1 coup utile sur 553 [58 positions, 1 passe] | ouvert (étude AggroChess) |
 
 ─────────────────────────────────────────────────────────────────────────
 
