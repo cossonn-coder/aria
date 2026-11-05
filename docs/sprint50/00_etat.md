@@ -41,6 +41,11 @@ Partie Ranacha vs La_Bagouze : suites comparées, « Pourquoi », liste et courb
 - `24...Kc7` n'expliquait pas le clouage levé : fait « décloue X » ajouté aux suites (clouage sur le roi seulement), à citer dans « Pourquoi ».
 - Clic sur un coup de la liste : ajouté en jeu libre (`goToLine`) ; la liste n'est plus reconstruite à chaque passe du moteur, ce qui pouvait perdre un tap (introduit par `22378aa`).
 
+Arbitrages de Nico après ce run :
+- Point et coup de la liste gardent la couleur de l'occasion (cyan au coup 17 même si le meilleur coup a été joué).
+- Meilleurs coups de la liste en bleu même si « Meilleur coup » est décoché.
+- Pas de fait « cloue X » seul : à ajouter pour toutes les tactiques ou pas du tout. À reporter au tableau des dettes du sprint 51.
+
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
 - 02 bilan (`02_bilan_web.md`) ✅ ; recherche web retirée après le run live 1.
