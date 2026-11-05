@@ -140,7 +140,7 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
         "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)\n"
-        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5.\n"
+        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4, décloue pion f2 ; 5...e5.\n"
         "Variante du meilleur coup : 4...Nc6 ; 5.Bb5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
@@ -150,7 +150,7 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     assert "réponse humaine la plus probable : Nxh4 (62 %)" in content
     assert "espérance face à un humain : Nico 58 % (meilleur coup : 46 %)" in content
     assert "variante : 5.Nxh4 e5 (avance de développement)" in content
-    assert "faits : 5.Nxh4 (prend Qh4) 5...e5" in content
+    assert "faits : 5.Nxh4 (prend Qh4, décloue pion f2) 5...e5" in content
     assert "fin de variante : matériel : Nico Q de moins, % de gain Nico 75 %" in content
     assert "coût" not in content.split("[Consigne")[0]
     assert "si Nxh4 (62 %) : 5.Nxh4, 62 % pour Nico" in content
@@ -413,6 +413,13 @@ def test_long_entry_cut_at_last_sentence(monkeypatch, tmp_path):
     caption = result["images"][0]["caption"]
     assert len(caption) <= 1024
     assert caption.endswith("remplir. …")
+
+
+def test_move_facts_names_unpinned_piece():
+    # Partie du run live : le roi quitte la colonne d et libère le fou cloué par la tour.
+    fen = "4r3/3k2pp/1ppb1p1n/p7/P1B2PP1/2P4P/1P3K2/2BR4 b - - 0 24"
+    assert _move_facts(fen, ["Kc7"], 24, "black") == "24...Kc7 (décloue Bd6)"
+    assert "décloue" not in _move_facts(fen, ["g5"], 24, "black")
 
 
 def test_move_facts_capture_and_numbering():

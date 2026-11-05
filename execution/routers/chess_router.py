@@ -235,8 +235,9 @@ def _attacked_line(fen: str) -> str:
 
 def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) -> list:
     """Ligne rejouée depuis `fen` : liste de (libellé du coup, faits observables) —
-    prise, échec, mat, roque, promotion, et pièces adverses nouvellement attaquées
-    par la pièce jouée (non défendues ou de valeur supérieure). Calcul unique partagé
+    prise, échec, mat, roque, promotion, pièces adverses nouvellement attaquées par la
+    pièce jouée (non défendues ou de valeur supérieure), et pièces de son camp qu'il
+    décloue (clouage sur le roi seulement). Calcul unique partagé
     par la ligne « faits : » du message enrichi et la ligne « Variante : » des légendes."""
     board = chess.Board(fen)
     parts = []
@@ -261,6 +262,9 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
         if move.promotion:
             facts.append(f"promotion en {chess.piece_symbol(move.promotion).upper()}")
         attacked = new_targets(board, move)
+        # La pièce jouée elle-même n'est pas « déclouée » : seules celles restées en place.
+        pinned = [sq for sq in chess.SquareSet(board.occupied_co[mover])
+                  if sq != move.from_square and board.is_pinned(mover, sq)]
         board.push(move)
         if board.is_checkmate():
             facts.append("mat")
@@ -268,6 +272,9 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
             facts.append("échec")
         if attacked and not board.is_checkmate():
             facts.append("attaque " + ", ".join(_square_label(board, sq) for sq in attacked))
+        unpinned = [sq for sq in pinned if not board.is_pinned(mover, sq)]
+        if unpinned:
+            facts.append("décloue " + ", ".join(_square_label(board, sq) for sq in unpinned))
         parts.append((_move_label(move_number, color, san), facts))
         if color == "black":
             move_number += 1
@@ -907,6 +914,7 @@ class ChessExecutionRouter(BaseRouter):
             "lignes « suite du meilleur coup » et « suite du coup joué » : commence par « Pourquoi : » "
             "au lieu de « Plan : » et explique en 1 à 2 phrases pourquoi le meilleur coup vaut mieux "
             "que le coup joué, en comparant uniquement ces deux suites, leurs faits et leur fin ; "
+            "si un de ces faits dit « décloue », cite-le : le coup libère cette pièce ; "
             "ne dis qu'une pièce est prise ou épargnée que si ces faits le montrent ; n'énumère pas les coups "
             "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "

@@ -185,6 +185,8 @@ let game = null;
 // Ligne affichée = chess.history() puis ahead dans l'ordre de rejeu ; position affichée = fin
 // de chess.history(). En partie chargée, la variante part de l'ancrage (anchor()).
 const ahead = [];
+// Couleurs de la liste des coups telle qu'affichée, pour ne la reconstruire que si elles changent.
+let movesColors = "";
 // Valeurs par position (sprint 39) : Map FEN → {win, mate, best} (% de gain des blancs, mat
 // signé côté blancs, meilleur coup SAN) ; partie chargée depuis /game, jeu libre par /eval.
 // evalAsked : FEN déjà demandées à /eval ; evalChain : une requête /eval à la fois.
@@ -475,7 +477,10 @@ function save(kind, move) {
     saved[kind].set(positionFen, found);
     renderSaved(kind);
     drawGraph();
-    renderMoves();
+    // Reconstruire la liste à chaque passe du moteur perdrait le tap en cours et le mini
+    // échiquier survolé : seulement quand une couleur change.
+    const colors = JSON.stringify([pointColors(curveFens()), pointColors(variantFens())]);
+    if (colors !== movesColors) renderMoves();
   }
 }
 
@@ -592,6 +597,13 @@ function goTo(n, line = []) {
   newPosition();
 }
 
+// Jeu libre : va à la position n de la ligne affichée, sans perdre les coups devant.
+function goToLine(n) {
+  while (chess.history().length > n) ahead.push(chess.undo().san);
+  while (chess.history().length < n) chess.move(ahead.pop());
+  newPosition();
+}
+
 // Coup de la partie chargée joué depuis la position affichée (coup verbose chess.js),
 // null hors partie, en variante ou en fin de partie.
 function playedMove() {
@@ -626,8 +638,9 @@ function drawEvalbar() {
 // variante en cours entre parenthèses juste après le coup de la partie qu'elle remplace (en
 // fin de liste si elle part de la fin de partie) ; sinon la ligne du jeu libre (coups devant
 // compris). Un coup noir en tête de liste ou de parenthèse, ou juste après elle, porte « N… ».
-// Coup menant à la position affichée surligné ; coups cliquables seulement en partie chargée.
+// Coup menant à la position affichée surligné ; un clic amène l'échiquier après ce coup.
 function renderMoves() {
+  movesColors = JSON.stringify([pointColors(curveFens()), pointColors(variantFens())]);
   const box = $("moves");
   box.replaceChildren();
   // Le coup survolé disparaît (clic → goTo → nouvelle liste) sans mouseleave.
@@ -659,7 +672,7 @@ function renderMoves() {
   if (!game) {
     const fens = lineFens();
     const colors = pointColors(fens);
-    displayedLine().forEach((san, i) => add(fens[i], san, i === 0, i === shown - 1, null, colors[i]));
+    displayedLine().forEach((san, i) => add(fens[i], san, i === 0, i === shown - 1, () => goToLine(i + 1), colors[i]));
     return;
   }
   const start = anchor();

@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Runs live 1 à 3 faits (2026-11-05) ; retours appliqués, run live 4 par Nico à suivre, sur une partie avec une erreur.
+Runs live 1 à 4 faits (2026-11-05) ; retours appliqués, run live 5 par Nico à suivre.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -36,6 +36,11 @@ Partie glend0, nulle, sans erreur : les deux suites et « Pourquoi » restent à
 - Liste des coups de l'échiquier à la couleur de leur point ; erreurs en pastille, lisibles sur fond sombre. Fait.
 - À arbitrer à la clôture : l'analyse a duré 211,6 s dont 197,7 s de recherche d'explosifs [n=1, 31 positions], alors que le message annonce « jusqu'à 2 minutes ».
 
+## Retours du run live 4 (Nico, 2026-11-05)
+Partie Ranacha vs La_Bagouze : suites comparées, « Pourquoi », liste et courbe colorées, échiquier validés par Nico. Deux corrections :
+- `24...Kc7` n'expliquait pas le clouage levé : fait « décloue X » ajouté aux suites (clouage sur le roi seulement), à citer dans « Pourquoi ».
+- Clic sur un coup de la liste : ajouté en jeu libre (`goToLine`) ; la liste n'est plus reconstruite à chaque passe du moteur, ce qui pouvait perdre un tap (introduit par `22378aa`).
+
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
 - 02 bilan (`02_bilan_web.md`) ✅ ; recherche web retirée après le run live 1.
@@ -47,4 +52,4 @@ Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les e
 À arbitrer à la clôture : le LLM peut encore mal raconter un coup joué (« Qxf1+ échange ta dame contre un cavalier », alors qu'il gagne le cavalier) [n=1] ; il ne reçoit pas ce que le coup joué capture. Variantes d'un seul coup (34.Qa4, 33...Qa6) [n=2], cause non cherchée.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`. Après le run live 1 : recherche web retirée (`web_block`, `_sources_line`, `structure_terms`, `memory_message` supprimés, `llm_router.py` revenu à son état d'avant le sprint), `_material_line` en toutes lettres, chutes proches dans `story_line`. Écarts conservés du tronçon 02 : `story_line` prend `outcome`, issue inconnue traitée comme une nulle, `nico_wins` dans `summary.py`. Tronçon 01 : ligne « Piège » entre « Variante » et « Variante du meilleur coup », position libellée « piège affiché » pour le LLM, `_human_moves` passe par `trapping_replies`. Prochaine étape : run live 4 par Nico (voir « Retours du run live 3 »), sur la branche `feat/sprint50-bilan`.
+Lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`. Après le run live 1 : recherche web retirée (`web_block`, `_sources_line`, `structure_terms`, `memory_message` supprimés, `llm_router.py` revenu à son état d'avant le sprint), `_material_line` en toutes lettres, chutes proches dans `story_line`. Écarts conservés du tronçon 02 : `story_line` prend `outcome`, issue inconnue traitée comme une nulle, `nico_wins` dans `summary.py`. Tronçon 01 : ligne « Piège » entre « Variante » et « Variante du meilleur coup », position libellée « piège affiché » pour le LLM, `_human_moves` passe par `trapping_replies`. Prochaine étape : run live 5 par Nico (voir « Retours du run live 4 »), sur la branche `feat/sprint50-bilan`.

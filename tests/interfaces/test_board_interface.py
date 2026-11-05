@@ -147,7 +147,7 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 39, tronçon 05 : champs des noms des joueurs.
         assert 'id="name-white"' in page and 'id="name-black"' in page
         # Tronçon 08 : liste des coups sous la courbe.
-        assert 'id="moves"' in page
+        assert 'id="moves"' in page and "goToLine(i + 1)" in page
         # Tronçon 10 : ligne de précision sous le coup joué.
         assert 'id="accuracy"' in page
         # Sprint 41, tronçon 01 : page mobile (viewport, Mini App, barre d'éval, onglets, barre du bas).
