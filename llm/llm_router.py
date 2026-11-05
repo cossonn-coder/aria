@@ -26,6 +26,19 @@ _SOUL = _load_soul()
 _USER = _load_user()
 
 
+def _usage_text(usage: dict | None) -> str:
+    """Tokens d'un appel, pour le journal : noms OpenAI-compatibles ou Anthropic.
+
+    « cache » = tokens d'entrée relus du cache : DeepSeek les compte dans « in »,
+    Anthropic à part.
+    """
+    usage = usage or {}
+    tokens_in = usage.get("prompt_tokens", usage.get("input_tokens", "?"))
+    tokens_out = usage.get("completion_tokens", usage.get("output_tokens", "?"))
+    cached = usage.get("prompt_cache_hit_tokens", usage.get("cache_read_input_tokens", 0))
+    return f"in={tokens_in} out={tokens_out} cache={cached}"
+
+
 @dataclass
 class LLMResponse:
     content: str
@@ -367,7 +380,7 @@ class LLMRouter:
                     f"{provider}: réponse vide "
                     f"(stop_reason={data.get('stop_reason')})"
                 )
-            log.info("[LLM] Anthropic (%s) a répondu.", provider_cfg["model"])
+            log.info("[LLM] Anthropic (%s) a répondu. %s", provider_cfg["model"], _usage_text(data.get("usage")))
             return LLMResponse(
                 content=content,
                 metadata={
@@ -410,7 +423,7 @@ class LLMRouter:
                 f"{provider}: réponse vide "
                 f"(finish_reason={choice.get('finish_reason')})"
             )
-        log.info("[LLM] %s (%s) a répondu.", provider, provider_cfg["model"])
+        log.info("[LLM] %s (%s) a répondu. %s", provider, provider_cfg["model"], _usage_text(data.get("usage")))
 
         return LLMResponse(
             content=content,
