@@ -43,6 +43,9 @@ _DEVELOPMENT_GAP = 2
 _ACTIVITY_GAP = 10
 # Longueur de ligne affichée pour les sortes a / b (inchangée).
 _PV_DISPLAY = 6
+# Suites comparées d'une erreur (sprint 50) : borne en demi-coups, pour tenir dans une légende.
+_FORCING_MAX = 10
+_FORCING_TIME = 0.15
 
 # Options Stockfish du live et de position_eval (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
@@ -116,6 +119,9 @@ class CriticalPosition:
     # Sortes c / e : critère d'avantage clair et ligne coupée au point d'arrêt (SAN).
     evidence: str | None = None
     line_san: list = field(default_factory=list)
+    # Sortes a / b : suites forcées du meilleur coup et du coup joué (SAN, ce coup en tête).
+    best_line_san: list = field(default_factory=list)
+    played_line_san: list = field(default_factory=list)
 
 
 @dataclass
@@ -562,6 +568,67 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     return sorted(selected, key=lambda c: c.ply.ply)
 
 
+def new_targets(board: chess.Board, move: chess.Move) -> list:
+    """Cases des pièces adverses que move attaque nouvellement : non défendues ou de valeur
+    supérieure à la pièce jouée. C'est la définition d'une menace pour tout le coach."""
+    if board.is_castling(move):
+        return []
+    values = {chess.PAWN: 1, **_PIECE_VALUES, chess.KING: 0}
+    mover = board.turn
+    before = board.attacks(move.from_square)
+    # Le roi n'attaque utilement qu'une pièce non défendue.
+    attacker_value = values[move.promotion or board.piece_type_at(move.from_square)] or 100
+    after = board.copy(stack=False)
+    after.push(move)
+    return [
+        sq for sq in after.attacks(move.to_square) & after.occupied_co[not mover]
+        if sq not in before and after.piece_type_at(sq) != chess.KING
+        and (not after.attackers(not mover, sq) or values[after.piece_type_at(sq)] > attacker_value)
+    ]
+
+
+def _is_forcing(board: chess.Board, move: chess.Move) -> bool:
+    """Coup forcé au sens de Nico : échec, prise ou menace ; la promotion crée une menace."""
+    return (board.gives_check(move) or board.is_capture(move) or bool(move.promotion)
+            or bool(new_targets(board, move)))
+
+
+def forcing_line(engine, fen: str, pv_uci: list) -> list:
+    """Suite d'un coup (SAN, ce coup en tête), à partir de la ligne moteur pv_uci.
+
+    Le coup et sa réponse sont toujours montrés ; ensuite la suite continue tant qu'un coup
+    est forcé ou répond à un coup forcé. Stockfish tronque souvent sa ligne : au bout, la
+    position atteinte est analysée de nouveau, tant que la suite n'est pas finie.
+    """
+    board = chess.Board(fen)
+    moves = [chess.Move.from_uci(uci) for uci in pv_uci]
+    line, previous_forcing = [], True
+    while len(line) < _FORCING_MAX and not board.is_game_over():
+        if not moves:
+            moves = list(engine.analyse(board, chess.engine.Limit(time=_FORCING_TIME))["pv"])
+        move = moves.pop(0)
+        forcing = _is_forcing(board, move)
+        if len(line) >= 2 and not forcing and not previous_forcing:
+            break
+        line.append(board.san(move))
+        board.push(move)
+        previous_forcing = forcing
+    return line
+
+
+def assign_forcing_lines(critical: list, plies: list, engine_path: str) -> None:
+    """Remplit les deux suites comparées des erreurs (sortes a et b)."""
+    errors = [c for c in critical if c.kind in ("a", "b")]
+    items = []
+    for c in errors:
+        p = c.ply
+        after = plies[p.ply + 1].pv_uci if p.ply + 1 < len(plies) else []
+        items += [(p.fen_before, p.pv_uci), (p.fen_before, [p.uci, *after])]
+    lines = run_on_engines(engine_path, lambda engine, item: forcing_line(engine, *item), items)
+    for i, c in enumerate(errors):
+        c.best_line_san, c.played_line_san = lines[2 * i], lines[2 * i + 1]
+
+
 def analyze(text: str, message: str, engine_path: str,
             maia_models_dir: str | None = None, past_games=()) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
@@ -599,6 +666,7 @@ def analyze(text: str, message: str, engine_path: str,
     else:
         explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir, first_move)
     critical = select_critical(plies, nico_color, explosive, first_move)
+    assign_forcing_lines(critical, plies, engine_path)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s first_move=%d critical=%s duration=%.1fs",
         len(plies), nico_color, source, first_move,

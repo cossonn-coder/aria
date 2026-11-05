@@ -730,3 +730,21 @@ def test_material_line_names_pieces_and_pawns():
     fen = "4k3/8/8/8/8/8/8/3QK3 w - - 0 1"
     assert chess_router_mod._material_line(fen, "white") == "matériel : Nico Q de plus"
     assert chess_router_mod._material_line(fen, "black") == "matériel : Nico Q de moins"
+
+
+def test_error_caption_compares_both_lines():
+    """Sprint 50 : une erreur montre les deux suites et où chacune mène, écrit par le code."""
+    # Position du coup 35 de la partie du run live : la dame prend le cavalier, puis les dames partent.
+    ply = _ply(0, 35, "Qxf1+", "Qxc5", "f2c5")
+    ply.fen_before = "5r1k/1P4pp/8/2Pp4/8/6P1/5q1P/3Q1N1K b - - 1 35"
+    ply.win_before, ply.win_after = 82.0, 11.0
+    critical = CriticalPosition(kind="a", ply=ply, score=71.0,
+                                best_line_san=["Qxc5", "h4"],
+                                played_line_san=["Qxf1+", "Qxf1", "Rxf1+", "Kg2"])
+    assert chess_router_mod._variant_line(critical) == (
+        "Meilleur coup : 35...Qxc5 prend pion c5 ; 36.h4.\n"
+        "  → matériel : Nico R contre N, 82 % de gain\n"
+        "Ton coup : 35...Qxf1+ prend Nf1, échec, attaque Qd1 ; 36.Qxf1 reprend, attaque Rf8 ; "
+        "36...Rxf1+ reprend, échec ; 37.Kg2 attaque Rf1.\n"
+        "  → matériel : Nico R de plus, 3 pions contre 4, 11 % de gain"
+    )

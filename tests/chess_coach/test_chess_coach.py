@@ -13,6 +13,7 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
                                   parse_pgn, select_critical)
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
+from chess_coach.analysis import forcing_line
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
 from chess_coach.render import (ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, error_arrow,
                                 render_curve, render_position)
@@ -489,3 +490,28 @@ def test_render_curve(tmp_path):
     assert image.getpixel((width - CURVE_MARGIN // 2 - 1, bottom)) == CURVE_LINE
     # Un point par position : plus épais que le segment qui le relie (sprint 50).
     assert image.getpixel((CURVE_MARGIN, top + 2)) == CURVE_LINE
+
+
+class _ScriptedEngine:
+    """Moteur factice : chaque analyse rend la ligne suivante du script."""
+
+    def __init__(self, *lines):
+        self.lines = list(lines)
+
+    def analyse(self, board, limit):
+        return {"pv": [chess.Move.from_uci(uci) for uci in self.lines.pop(0)]}
+
+
+_START = chess.STARTING_FEN
+
+
+def test_forcing_line_stops_on_quiet_moves():
+    """Le coup et sa réponse sont montrés ; deux coups calmes de suite arrêtent la suite."""
+    engine = _ScriptedEngine()
+    assert forcing_line(engine, _START, ["a2a3", "a7a6", "h2h3", "h7h6"]) == ["a3", "a6"]
+
+
+def test_forcing_line_extends_truncated_pv():
+    """Ligne tronquée : le moteur est relancé ; la menace (Nf3 sur e5) et sa réponse sont montrées."""
+    engine = _ScriptedEngine(["e7e5"], ["g1f3"], ["b8c6"], ["a2a3"])
+    assert forcing_line(engine, _START, ["e2e4"]) == ["e4", "e5", "Nf3", "Nc6"]

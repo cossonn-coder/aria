@@ -26,7 +26,7 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze, parse_pgn, split_pgn
+from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
 from chess_coach.explosive import _GAIN_MIN
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
@@ -66,8 +66,6 @@ _EVIDENCE_FR = {
     "material": "gain matériel", "crushing": "position écrasante", "mate": "attaque de mat",
     "development": "avance de développement", "activity": "avance d'activité",
 }
-
-_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
 _OUTCOME_FR = {"win": "victoire", "loss": "défaite", "draw": "nulle", "unknown": "issue inconnue"}
 
@@ -258,24 +256,14 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
         recapture_square = move.to_square if board.is_capture(move) else None
         if move.promotion:
             facts.append(f"promotion en {chess.piece_symbol(move.promotion).upper()}")
-        before = chess.SquareSet() if castling else board.attacks(move.from_square)
-        # Le roi n'attaque utilement qu'une pièce non défendue (valeur 0 dans _VALUES).
-        attacker_value = _VALUES[move.promotion or board.piece_type_at(move.from_square)] or 100
+        attacked = new_targets(board, move)
         board.push(move)
         if board.is_checkmate():
             facts.append("mat")
         elif board.is_check():
             facts.append("échec")
-        if not castling and not board.is_checkmate():
-            targets = [
-                _square_label(board, sq)
-                for sq in board.attacks(move.to_square) & board.occupied_co[not mover]
-                if sq not in before and board.piece_type_at(sq) != chess.KING
-                and (not board.attackers(not mover, sq)
-                     or _VALUES[board.piece_type_at(sq)] > attacker_value)
-            ]
-            if targets:
-                facts.append("attaque " + ", ".join(targets))
+        if attacked and not board.is_checkmate():
+            facts.append("attaque " + ", ".join(_square_label(board, sq) for sq in attacked))
         parts.append((_move_label(move_number, color, san), facts))
         if color == "black":
             move_number += 1
@@ -324,12 +312,35 @@ def _trap_line(p, explosive, reply: dict) -> str:
     return f"{head}, {reply['win']:.0f} % pour toi."
 
 
+def _line_end(p, moves: list, win: float) -> str:
+    """Fin d'une suite comparée : mat, ou matériel et % de gain de la ligne du moteur."""
+    board = chess.Board(p.fen_before)
+    for san in moves:
+        board.push_san(san)
+    if board.is_checkmate():
+        return "  → mat"
+    return f"  → {_material_line(board.fen(), p.color)}, {win:.0f} % de gain"
+
+
+def _compared_lines(critical) -> str:
+    """Suites du meilleur coup et du coup joué, avec leur fin : le code dit où chacune mène."""
+    p = critical.ply
+    return "\n".join((
+        _told_moves("Meilleur coup", p, critical.best_line_san),
+        _line_end(p, critical.best_line_san, p.win_before),
+        _told_moves("Ton coup", p, critical.played_line_san),
+        _line_end(p, critical.played_line_san, p.win_after),
+    ))
+
+
 def _variant_line(critical) -> str:
     """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
     la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis la ligne « Piège : »
     s'il est piégeant, puis une ligne pour la variante du meilleur coup (les autres
-    sortes la donnent déjà)."""
+    sortes la donnent déjà). Sortes a et b : les deux suites comparées."""
     p = critical.ply
+    if critical.best_line_san:
+        return _compared_lines(critical)
     if critical.kind in ("c", "e"):
         moves = critical.line_san
     elif critical.kind == "d":
@@ -842,6 +853,13 @@ class ChessExecutionRouter(BaseRouter):
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
                              f"perte {prev.loss:.0f} pts "
                              f"(meilleur {_move_label(prev.move_number, prev.color, prev.best_san)})")
+            if critical.best_line_san:
+                lines.append(f"  suite du meilleur coup, faits : "
+                             f"{_move_facts(p.fen_before, critical.best_line_san, p.move_number, p.color)}")
+                lines.append(_line_end(p, critical.best_line_san, p.win_before))
+                lines.append(f"  suite du coup joué, faits : "
+                             f"{_move_facts(p.fen_before, critical.played_line_san, p.move_number, p.color)}")
+                lines.append(_line_end(p, critical.played_line_san, p.win_after))
             if critical.kind in ("c", "e"):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
@@ -862,7 +880,11 @@ class ChessExecutionRouter(BaseRouter):
             "« Plan : » et dis quoi viser dans cette position (pièce à améliorer, colonne à "
             "occuper, pion ou roi à attaquer) d'après les lignes « structure », « évaluation », "
             "« motifs » et le but du meilleur coup (d'après ses faits) ; ne nomme une colonne, "
-            "un pion ou un roi que s'il figure dans ces lignes ; n'énumère pas les coups "
+            "un pion ou un roi que s'il figure dans ces lignes ; exception, si la position a les "
+            "lignes « suite du meilleur coup » et « suite du coup joué » : commence par « Pourquoi : » "
+            "au lieu de « Plan : » et explique en 1 à 2 phrases pourquoi le meilleur coup vaut mieux "
+            "que le coup joué, en comparant uniquement ces deux suites, leurs faits et leur fin ; "
+            "ne dis qu'une pièce est prise ou épargnée que si ces faits le montrent ; n'énumère pas les coups "
             "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
@@ -874,7 +896,7 @@ class ChessExecutionRouter(BaseRouter):
             "Aucune cause de "
             "défaite ou de victoire absente du déroulé ; n'annonce un mat que s'il est joué ou s'il "
             "figure dans une ligne, en disant s'il dépend d'une réponse adverse. Rien "
-            "d'autre : pas de section « ce qui se passe » ni « pourquoi ». Utilise "
+            "d'autre : pas de section « ce qui se passe ». Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
