@@ -2,7 +2,7 @@
 #
 # Faits structurels d'une position (sprint 46, tronçon 02).
 
-from chess_coach.structure import structure_line, structure_terms
+from chess_coach.structure import structure_line
 
 # Blancs : Ra1 Nb1 Bc1 Qd1 Rf1 Kg1, pions b2 d4 f2 g2 h2.
 # Noirs : Ra8 Nb8 Qd8 Ke8 Bf8 Ng8 Rh8, pions a7 f7 g7 h7 h6.
@@ -37,7 +37,3 @@ def test_structure_line_hides_empty_categories():
     assert "colonnes" not in line
     assert "pions isolés" not in line
     assert line.startswith("roi de Nico : e1, au centre, 3 pions devant")
-
-
-def test_structure_terms_for_web_query():
-    assert structure_terms(_FEN) == ["open file", "isolated pawn", "passed pawn"]

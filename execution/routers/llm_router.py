@@ -313,15 +313,12 @@ class LLMExecutionRouter(BaseRouter):
         # ── 10. Écriture MemPalace ───────────────────────────────────────────
         # Écriture après résolution complète — jamais sur un état intermédiaire.
         # Non bloquant : une erreur mémoire ne doit pas tuer la réponse.
-        # memory_message (sprint 50) : texte mémorisé quand il diffère du message
-        # envoyé au LLM (les résultats web d'une analyse de partie ne s'écrivent pas).
-        stored_message = metadata.get("memory_message", message)
         if intent is None:
             log.info("memory_write SKIPPED reason=no_intent_resolved")
         else:
             try:
                 write_interaction(
-                    text=f"USER:\n{stored_message}\n\nARIA:\n{result}",
+                    text=f"USER:\n{message}\n\nARIA:\n{result}",
                     intent_id=intent.id,
                     intent_name=intent.name,
                     source="llm_execution_router",
@@ -339,7 +336,7 @@ class LLMExecutionRouter(BaseRouter):
         # Historique conversationnel : écrit même sans intent résolu
         # (amendement Nico 2026-10-15). Même politique non bloquante.
         try:
-            write_conversation_turn(conversation_key, "user", stored_message)
+            write_conversation_turn(conversation_key, "user", message)
             write_conversation_turn(conversation_key, "assistant", result)
             log.info("conversation_write OK key=%s", conversation_key)
         except Exception:

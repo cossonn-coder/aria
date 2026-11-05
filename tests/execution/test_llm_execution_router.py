@@ -405,24 +405,3 @@ def test_skip_history_skips_load_but_writes_turn(mock_store, mock_conv):
     bridge.load_conversation_history.assert_not_called()
     assert captured["history"] == []
     assert mock_conv.call_count == 2
-
-
-@patch("execution.routers.llm_router.write_conversation_turn")
-@patch("execution.routers.llm_router.write_interaction")
-def test_memory_message_is_written_instead_of_llm_message(mock_store, mock_conv):
-    """Sprint 50 : memory_message remplace le message dans les écritures, pas pour l'agent."""
-    router, _, _, fake_intent, _ = make_router()
-    captured = {}
-
-    def capture_ctx(ctx, lr):
-        captured["message"] = ctx.message
-        return _fake_ctx(fake_intent, result="analyse")
-
-    router.controller.run = capture_ctx
-
-    router._run_pipeline("partie + web", CognitiveOperation.REASONING,
-                         {"chat_id": 42, "memory_message": "partie"})
-
-    assert captured["message"] == "partie + web"
-    assert "partie + web" not in mock_store.call_args.kwargs["text"]
-    assert mock_conv.call_args_list[0].args == ("42", "user", "partie")

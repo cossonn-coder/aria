@@ -144,6 +144,12 @@ def test_story_line_loss_with_turning_point():
     )
 
 
+def test_story_line_cites_near_drops_in_game_order():
+    # 37 pts dépasse 3/4 de 39 : cité. 21 pts est décisif mais loin du maximum : non cité.
+    plies = _story_plies((14, "e5", 77.0, 21.0), (32, "Kg1", 84.0, 37.0), (34, "b6", 49.0, 39.0))
+    assert story_line(plies, "white", "loss").endswith("Tournants : coups 32.Kg1 (−37 pts) et 34.b6 (−39 pts).")
+
+
 def test_story_line_win_without_worst_move():
     plies = _story_plies((5, "Nf3", 30.0, 2.0), (30, "Qh7", 97.0, 0.0))
     assert story_line(plies, "white", "win") == "📈 Victoire sans coup décisif : de 28 % au coup 5 à 97 % au coup 30."

@@ -31,6 +31,8 @@ _STORY_HEAD = {"win": "📈 Victoire", "loss": "📉 Défaite", "draw": "➖ Nul
 # Pire coup de Nico : décisif à partir de 20 pts de perte, cité à partir de 10 (sprint 50).
 _DECISIVE_LOSS = 20
 _WORST_MOVE_MIN = 10
+# Chute proche : un autre coup décisif d'au moins 3/4 de la perte maximale est cité aussi.
+_NEAR_DROP_RATIO = 0.75
 
 
 def _header(headers: dict, key: str) -> str:
@@ -131,7 +133,12 @@ def story_line(plies: list, nico_color: str, outcome: str) -> str:
     head = _STORY_HEAD[outcome] + ("" if loss >= _DECISIVE_LOSS else " sans coup décisif")
     line = f"{head} : {span}."
     if loss >= _DECISIVE_LOSS:
-        line += f" Tournant : coup {_label(worst)} (−{loss:.0f} pts)."
+        floor = max(_DECISIVE_LOSS, loss * _NEAR_DROP_RATIO)
+        drops = [f"{_label(p)} (−{p.loss:.0f} pts)" for p in plies if p.color == nico_color and p.loss >= floor]
+        if len(drops) == 1:
+            line += f" Tournant : coup {drops[0]}."
+        else:
+            line += f" Tournants : coups {', '.join(drops[:-1])} et {drops[-1]}."
     elif loss >= _WORST_MOVE_MIN:
         line += f" Pire coup {_label(worst)} (−{loss:.0f} pts)."
     return line
