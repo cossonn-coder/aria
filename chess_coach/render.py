@@ -31,10 +31,10 @@ BADGE_RADIUS = 10
 
 CURVE_SIZE = (640, 320)
 CURVE_MARGIN = 50
-CURVE_BG = (250, 250, 250)
-CURVE_GRID = (205, 205, 205)
-CURVE_TEXT = (90, 90, 90)
-CURVE_LINE = (21, 120, 27)
+CURVE_BG = (0, 0, 0)
+CURVE_GRID = (70, 70, 70)
+CURVE_TEXT = (190, 190, 190)
+CURVE_LINE = (90, 210, 100)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
