@@ -40,6 +40,7 @@ CURVE_BG = (0, 0, 0)
 CURVE_GRID = (70, 70, 70)
 CURVE_TEXT = (190, 190, 190)
 CURVE_LINE = (90, 210, 100)
+CURVE_DOT = 2
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
@@ -201,7 +202,10 @@ def render_curve(wins: list, move_numbers: list, out_path: str) -> str:
             draw.text((x_at(i), bottom + 12), str(number), font=font, fill=CURVE_TEXT, anchor="mm")
 
     points = [(x_at(i), y_at(win)) for i, win in enumerate(wins)]
-    draw.line(points, fill=CURVE_LINE, width=3, joint="curve")
+    # Segments droits et un point par position : on lit chaque coup, sans effet lissé.
+    draw.line(points, fill=CURVE_LINE, width=2)
+    for x, y in points:
+        draw.ellipse([x - CURVE_DOT, y - CURVE_DOT, x + CURVE_DOT, y + CURVE_DOT], fill=CURVE_LINE)
 
     image.save(out_path, "PNG")
     return out_path

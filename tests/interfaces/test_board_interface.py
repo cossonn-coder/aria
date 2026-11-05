@@ -133,6 +133,10 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (blanc).
         assert "show-trap" in page and "show-strategy" in page
         assert 'strategy: { key: "s", color: "#ffffff"' in page and "#ff5fb0\"></span>" not in page
+        # Sprint 50 : flèches d'erreur cochables, meilleur coup coché, bouton + de la barre mobile.
+        assert 'id="show-errors" type="checkbox" checked' in page
+        assert 'id="show-best" type="checkbox" checked' in page
+        assert page.index('id="menu"') < page.index('id="new-bar"') < page.index('id="flip-bar"')
         # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
         assert 'id="pgn"' in page and 'id="graph"' in page
         # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue » ; tronçon 07 : plus de pseudo injecté.

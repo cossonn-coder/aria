@@ -487,3 +487,5 @@ def test_render_curve(tmp_path):
     top, bottom = CURVE_MARGIN // 2, height - CURVE_MARGIN
     assert image.getpixel((CURVE_MARGIN + 10, top)) == CURVE_LINE
     assert image.getpixel((width - CURVE_MARGIN // 2 - 1, bottom)) == CURVE_LINE
+    # Un point par position : plus épais que le segment qui le relie (sprint 50).
+    assert image.getpixel((CURVE_MARGIN, top + 2)) == CURVE_LINE

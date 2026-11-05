@@ -141,7 +141,8 @@
     <div id="pgn-status"></div>
     <label>Calque explosif <input id="show-explosive" type="checkbox" checked></label>
     <label>Seul coup <input id="show-forced" type="checkbox" checked></label>
-    <label>Meilleur coup <input id="show-best" type="checkbox"></label>
+    <label>Meilleur coup <input id="show-best" type="checkbox" checked></label>
+    <label>Erreurs <input id="show-errors" type="checkbox" checked></label>
     <label>Piège <input id="show-trap" type="checkbox" checked></label>
     <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
   </div>
@@ -153,6 +154,7 @@
 </main>
 <div id="bottombar">
   <button id="menu">☰</button>
+  <button id="new-bar" aria-label="Nouvelle partie">+</button>
   <!-- Retourner l'échiquier : deux flèches qui tournent, façon lichess. -->
   <button id="flip-bar" aria-label="Retourner l'échiquier"><svg width="22" height="22" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -211,6 +213,21 @@ function legalDests() {
   return dests;
 }
 
+// Flèche d'erreur : même échelle que les miniatures Telegram (chess_coach/render.py) :
+// 10 pts rose pâle, 25 pts rouge, 50 pts et plus noir, dégradé continu entre les deux.
+const ERROR_SCALE = [[10, [255, 190, 205]], [25, [215, 20, 35]], [50, [0, 0, 0]]];
+function errorColor(lost) {
+  const [[low, a], [mid, b], [high, c]] = ERROR_SCALE;
+  const [start, end, from, to] = lost < mid ? [low, mid, a, b] : [mid, high, b, c];
+  const t = Math.min(Math.max((lost - start) / (end - start), 0), 1);
+  return `rgb(${from.map((x, i) => Math.round(x + t * (to[i] - x))).join(",")})`;
+}
+// Un pinceau par point de perte : Chessground ne connaît que des pinceaux déclarés.
+const errorBrushes = {};
+for (let pts = 10; pts <= 50; pts++) {
+  errorBrushes[`error${pts}`] = { key: `e${pts}`, color: errorColor(pts), opacity: 0.92, lineWidth: 10 };
+}
+
 const ground = Chessground($("board"), {
   movable: { free: false, color: "both", showDests: true,
              events: { after: (from, to) => { playedOnBoard(chess.move({ from, to, promotion: "q" })); newPosition(); } } },
@@ -220,7 +237,8 @@ const ground = Chessground($("board"), {
                          strategy: { key: "s", color: "#ffffff", opacity: 0.9, lineWidth: 10 },
                          green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
                          blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 },
-                         white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 } } },
+                         white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 },
+                         ...errorBrushes } },
 });
 // Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
 const mini = Chessground($("mini"), { viewOnly: true, coordinates: false });
@@ -283,6 +301,11 @@ function drawShapes() {
   // Pièce du coup joué dans la partie chargée : cerclée de blanc.
   const played = playedMove();
   if (played) shapes.push({ orig: played.from, brush: "white" });
+  const error = $("show-errors").checked ? playedError() : null;
+  if (error) {
+    const pts = Math.min(Math.round(error.lost), 50);
+    shapes.push({ orig: error.move.from, dest: error.move.to, brush: `error${pts}` });
+  }
   ground.setAutoShapes(shapes);
 }
 
@@ -674,6 +697,21 @@ function loss(fen, before, after) {
   return fen.split(" ")[1] === "w" ? delta : -delta;
 }
 
+// Coup décrit par la ligne « joué » s'il perd au moins 10 pts, pour l'un ou l'autre camp :
+// coup à venir sur la partie chargée, coup qui vient d'être joué en jeu libre ou en variante.
+function playedError() {
+  const onGame = game && !inVariant();
+  const i = onGame ? chess.history().length : chess.history().length - 1;
+  const fens = onGame ? game.fens : lineFens();
+  const san = onGame ? game.sans[i] : displayedLine()[i];
+  const move = onGame ? playedMove() : chess.history({ verbose: true })[i];
+  const before = evals.get(fens[i]);
+  const after = evals.get(fens[i + 1]);
+  if (!move || !before || !after || !before.best || san === before.best) return null;
+  const lost = loss(fens[i], before, after);
+  return lost >= 10 ? { move, lost } : null;
+}
+
 // Ligne sous l'échiquier : coup joué depuis la position affichée (partie chargée hors
 // variante) ou coup menant à elle (jeu libre, variante), numéro de coup tiré du FEN d'avant
 // le coup, perte comparée au meilleur coup (nommé seulement si « Meilleur coup » est
@@ -893,7 +931,6 @@ async function loadGame(cursor = 0) {
   if (Number(headers.BlackElo)) $("elo-black").value = headers.BlackElo;
   $("name-white").value = headers.White && headers.White !== "?" ? headers.White : "";
   $("name-black").value = headers.Black && headers.Black !== "?" ? headers.Black : "";
-  $("show-best").checked = false;
   evals.clear();
   evalAsked.clear();
   game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…" };
@@ -930,8 +967,6 @@ if (TOUCH) {
 }
 
 $("new").addEventListener("click", () => {
-  // Meilleur coup masqué en début de partie (retour live sprint 39).
-  $("show-best").checked = false;
   $("pgn").value = "";
   chess.reset();
   game = null;
@@ -983,6 +1018,7 @@ $("graph").addEventListener("click", (event) => {
 });
 $("flip").addEventListener("click", () => { ground.toggleOrientation(); drawEvalbar(); });
 $("flip-bar").addEventListener("click", () => $("flip").click());
+$("new-bar").addEventListener("click", () => $("new").click());
 $("elo-white").addEventListener("change", newPosition);
 $("elo-black").addEventListener("change", newPosition);
 $("show-explosive").addEventListener("change", drawShapes);
@@ -990,6 +1026,7 @@ $("show-forced").addEventListener("change", drawShapes);
 // « Meilleur coup » décide aussi si la ligne « joué » nomme le meilleur coup.
 $("show-best").addEventListener("change", () => { drawShapes(); refreshGame(); });
 $("show-trap").addEventListener("change", drawShapes);
+$("show-errors").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
 // « Je joue » écrit le nom de Nico dans le champ du camp choisi et l'ôte de l'autre ; « aucun »
 // ne touche pas aux noms.
