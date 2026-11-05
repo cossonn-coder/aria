@@ -31,7 +31,8 @@ from chess_coach.explosive import _GAIN_MIN
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import ALT_ARROW, PLAYED_ARROW, TRAP_ARROW, error_arrow, render_curve, render_position
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
+                                render_curve, render_position)
 from chess_coach.structure import structure_line
 from chess_coach.summary import nico_wins, story_line, summarize, summary_text
 from config import config
@@ -57,6 +58,9 @@ _KIND_FR = {
     "d": "occasion explosive",
     "e": "tournant (erreur adverse punie)",
 }
+
+# Perte à partir de laquelle un point de la courbe prend la couleur d'une erreur.
+_ERROR_POINT_MIN = 10
 
 # Sorte d piégeante : remplace « occasion explosive » dans les faits donnés au LLM.
 _TRAP_KIND_FR = "piège affiché"
@@ -541,6 +545,25 @@ def _win_drop(before: float, after: float, drop: float) -> str:
     return f"{before:.0f} % → {after:.0f} % (−{drop:.0f} pts)"
 
 
+def _point_colors(analysis) -> list:
+    """Couleur de chaque point de la courbe : le point d'une position porte le coup joué depuis
+    elle. Par priorité : erreur, piège, explosif, meilleur coup, sinon neutre ; la dernière
+    position n'a pas de coup. La stratégie n'est calculée qu'à l'échiquier."""
+    explosive = {c.ply.ply: c for c in analysis.explosive}
+    colors = []
+    for p in analysis.plies:
+        found = explosive.get(p.ply)
+        if p.loss >= _ERROR_POINT_MIN:
+            colors.append(error_arrow(p.loss)[:3])
+        elif found and _trap_replies(found):
+            colors.append(TRAP_ARROW[:3])
+        elif found:
+            colors.append(ALT_ARROW[:3])
+        else:
+            colors.append(CURVE_BEST if p.quality == "best" else CURVE_NEUTRAL)
+    return colors + [CURVE_NEUTRAL]
+
+
 def _caption(index: int, critical, plies: list) -> str:
     p = critical.ply
     if critical.kind == "e":
@@ -801,7 +824,7 @@ class ChessExecutionRouter(BaseRouter):
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
         render_curve(nico_wins(analysis.plies, analysis.nico_color),
-                     [p.move_number for p in analysis.plies], str(curve_path))
+                     [p.move_number for p in analysis.plies], _point_colors(analysis), str(curve_path))
         images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
         moves_line = _moves_line(summary)
         if moves_line:

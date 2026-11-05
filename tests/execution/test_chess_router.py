@@ -14,6 +14,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
+from chess_coach.render import ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, TRAP_ARROW, error_arrow
 from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
 
 
@@ -748,3 +749,23 @@ def test_error_caption_compares_both_lines():
         "36...Rxf1+ reprend, échec ; 37.Kg2 attaque Rf1.\n"
         "  → matériel : Nico R de plus, 3 pions contre 4, 11 % de gain"
     )
+
+
+def test_point_colors_follow_each_move():
+    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange, meilleur coup, neutre."""
+    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(5)]
+    for p, (loss, quality) in zip(plies, [(30.0, "mistake"), (0.0, "best"), (0.0, "best"),
+                                          (0.0, "best"), (3.0, "good")]):
+        p.loss, p.quality, p.win_before = loss, quality, 50.0
+    def explosive(replies):
+        return ExplosiveMove(san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3,
+                             forcing=[], trap_reply_san="Bxd8", score=1.0, replies=replies)
+
+    trap = explosive([{"san": "Bxd8", "p": 0.5, "line_san": ["Bxd8"], "win": 99.0}])
+    analysis = GameAnalysis(headers={}, nico_color="black", color_source="header", plies=plies, explosive=[
+        CriticalPosition(kind="d", ply=plies[1], score=1.0, explosive=trap),
+        CriticalPosition(kind="d", ply=plies[2], score=1.0, explosive=explosive([])),
+    ])
+    assert chess_router_mod._point_colors(analysis) == [
+        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_NEUTRAL, CURVE_NEUTRAL,
+    ]

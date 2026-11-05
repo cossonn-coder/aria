@@ -39,8 +39,12 @@ CURVE_MARGIN = 50
 CURVE_BG = (0, 0, 0)
 CURVE_GRID = (70, 70, 70)
 CURVE_TEXT = (190, 190, 190)
-CURVE_LINE = (90, 210, 100)
-CURVE_DOT = 2
+CURVE_LINE = (110, 110, 110)
+CURVE_DOT = 3
+# Anneau clair : un point noir (erreur de 50 pts et plus) reste visible sur le fond noir.
+CURVE_DOT_RING = (200, 200, 200)
+CURVE_BEST = (90, 210, 100)
+CURVE_NEUTRAL = (150, 150, 150)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
@@ -173,11 +177,12 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
     return out_path
 
 
-def render_curve(wins: list, move_numbers: list, out_path: str) -> str:
+def render_curve(wins: list, move_numbers: list, colors: list, out_path: str) -> str:
     """Dessine la courbe du % de gain en PNG (640 × 320 px) et retourne `out_path`.
 
     wins : N+1 valeurs de 0 à 100, une par position ; move_numbers : numéro de coup
-    des N coups joués, pour graduer l'axe tous les 10 coups.
+    des N coups joués, pour graduer l'axe tous les 10 coups ; colors : N+1 couleurs RGB,
+    une par point.
     """
     width, height = CURVE_SIZE
     image = Image.new("RGB", CURVE_SIZE, CURVE_BG)
@@ -204,8 +209,9 @@ def render_curve(wins: list, move_numbers: list, out_path: str) -> str:
     points = [(x_at(i), y_at(win)) for i, win in enumerate(wins)]
     # Segments droits et un point par position : on lit chaque coup, sans effet lissé.
     draw.line(points, fill=CURVE_LINE, width=2)
-    for x, y in points:
-        draw.ellipse([x - CURVE_DOT, y - CURVE_DOT, x + CURVE_DOT, y + CURVE_DOT], fill=CURVE_LINE)
+    for (x, y), color in zip(points, colors):
+        draw.ellipse([x - CURVE_DOT, y - CURVE_DOT, x + CURVE_DOT, y + CURVE_DOT],
+                     fill=color, outline=CURVE_DOT_RING)
 
     image.save(out_path, "PNG")
     return out_path

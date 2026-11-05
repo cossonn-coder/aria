@@ -131,6 +131,8 @@ class GameAnalysis:
     color_source: str
     plies: list = field(default_factory=list)
     critical: list = field(default_factory=list)
+    # Toutes les occasions explosives trouvées, retenues ou non (couleur des points de la courbe).
+    explosive: list = field(default_factory=list)
 
 
 def parse_pgn(text: str) -> chess.pgn.Game | None:
@@ -674,4 +676,4 @@ def analyze(text: str, message: str, engine_path: str,
         time.monotonic() - started,
     )
     return GameAnalysis(headers=headers, nico_color=nico_color, color_source=source,
-                        plies=plies, critical=critical)
+                        plies=plies, critical=critical, explosive=explosive)

@@ -473,6 +473,7 @@ function save(kind, move) {
   if (move && JSON.stringify(saved[kind].get(positionFen)) !== JSON.stringify(found)) {
     saved[kind].set(positionFen, found);
     renderSaved(kind);
+    drawGraph();
   }
 }
 
@@ -810,6 +811,19 @@ function graphLength() {
 // Une série de la courbe : positions fens tracées à partir de l'indice offset, en color.
 // Écart ombré quand le coup perd ≥ 10 pts au camp qui joue (entre « si meilleur coup » =
 // valeur avant le coup, pointillée, et le segment joué), repères « #N » de mat sur pastille.
+// Couleur du point d'une position, qui porte le coup joué depuis elle ; mêmes couleurs que
+// les flèches. Priorité : erreur, piège, explosif, stratégie, meilleur coup, sinon neutre.
+// Piège, explosif et stratégie ne sont connus que sur les positions déjà analysées (saved).
+function pointColor(fens, values, i) {
+  const [before, after] = [values[i], values[i + 1]];
+  const lost = before && after ? loss(fens[i], before, after) : null;
+  if (lost !== null && lost >= 10) return errorColor(lost);
+  if (saved.trap.has(fens[i])) return "#00e5ff";
+  if (saved.explosive.has(fens[i])) return "#ff7f00";
+  if (saved.strategy.has(fens[i])) return "#ffffff";
+  return lost !== null && lost < 1 ? "#4d8dff" : "#999999";
+}
+
 function graphSeries(fens, offset, color, x, y) {
   const values = fens.map((fen) => evals.get(fen));
   let body = "";
@@ -822,6 +836,11 @@ function graphSeries(fens, offset, color, x, y) {
   }
   const points = values.map((value, i) => value ? `${x(offset + i)},${y(value.win)}` : null).filter(Boolean).join(" ");
   body += `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/>`;
+  values.forEach((value, i) => {
+    if (!value) return;
+    // Anneau clair : un point noir reste visible sur le fond sombre.
+    body += `<circle cx="${x(offset + i)}" cy="${y(value.win)}" r="3.5" fill="${pointColor(fens, values, i)}" stroke="#ccc" stroke-width="0.8"/>`;
+  });
   values.forEach((value, i) => {
     if (!value || !value.mate) return;
     const label = `#${Math.abs(value.mate)}`;

@@ -137,6 +137,7 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="show-errors" type="checkbox" checked' in page
         assert 'id="show-best" type="checkbox" checked' in page
         assert page.index('id="menu"') < page.index('id="new-bar"') < page.index('id="flip-bar"')
+        assert "function pointColor(" in page and "<circle cx=" in page
         # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
         assert 'id="pgn"' in page and 'id="graph"' in page
         # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue » ; tronçon 07 : plus de pseudo injecté.

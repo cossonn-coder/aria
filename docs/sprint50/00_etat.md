@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Run live 2 fait (2026-11-05, 1 partie, sans chute proche) ; retours appliqués, run live 3 par Nico à suivre.
+Runs live 1 à 3 faits (2026-11-05) ; retours appliqués, run live 4 par Nico à suivre, sur une partie avec une erreur.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -30,10 +30,15 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 - **Explication des erreurs (arbitré par Nico) :** sur les sortes a et b, légende en deux suites, « Meilleur coup » et « Ton coup », chacune suivie de sa fin (matériel, % de gain) ; « Pourquoi » écrit par le LLM à la place de « Plan ». Coup forcé = échec, prise ou menace (la menace est l'« attaque » déjà calculée, `new_targets`) ; le coup et sa réponse sont toujours montrés ; moteur relancé si sa ligne est tronquée. Borne de 10 demi-coups. Fait, « Pourquoi » à juger au run live 3. Le % de fin est celui de la ligne moteur, pas une nouvelle évaluation de la position de fin.
 - Mesure avant correction : variante de 1 coup sur 21/162 positions, de 2 coups au plus sur 53/162 [2 parties, moteur à 0,15 s par position].
 
+## Retours du run live 3 (Nico, 2026-11-05)
+Partie glend0, nulle, sans erreur : les deux suites et « Pourquoi » restent à observer ; flèche cyan observée (coup 17).
+- Points de la courbe colorés, Telegram et échiquier : le point d'une position porte le coup joué depuis elle ; priorité erreur, piège, explosif, stratégie, meilleur coup, neutre. Fait, interprétation à confirmer par Nico. Sur Telegram : tous les explosifs trouvés, côté Nico, sans stratégie (non calculée) ; meilleur coup en vert comme sa flèche. À l'échiquier : piège, explosif et stratégie n'apparaissent que sur les positions déjà analysées ; meilleur coup = perte sous 1 pt.
+- À arbitrer à la clôture : l'analyse a duré 211,6 s dont 197,7 s de recherche d'explosifs [n=1, 31 positions], alors que le message annonce « jusqu'à 2 minutes ».
+
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
 - 02 bilan (`02_bilan_web.md`) ✅ ; recherche web retirée après le run live 1.
-- 03 run live par Nico (`03_run_live.md`) ⏳ runs 1 et 2 faits, run 3 à faire.
+- 03 run live par Nico (`03_run_live.md`) ⏳ runs 1 à 3 faits, run 4 à faire.
 
 ## Dettes
 Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les explosifs retenus, sans calcul du piège ni de la stratégie sur toute la partie.
@@ -41,4 +46,4 @@ Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les e
 À arbitrer à la clôture : le LLM peut encore mal raconter un coup joué (« Qxf1+ échange ta dame contre un cavalier », alors qu'il gagne le cavalier) [n=1] ; il ne reçoit pas ce que le coup joué capture. Variantes d'un seul coup (34.Qa4, 33...Qa6) [n=2], cause non cherchée.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`. Après le run live 1 : recherche web retirée (`web_block`, `_sources_line`, `structure_terms`, `memory_message` supprimés, `llm_router.py` revenu à son état d'avant le sprint), `_material_line` en toutes lettres, chutes proches dans `story_line`. Écarts conservés du tronçon 02 : `story_line` prend `outcome`, issue inconnue traitée comme une nulle, `nico_wins` dans `summary.py`. Tronçon 01 : ligne « Piège » entre « Variante » et « Variante du meilleur coup », position libellée « piège affiché » pour le LLM, `_human_moves` passe par `trapping_replies`. Prochaine étape : run live 3 par Nico (voir « Retours du run live 2 »), sur la branche `feat/sprint50-bilan`.
+Lire `CLAUDE.md`, ce fichier, puis `03_run_live.md`. Après le run live 1 : recherche web retirée (`web_block`, `_sources_line`, `structure_terms`, `memory_message` supprimés, `llm_router.py` revenu à son état d'avant le sprint), `_material_line` en toutes lettres, chutes proches dans `story_line`. Écarts conservés du tronçon 02 : `story_line` prend `outcome`, issue inconnue traitée comme une nulle, `nico_wins` dans `summary.py`. Tronçon 01 : ligne « Piège » entre « Variante » et « Variante du meilleur coup », position libellée « piège affiché » pour le LLM, `_human_moves` passe par `trapping_replies`. Prochaine étape : run live 4 par Nico (voir « Retours du run live 3 »), sur la branche `feat/sprint50-bilan`.

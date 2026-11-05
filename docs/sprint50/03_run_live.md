@@ -15,7 +15,7 @@ Une ou deux **vraies parties jamais envoyées**, idéalement une partie avec une
 6. Une variante à mat va jusqu'au mat ; si la partie n'en contient pas, le noter comme non observé.
 7. À l'échiquier, la stratégie est blanche.
 8. Sur une erreur, la légende montre « Meilleur coup » et « Ton coup » avec leur fin, puis un « Pourquoi » juste au regard de ces deux suites, sans « Plan ».
-9. La courbe montre des points reliés.
+9. La courbe montre des points reliés, colorés selon le coup, sur Telegram et à l'échiquier.
 10. À l'échiquier : flèche d'erreur lisible (case « Erreurs »), « Meilleur coup » coché par défaut, bouton + sur téléphone entre le menu et le retournement.
 
 ## À vérifier dans les journaux

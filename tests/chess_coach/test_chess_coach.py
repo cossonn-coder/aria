@@ -481,15 +481,15 @@ def test_find_explosive_starts_at_first_move(monkeypatch):
 def test_render_curve(tmp_path):
     """La courbe suit le % de gain : haut au début, bas à la fin."""
     out = tmp_path / "curve.png"
-    render_curve([100, 100, 0], [10, 10], str(out))
+    render_curve([100, 100, 0], [10, 10], [(1, 2, 3), (4, 5, 6), (7, 8, 9)], str(out))
     image = Image.open(out).convert("RGB")
     assert image.size == CURVE_SIZE
     width, height = CURVE_SIZE
     top, bottom = CURVE_MARGIN // 2, height - CURVE_MARGIN
+    # Segment entre deux points, puis centre de chaque point à sa couleur (sprint 50).
     assert image.getpixel((CURVE_MARGIN + 10, top)) == CURVE_LINE
-    assert image.getpixel((width - CURVE_MARGIN // 2 - 1, bottom)) == CURVE_LINE
-    # Un point par position : plus épais que le segment qui le relie (sprint 50).
-    assert image.getpixel((CURVE_MARGIN, top + 2)) == CURVE_LINE
+    assert image.getpixel((CURVE_MARGIN, top)) == (1, 2, 3)
+    assert image.getpixel((width - CURVE_MARGIN // 2, bottom)) == (7, 8, 9)
 
 
 class _ScriptedEngine:
