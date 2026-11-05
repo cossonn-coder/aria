@@ -9,7 +9,7 @@ import pytest
 
 import chess_coach.summary as summary_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
-from chess_coach.summary import summarize, summary_text
+from chess_coach.summary import story_line, summarize, summary_text
 
 
 @pytest.fixture
@@ -119,3 +119,38 @@ def test_best_move_is_rarest_played_move(no_detection):
 
     assert s["best_move"] == "12.Nb3"
     assert s["best_move_p"] == 0.1
+
+
+def _story_plies(*losses):
+    """Coups de Nico (blancs) ; (coup, san, % avant, perte), un coup adverse neutre derrière chacun."""
+    plies = []
+    for number, san, before, loss in losses:
+        plies.append(_ply(len(plies), number, "white", san, "a2a3", "correct", loss, before, None))
+        plies.append(_ply(len(plies), number, "black", "a6", "a7a6", "best", 0.0, 100 - before + loss, None))
+    return plies
+
+
+def test_story_line_loss_by_erosion():
+    plies = _story_plies((17, "Bd3", 68.0, 4.0), (18, "Nc5", 64.0, 10.0), (33, "Kh1", 10.0, 4.0))
+    assert story_line(plies, "white", "loss") == (
+        "📉 Défaite sans coup décisif : de 68 % au coup 17 à 6 % au coup 33. Pire coup 18.Nc5 (−10 pts)."
+    )
+
+
+def test_story_line_loss_with_turning_point():
+    plies = _story_plies((10, "Nf3", 60.0, 0.0), (11, "Qd2", 60.0, 35.0), (20, "Kh1", 25.0, 15.0))
+    assert story_line(plies, "white", "loss") == (
+        "📉 Défaite : de 60 % au coup 10 à 10 % au coup 20. Tournant : coup 11.Qd2 (−35 pts)."
+    )
+
+
+def test_story_line_win_without_worst_move():
+    plies = _story_plies((5, "Nf3", 30.0, 2.0), (30, "Qh7", 97.0, 0.0))
+    assert story_line(plies, "white", "win") == "📈 Victoire sans coup décisif : de 28 % au coup 5 à 97 % au coup 30."
+
+
+def test_story_line_draw_gives_trough_and_peak():
+    plies = _story_plies((5, "Nf3", 40.0, 12.0), (30, "Kh1", 70.0, 20.0))
+    assert story_line(plies, "white", "draw") == (
+        "➖ Nulle : creux 28 % au coup 5, pic 70 % au coup 30. Tournant : coup 30.Kh1 (−20 pts)."
+    )

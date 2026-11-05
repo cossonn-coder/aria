@@ -112,3 +112,13 @@ def structure_line(fen: str, nico_color: str) -> str:
          sides_text(_undeveloped(board, nico), _undeveloped(board, not nico))),
     )
     return " ; ".join(f"{label} : {text}" for label, text in candidates if text)
+
+
+def structure_terms(fen: str) -> list:
+    """Termes anglais de la requête web sur la position : colonnes ouvertes, pions isolés ou passés."""
+    board = chess.Board(fen)
+    has_open_file = bool(set(range(8)) - _pawn_files(board, chess.WHITE) - _pawn_files(board, chess.BLACK))
+    candidates = (("open file", has_open_file),
+                  ("isolated pawn", _isolated(board, chess.WHITE) or _isolated(board, chess.BLACK)),
+                  ("passed pawn", _passed(board, chess.WHITE) or _passed(board, chess.BLACK)))
+    return [term for term, present in candidates if present]

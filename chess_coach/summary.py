@@ -26,6 +26,11 @@ _PHASES = ("opening", "middlegame", "endgame")
 _COLOR_FR = {"white": "blancs", "black": "noirs"}
 _OUTCOME_FR = {"win": "victoire", "loss": "défaite", "draw": "nulle", "unknown": "issue inconnue"}
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu", "endgame": "finale"}
+_STORY_HEAD = {"win": "📈 Victoire", "loss": "📉 Défaite", "draw": "➖ Nulle", "unknown": "➖ Issue inconnue"}
+
+# Pire coup de Nico : décisif à partir de 20 pts de perte, cité à partir de 10 (sprint 50).
+_DECISIVE_LOSS = 20
+_WORST_MOVE_MIN = 10
 
 
 def _header(headers: dict, key: str) -> str:
@@ -97,6 +102,39 @@ def _effective_loss(p) -> float:
     # perte légèrement positive d'une position à l'autre. On la ramène à 0
     # pour ne pas pénaliser la précision d'un coup jugé « meilleur ».
     return 0.0 if p.quality == "best" else p.loss
+
+
+def nico_wins(plies: list, nico_color: str) -> list:
+    """% de gain de Nico à chaque position : N+1 valeurs, du point de vue de Nico."""
+    wins = [p.win_before if p.color == nico_color else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    wins.append(last.win_after if last.color == nico_color else 100 - last.win_after)
+    return wins
+
+
+def story_line(plies: list, nico_color: str, outcome: str) -> str:
+    """Déroulé de la partie en une ligne, écrit par le code (sprint 50)."""
+    wins = nico_wins(plies, nico_color)
+
+    def at(index: int) -> str:
+        # La position N+1 (après le dernier coup) porte le numéro du dernier coup.
+        return f"{wins[index]:.0f} % au coup {plies[min(index, len(plies) - 1)].move_number}"
+
+    peak = at(wins.index(max(wins)))
+    trough = at(wins.index(min(wins)))
+    last = at(len(wins) - 1)
+    span = {"loss": f"de {peak} à {last}", "win": f"de {trough} à {last}"}.get(
+        outcome, f"creux {trough}, pic {peak}")
+
+    worst = max((p for p in plies if p.color == nico_color), key=lambda p: p.loss, default=None)
+    loss = worst.loss if worst else 0
+    head = _STORY_HEAD[outcome] + ("" if loss >= _DECISIVE_LOSS else " sans coup décisif")
+    line = f"{head} : {span}."
+    if loss >= _DECISIVE_LOSS:
+        line += f" Tournant : coup {_label(worst)} (−{loss:.0f} pts)."
+    elif loss >= _WORST_MOVE_MIN:
+        line += f" Pire coup {_label(worst)} (−{loss:.0f} pts)."
+    return line
 
 
 def summarize(analysis: GameAnalysis) -> dict:

@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Implémentation : tronçon 01 fait (non commité), tronçon 02 à suivre.
+Implémentation : tronçon 02 fait (non commité), run live par Nico à suivre.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -23,11 +23,11 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
-- 02 bilan et recherche web (`02_bilan_web.md`) ⏳
+- 02 bilan et recherche web (`02_bilan_web.md`) ✅ tests verts ; qualité du bilan et hausse de tokens à valider au run live.
 - 03 run live par Nico (`03_run_live.md`) ⏳
 
 ## Dettes
 Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les explosifs retenus, sans calcul du piège ni de la stratégie sur toute la partie.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (`02_bilan_web.md`). Tronçon 01 : la ligne « Piège » est placée entre « Variante » et « Variante du meilleur coup » ; la position piégeante est libellée « piège affiché » dans les faits donnés au LLM ; `_human_moves` utilise la nouvelle `trapping_replies`. Le `#ff5fb0` du badge de mat de la courbe (`index.html`) n'est pas la stratégie : inchangé. Prochaine étape : `/sprint-auto sprint 50`, sur la branche `feat/sprint50-bilan`.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (`03_run_live.md`). Tronçon 02, écarts au kickoff : `story_line(plies, nico_color, outcome)` prend aussi `outcome` (le résultat ne se déduit pas des `plies`) ; issue inconnue traitée comme une nulle (creux et pic) ; `nico_wins` déplacée dans `summary.py` ; `structure_terms` ajoutée à `structure.py`. Le LLM router écrivait le message reçu en mémoire : il lit désormais `metadata["memory_message"]` pour que les résultats web ne soient ni dans `aria_episodic` ni dans `aria_conversation` (la requête de rappel épisodique les voit encore). La consigne du Bilan garde l'appui sur `Niveau (données)` et `Historique (données)`. Tronçon 01 : la ligne « Piège » est placée entre « Variante » et « Variante du meilleur coup » ; la position piégeante est libellée « piège affiché » dans les faits donnés au LLM ; `_human_moves` utilise la nouvelle `trapping_replies`. Le `#ff5fb0` du badge de mat de la courbe (`index.html`) n'est pas la stratégie : inchangé. Prochaine étape : run live par Nico, sur la branche `feat/sprint50-bilan`.
