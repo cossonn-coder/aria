@@ -14,7 +14,8 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, render_curve, render_position
+from chess_coach.render import (ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, error_arrow,
+                                render_curve, render_position)
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -121,6 +122,20 @@ def test_clear_advantage_material():
     board = chess.Board(HANGING_FEN)
     n, criterion = clear_advantage(board, _line(HANGING_FEN, ["e3", "a6", "exd4"]), 50.0, False)
     assert n <= 4 and criterion == "material"
+
+
+def test_clear_advantage_announced_mate_goes_to_mate():
+    # Sprint 50 : le critère de développement répondait (2, …) avant 21.Qxd8#.
+    fen = "r1b2k1r/4bppp/p1p1p1q1/B1N2n2/4N3/7P/2P2PP1/R2Q1RK1 w - - 9 20"
+    line = _line(fen, ["Bd8", "Bxd8", "Qxd8"])
+    assert clear_advantage(chess.Board(fen), line, 60.0, True) == (3, "mate")
+
+
+def test_error_arrow_scale():
+    assert error_arrow(10) == (255, 190, 205, 235)
+    assert error_arrow(25) == (215, 20, 35, 235)
+    assert error_arrow(60) == (0, 0, 0, 235)
+    assert error_arrow(3) == error_arrow(10)
 
 
 def test_clear_advantage_quiet_line_none():

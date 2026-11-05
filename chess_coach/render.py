@@ -5,7 +5,8 @@
 # camps : remplis de blanc + contour noir pour les blancs, noirs pour les noirs.
 # Flèche verte : le meilleur coup ; flèche orange optionnelle : le coup
 # explosif d'une position de sorte d (sprint 27) ; flèche bleue optionnelle :
-# le coup joué (sprint 46). Variante du meilleur coup optionnelle : flèches
+# le coup joué (sprint 46), à la couleur de sa gravité si c'est une erreur, flèche
+# cyan pour un coup explosif piégeant (sprint 50). Variante du meilleur coup optionnelle : flèches
 # numérotées 1, 2, 3 (sprint 49). Courbe du % de gain d'une partie (après le sprint 49).
 
 import math
@@ -26,6 +27,10 @@ COORD = (230, 230, 230)
 ARROW = (21, 120, 27, 190)
 ALT_ARROW = (230, 120, 20, 190)
 PLAYED_ARROW = (30, 90, 220, 190)
+TRAP_ARROW = (0, 229, 255, 190)
+# Échelle fixe de gravité d'une erreur jouée : (perte en pts, couleur).
+ERROR_SCALE = ((10, (255, 190, 205)), (25, (215, 20, 35)), (50, (0, 0, 0)))
+ERROR_OPACITY = 235
 ARROW_HEAD = SQUARE * 0.45
 BADGE_RADIUS = 10
 
@@ -41,6 +46,18 @@ _GLYPHS = {
     chess.KING: "♚", chess.QUEEN: "♛", chess.ROOK: "♜",
     chess.BISHOP: "♝", chess.KNIGHT: "♞", chess.PAWN: "♟",
 }
+
+
+def error_arrow(loss: float) -> tuple:
+    """Couleur RGBA de la flèche d'une erreur : interpolation linéaire sur ERROR_SCALE,
+    bornée à ses extrémités (sous 10 pts, la couleur de 10 ; dès 50 pts, le noir)."""
+    (low, low_rgb), (mid, mid_rgb), (high, high_rgb) = ERROR_SCALE
+    if loss < mid:
+        start, end, a, b = low, mid, low_rgb, mid_rgb
+    else:
+        start, end, a, b = mid, high, mid_rgb, high_rgb
+    t = min(max((loss - start) / (end - start), 0.0), 1.0)
+    return (*(round(x + t * (y - x)) for x, y in zip(a, b)), ERROR_OPACITY)
 
 
 def _square_origin(square: int, flipped: bool) -> tuple[int, int]:
@@ -90,12 +107,14 @@ def _draw_badge(draw: ImageDraw.ImageDraw, font: ImageFont.FreeTypeFont, number:
 
 def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
                     alt_uci: str | None = None, played_uci: str | None = None,
-                    best_line_uci: list | None = None) -> str:
+                    best_line_uci: list | None = None, played_color: tuple = PLAYED_ARROW,
+                    alt_color: tuple = ALT_ARROW) -> str:
     """Dessine la position `fen` en PNG (480 px) et retourne `out_path`.
 
     orientation == "black" retourne l'échiquier ; best_uci est tracé en flèche
     verte, alt_uci (coup explosif, facultatif) en flèche orange, played_uci (coup
     joué, facultatif) en flèche bleue. Coup joué = meilleur coup : seule la bleue reste.
+    played_color et alt_color remplacent le bleu et l'orange (gravité d'une erreur, piège).
     best_line_uci (variante du meilleur coup, facultative, best_uci en tête) : ses
     coups suivants en flèches vertes, tous numérotés à partir de 1.
     """
@@ -128,9 +147,9 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
     for move in line[1:]:
         _draw_arrow(overlay, move, flipped)
     if alt_uci:
-        _draw_arrow(overlay, chess.Move.from_uci(alt_uci), flipped, ALT_ARROW)
+        _draw_arrow(overlay, chess.Move.from_uci(alt_uci), flipped, alt_color)
     if played_uci:
-        _draw_arrow(overlay, chess.Move.from_uci(played_uci), flipped, PLAYED_ARROW)
+        _draw_arrow(overlay, chess.Move.from_uci(played_uci), flipped, played_color)
     image = Image.alpha_composite(image, overlay)
     draw = ImageDraw.Draw(image)
 
@@ -146,7 +165,7 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
     # Pastilles au-dessus des pièces ; le n° 1 prend la couleur de sa flèche.
     badge_font = ImageFont.truetype(FONT_PATH, 13)
     for number, move in enumerate(line, 1):
-        color = PLAYED_ARROW if number == 1 and played_uci == best_uci else ARROW
+        color = played_color if number == 1 and played_uci == best_uci else ARROW
         _draw_badge(draw, badge_font, number, move, flipped, color)
 
     image.convert("RGB").save(out_path, "PNG")

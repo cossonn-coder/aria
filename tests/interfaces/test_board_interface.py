@@ -130,8 +130,9 @@ def test_index_serves_chessboard_page(monkeypatch):
         with urllib.request.urlopen(url) as response:
             page = response.read().decode()
         assert "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm" in page
-        # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (rose).
+        # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (blanc).
         assert "show-trap" in page and "show-strategy" in page
+        assert 'strategy: { key: "s", color: "#ffffff"' in page and "#ff5fb0\"></span>" not in page
         # Sprint 38, tronçon 02 : zone PGN et courbe d'évaluation.
         assert 'id="pgn"' in page and 'id="graph"' in page
         # Sprint 39, tronçon 03 : export, envoi à ARIA, « Je joue » ; tronçon 07 : plus de pseudo injecté.

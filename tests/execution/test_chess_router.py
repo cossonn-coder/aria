@@ -591,3 +591,90 @@ def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     content = llm_exec.execute.call_args.args[0]["content"]
     assert "colonnes c et d et les diagonales a1-h8 et a2-g8" in content
     assert "c'est la Scotch normale" in content
+
+
+# Position avant 20.Bd8 (La_Bagouze – Mama_dor_de_pene, 2026-11-05).
+_TRAP_FEN = "r1b2k1r/4bppp/p1p1p1q1/B1N2n2/4N3/7P/2P2PP1/R2Q1RK1 w - - 9 20"
+
+
+def _trap_critical(replies):
+    ply = _ply(39, 20, "Nd3", "Bb6", "a5b6")
+    ply.color = "white"
+    ply.fen_before = _TRAP_FEN
+    ply.win_before = 60.0
+    ply.pv_san = []
+    explosive = ExplosiveMove(
+        san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3, forcing=[],
+        trap_reply_san="Bxd8", score=10.0, trap_line_san=["Bxd8", "Qxd8#"], replies=replies,
+        evidence="mate", trap_end_fen=_TRAP_FEN, trap_end_win=100.0, expected=70.0, best_expected=60.0,
+    )
+    return CriticalPosition(kind="d", ply=ply, score=10.0, explosive=explosive)
+
+
+_BXD8_MATE = {"san": "Bxd8", "p": 0.36, "line_san": ["Bxd8", "Qxd8#"], "win": 100.0}
+_KG8_CALM = {"san": "Kg8", "p": 0.30, "line_san": ["Kg8", "Nd3", "e5"], "win": 55.0}
+
+
+def test_trap_line_with_mate():
+    line = _variant_line(_trap_critical([_BXD8_MATE, _KG8_CALM]))
+    assert "\nPiège : 20.Bd8!? Si 20...Bxd8 (36 %), 21.Qxd8#. Sinon, pas de mat." in line
+
+
+def test_trap_line_other_mate_drops_otherwise():
+    other = {**_KG8_CALM, "line_san": ["Kg8", "Qd8#"]}
+    assert "21.Qxd8#.\n" in _variant_line(_trap_critical([_BXD8_MATE, other])) + "\n"
+
+
+def test_trap_line_without_mate():
+    reply = {"san": "Kg8", "p": 0.40, "line_san": ["Kg8", "Nd3", "e5"], "win": 80.0}
+    line = _variant_line(_trap_critical([reply]))
+    assert "\nPiège : 20.Bd8!? Si 20...Kg8 (40 %), 21.Nd3 e5, 80 % pour toi." in line
+
+
+def test_trap_position_is_cyan_and_llm_writes_plan_only(monkeypatch, tmp_path):
+    critical = _trap_critical([_BXD8_MATE, _KG8_CALM])
+    analysis = GameAnalysis(headers={}, nico_color="white", color_source="header",
+                            plies=[critical.ply], critical=[critical])
+    render = MagicMock(side_effect=lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", render)
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert render.call_args.kwargs["alt_color"] == chess_router_mod.TRAP_ARROW
+    assert render.call_args.kwargs["played_color"] == chess_router_mod.PLAYED_ARROW
+    assert "Position 1 (piège affiché)" in content
+    assert "sans parler du piège ni de mat" in content
+    assert "explosif 20.Bd8" not in content
+    assert "pour chaque occasion explosive" not in content
+
+
+def test_error_played_arrow_takes_severity_color(monkeypatch, tmp_path):
+    ply = _ply(7, 4, "Nf6", "Nc6", "b8c6")
+    ply.loss = 25.0
+    analysis = GameAnalysis(headers={}, nico_color="black", color_source="header", plies=[ply],
+                            critical=[CriticalPosition(kind="a", ply=ply, score=25.0)])
+    render = MagicMock(side_effect=lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", render)
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    assert render.call_args.kwargs["played_color"] == (215, 20, 35, 235)

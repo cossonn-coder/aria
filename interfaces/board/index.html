@@ -110,7 +110,7 @@
       <button data-panel="moves">Coups</button><button data-panel="graph">Courbe</button>
       <button data-panel="saved-explosive"><span class="dot" style="background: #ff7f00"></span></button>
       <button data-panel="saved-trap"><span class="dot" style="background: #00e5ff"></span></button>
-      <button data-panel="saved-strategy"><span class="dot" style="background: #ff5fb0"></span></button>
+      <button data-panel="saved-strategy"><span class="dot" style="background: #ffffff"></span></button>
     </nav>
     <svg id="graph" width="560" height="200" viewBox="0 0 560 200"></svg>
     <div id="moves"></div>
@@ -148,7 +148,7 @@
   <div id="columns">
     <section class="column" id="saved-explosive"><h3><span class="dot" style="background: #ff7f00"></span>Coups explosifs</h3></section>
     <section class="column" id="saved-trap"><h3><span class="dot" style="background: #00e5ff"></span>Pièges</h3></section>
-    <section class="column" id="saved-strategy"><h3><span class="dot" style="background: #ff5fb0"></span>Stratégie</h3></section>
+    <section class="column" id="saved-strategy"><h3><span class="dot" style="background: #ffffff"></span>Stratégie</h3></section>
   </div>
 </main>
 <div id="bottombar">
@@ -217,7 +217,7 @@ const ground = Chessground($("board"), {
   // Vert et bleu éclaircis pour rester lisibles sur l'échiquier sombre.
   drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 },
                          cyan: { key: "c", color: "#00e5ff", opacity: 0.9, lineWidth: 10 },
-                         pink: { key: "p", color: "#ff5fb0", opacity: 0.9, lineWidth: 10 },
+                         strategy: { key: "s", color: "#ffffff", opacity: 0.9, lineWidth: 10 },
                          green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
                          blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 },
                          white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 } } },
@@ -267,13 +267,13 @@ function bestMove() {
 }
 
 // Flèches, une par coup, par priorité : seul coup (vert) > meilleur coup (bleu) > explosif
-// (orange) > piège (cyan) > stratégie (rose), un coup déjà dessiné étant sauté. Le bleu
+// (orange) > piège (cyan) > stratégie (blanc), un coup déjà dessiné étant sauté. Le bleu
 // remplace donc la flèche du même coup, sauf le seul coup affiché, qui reste vert.
 function drawShapes() {
   const shapes = [];
   const layers = [[state && state.forced, "show-forced", "green"], [bestMove(), "show-best", "blue"],
                   [state && state.explosive, "show-explosive", "orange"],
-                  [state && state.trap, "show-trap", "cyan"], [state && state.strategy, "show-strategy", "pink"]];
+                  [state && state.trap, "show-trap", "cyan"], [state && state.strategy, "show-strategy", "strategy"]];
   const drawn = new Set();
   for (const [move, box, brush] of layers) {
     if (!move || !$(box).checked || drawn.has(move.uci)) continue;
@@ -469,7 +469,7 @@ async function poll() {
       render();
       save("explosive", state.explosive);
       save("trap", state.trap);
-      // Le rose n'est jamais dessiné sur le seul coup (flèche verte).
+      // La stratégie n'est jamais dessinée sur le seul coup (flèche verte).
       const forcedUci = state.forced && state.forced.uci;
       save("strategy", state.strategy && state.strategy.uci !== forcedUci ? state.strategy : null);
     }

@@ -427,8 +427,10 @@ def clear_advantage(board: chess.Board, line: list, win: float, mate: bool) -> t
             continue
         last = n == len(line)
         # Mat annoncé : la ligne va jusqu'au mat (fin de PV) dans la borne.
-        if mate and (last or pos.is_checkmate()):
-            return n, "mate"
+        if mate:
+            if last or pos.is_checkmate():
+                return n, "mate"
+            continue
         criterion = _clear_criterion(board, pos, mover)
         if criterion is not None:
             return n, criterion

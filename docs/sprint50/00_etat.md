@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Conception figée (2026-11-05). Prochaine phase : `/sprint-auto sprint 50`.
+Implémentation : tronçon 01 fait (non commité), tronçon 02 à suivre.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -22,7 +22,7 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 - **Corrections de code :** variante jusqu'au mat annoncé dans `clear_advantage` ; « roqué » remplacé par « à l'aile ».
 
 ## Carte des tronçons
-- 01 flèches et corrections (`01_fleches_corrections.md`) ⏳
+- 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
 - 02 bilan et recherche web (`02_bilan_web.md`) ⏳
 - 03 run live par Nico (`03_run_live.md`) ⏳
 
@@ -30,4 +30,4 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les explosifs retenus, sans calcul du piège ni de la stratégie sur toute la partie.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape : `/sprint-auto sprint 50`, sur la branche `feat/sprint50-bilan`.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (`02_bilan_web.md`). Tronçon 01 : la ligne « Piège » est placée entre « Variante » et « Variante du meilleur coup » ; la position piégeante est libellée « piège affiché » dans les faits donnés au LLM ; `_human_moves` utilise la nouvelle `trapping_replies`. Le `#ff5fb0` du badge de mat de la courbe (`index.html`) n'est pas la stratégie : inchangé. Prochaine étape : `/sprint-auto sprint 50`, sur la branche `feat/sprint50-bilan`.

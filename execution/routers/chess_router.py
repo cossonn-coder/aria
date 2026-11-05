@@ -28,9 +28,10 @@ import chess
 
 from chess_coach.analysis import analyze, parse_pgn, split_pgn
 from chess_coach.explosive import _GAIN_MIN
+from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import render_curve, render_position
+from chess_coach.render import ALT_ARROW, PLAYED_ARROW, TRAP_ARROW, error_arrow, render_curve, render_position
 from chess_coach.structure import structure_line
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -56,6 +57,9 @@ _KIND_FR = {
     "d": "occasion explosive",
     "e": "tournant (erreur adverse punie)",
 }
+
+# Sorte d piégeante : remplace « occasion explosive » dans les faits donnés au LLM.
+_TRAP_KIND_FR = "piège affiché"
 
 # Critère d'avantage clair (chess_coach.analysis.clear_advantage) → libellé français.
 _EVIDENCE_FR = {
@@ -291,10 +295,35 @@ def _told_moves(label: str, p, moves: list) -> str:
     ) + "."
 
 
+def _trap_replies(critical) -> list:
+    """Réponses piégeantes d'une position de sorte d, sinon []. La règle est celle de
+    l'échiquier, le coup analysé donnant le % de gain du meilleur coup."""
+    if critical.kind != "d":
+        return []
+    return trapping_replies(critical.explosive.replies, critical.ply.win_before)
+
+
+def _trap_line(p, explosive, reply: dict) -> str:
+    """Ligne « Piège : » d'une légende, écrite par le code à partir de la réponse piégeante
+    la plus probable. « Sinon, pas de mat. » : seule cette réponse connue mène au mat."""
+    number, color = _reply_start(p)
+    head = (f"Piège : {_move_label(p.move_number, p.color, explosive.san)}!? "
+            f"Si {_move_label(number, color, reply['san'])} ({reply['p'] * 100:.0f} %)")
+    # Après la réponse adverse, le trait revient à Nico, au coup suivant.
+    if len(reply["line_san"]) > 1:
+        head += ", " + _format_line(reply["line_san"][1:], p.move_number + 1, p.color)
+    if reply["line_san"][-1].endswith("#"):
+        others = [r for r in explosive.replies if r is not reply]
+        no_other_mate = not any("#" in san for r in others for san in r["line_san"])
+        return f"{head}." + (" Sinon, pas de mat." if no_other_mate else "")
+    return f"{head}, {reply['win']:.0f} % pour toi."
+
+
 def _variant_line(critical) -> str:
     """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
-    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis une seconde
-    ligne pour celle du meilleur coup (les autres sortes la donnent déjà)."""
+    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis la ligne « Piège : »
+    s'il est piégeant, puis une ligne pour la variante du meilleur coup (les autres
+    sortes la donnent déjà)."""
     p = critical.ply
     if critical.kind in ("c", "e"):
         moves = critical.line_san
@@ -305,6 +334,9 @@ def _variant_line(critical) -> str:
     if not moves:
         return ""
     line = _told_moves("Variante", p, moves)
+    trapping = _trap_replies(critical)
+    if trapping:
+        line += "\n" + _trap_line(p, critical.explosive, trapping[0])
     if critical.kind == "d" and p.pv_san:
         line += "\n" + _told_moves("Variante du meilleur coup", p, p.pv_san)
     return line
@@ -697,12 +729,15 @@ class ChessExecutionRouter(BaseRouter):
         images = []
         for i, critical in enumerate(analysis.critical, 1):
             out_path = out_dir / f"{uuid4().hex[:8]}_{i}.png"
-            # Sorte d : 2e flèche (orange) pour le coup explosif.
+            # Sorte d : 2e flèche pour le coup explosif, cyan s'il est piégeant, sinon orange.
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
+            # Sortes a et b : le coup joué est une erreur, sa flèche en dit la gravité.
+            played_color = error_arrow(critical.ply.loss) if critical.kind in ("a", "b") else PLAYED_ARROW
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
                             played_uci=critical.ply.uci,
-                            best_line_uci=critical.ply.pv_uci[:3])
+                            best_line_uci=critical.ply.pv_uci[:3], played_color=played_color,
+                            alt_color=TRAP_ARROW if _trap_replies(critical) else ALT_ARROW)
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)
@@ -783,8 +818,9 @@ class ChessExecutionRouter(BaseRouter):
         for i, critical in enumerate(analysis.critical, 1):
             p = critical.ply
             tags = ", ".join(_TAG_FR.get(t, t) for t in p.tags) or "aucune"
+            trap = bool(_trap_replies(critical))
             lines += [
-                f"Position {i} ({_KIND_FR[critical.kind]}) — coup {p.move_number} :",
+                f"Position {i} ({_TRAP_KIND_FR if trap else _KIND_FR[critical.kind]}) — coup {p.move_number} :",
                 f"  joué {_move_label(p.move_number, p.color, p.san)}, perte {p.loss:.0f} pts "
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
@@ -808,7 +844,8 @@ class ChessExecutionRouter(BaseRouter):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
                 lines.append(f"  faits : {_move_facts(p.fen_before, critical.line_san, p.move_number, p.color)}")
-            if critical.kind == "d":
+            # Piège : sa ligne est écrite par le code, le LLM n'en reçoit pas les faits.
+            if critical.kind == "d" and not trap:
                 lines += _explosive_lines(p, critical.explosive, color)
         block = "\n".join(lines) + "]"
 
@@ -864,7 +901,12 @@ class ChessExecutionRouter(BaseRouter):
                 "[Consigne : pour chaque tournant, nomme l'erreur adverse et montre la "
                 "variante qui la punit (coups fournis).]"
             )
-        if any(c.kind == "d" for c in analysis.critical):
+        if any(_trap_replies(c) for c in analysis.critical):
+            parts.append(
+                f"[Consigne : pour chaque position « {_TRAP_KIND_FR} », écris seulement le plan, "
+                "sans parler du piège ni de mat : la ligne « Piège » est sous le diagramme.]"
+            )
+        if any(c.kind == "d" and not _trap_replies(c) for c in analysis.critical):
             parts.append(
                 "[Consigne : pour chaque occasion explosive : d'abord le plan, puis l'idée en une phrase ; la "
                 "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "
