@@ -30,7 +30,7 @@ from chess_coach.analysis import analyze, parse_pgn, split_pgn
 from chess_coach.explosive import _GAIN_MIN
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import render_position
+from chess_coach.render import render_curve, render_position
 from chess_coach.structure import structure_line
 from chess_coach.summary import summarize, summary_text
 from config import config
@@ -493,6 +493,14 @@ def _win_drop(before: float, after: float, drop: float) -> str:
     return f"{before:.0f} % → {after:.0f} % (−{drop:.0f} pts)"
 
 
+def _nico_wins(plies: list, nico_color: str) -> list:
+    """% de gain de Nico à chaque position : N+1 valeurs, du point de vue de Nico."""
+    wins = [p.win_before if p.color == nico_color else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    wins.append(last.win_after if last.color == nico_color else 100 - last.win_after)
+    return wins
+
+
 def _caption(index: int, critical, plies: list) -> str:
     p = critical.ply
     if critical.kind == "e":
@@ -743,6 +751,11 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
         text, images = _split_entries(_to_english(result["text"]), images)
+        # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
+        curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
+        render_curve(_nico_wins(analysis.plies, analysis.nico_color),
+                     [p.move_number for p in analysis.plies], str(curve_path))
+        images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
         moves_line = _moves_line(summary)
         if moves_line:
             text += "\n\n" + moves_line

@@ -6,7 +6,7 @@
 # Flèche verte : le meilleur coup ; flèche orange optionnelle : le coup
 # explosif d'une position de sorte d (sprint 27) ; flèche bleue optionnelle :
 # le coup joué (sprint 46). Variante du meilleur coup optionnelle : flèches
-# numérotées 1, 2, 3 (sprint 49).
+# numérotées 1, 2, 3 (sprint 49). Courbe du % de gain d'une partie (après le sprint 49).
 
 import math
 
@@ -28,6 +28,13 @@ ALT_ARROW = (230, 120, 20, 190)
 PLAYED_ARROW = (30, 90, 220, 190)
 ARROW_HEAD = SQUARE * 0.45
 BADGE_RADIUS = 10
+
+CURVE_SIZE = (640, 320)
+CURVE_MARGIN = 50
+CURVE_BG = (250, 250, 250)
+CURVE_GRID = (205, 205, 205)
+CURVE_TEXT = (90, 90, 90)
+CURVE_LINE = (21, 120, 27)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
 _GLYPHS = {
@@ -143,4 +150,39 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
         _draw_badge(draw, badge_font, number, move, flipped, color)
 
     image.convert("RGB").save(out_path, "PNG")
+    return out_path
+
+
+def render_curve(wins: list, move_numbers: list, out_path: str) -> str:
+    """Dessine la courbe du % de gain en PNG (640 × 320 px) et retourne `out_path`.
+
+    wins : N+1 valeurs de 0 à 100, une par position ; move_numbers : numéro de coup
+    des N coups joués, pour graduer l'axe tous les 10 coups.
+    """
+    width, height = CURVE_SIZE
+    image = Image.new("RGB", CURVE_SIZE, CURVE_BG)
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(FONT_PATH, 12)
+    left, right, top, bottom = CURVE_MARGIN, width - CURVE_MARGIN / 2, CURVE_MARGIN / 2, height - CURVE_MARGIN
+
+    def x_at(index: int) -> float:
+        return left + index * (right - left) / (len(wins) - 1)
+
+    def y_at(win: float) -> float:
+        return bottom - win * (bottom - top) / 100
+
+    for win in (0, 50, 100):
+        draw.line([(left, y_at(win)), (right, y_at(win))], fill=CURVE_GRID, width=2 if win == 50 else 1)
+        draw.text((left - 6, y_at(win)), f"{win} %", font=font, fill=CURVE_TEXT, anchor="rm")
+
+    # Graduation au premier demi-coup de chaque dizaine de coups.
+    for i, number in enumerate(move_numbers):
+        if number % 10 == 0 and (i == 0 or move_numbers[i - 1] != number):
+            draw.line([(x_at(i), top), (x_at(i), bottom)], fill=CURVE_GRID)
+            draw.text((x_at(i), bottom + 12), str(number), font=font, fill=CURVE_TEXT, anchor="mm")
+
+    points = [(x_at(i), y_at(win)) for i, win in enumerate(wins)]
+    draw.line(points, fill=CURVE_LINE, width=3, joint="curve")
+
+    image.save(out_path, "PNG")
     return out_path

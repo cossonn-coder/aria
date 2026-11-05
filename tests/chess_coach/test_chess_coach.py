@@ -14,7 +14,7 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import ARROW_HEAD, SIZE, _square_center, render_position
+from chess_coach.render import ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, render_curve, render_position
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -460,3 +460,15 @@ def test_find_explosive_starts_at_first_move(monkeypatch):
                         lambda path, work, items: searched.extend(p.move_number for p in items) or [None] * len(items))
     explosive.find_explosive(plies, "white", "stockfish", 1500, "maia", first_move=4)
     assert searched == [4, 5, 6]
+
+
+def test_render_curve(tmp_path):
+    """La courbe suit le % de gain : haut au début, bas à la fin."""
+    out = tmp_path / "curve.png"
+    render_curve([100, 100, 0], [10, 10], str(out))
+    image = Image.open(out).convert("RGB")
+    assert image.size == CURVE_SIZE
+    width, height = CURVE_SIZE
+    top, bottom = CURVE_MARGIN // 2, height - CURVE_MARGIN
+    assert image.getpixel((CURVE_MARGIN + 10, top)) == CURVE_LINE
+    assert image.getpixel((width - CURVE_MARGIN // 2 - 1, bottom)) == CURVE_LINE

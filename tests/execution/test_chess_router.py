@@ -72,7 +72,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
         "🎮 Progression — saison 1, partie 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
-    assert len(result["images"]) == 2
+    assert len(result["images"]) == 3
+    assert result["images"][-1]["caption"] == "Courbe de la partie : % de gain de Nico"
     assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
     assert delegated["op_type"] == "reasoning"
     assert "skip_intent" not in delegated["metadata"]
@@ -484,7 +485,8 @@ def test_multi_games_grouped_answer(monkeypatch, tmp_path):
         {"op_type": "chess_analysis", "content": pgn, "metadata": {"chat_id": 42}}
     )
 
-    assert [i["caption"][:21] for i in result["images"]] == ["Partie 1 — Position 1", "Partie 2 — Position 1"]
+    assert [i["caption"][:21] for i in result["images"]] == [
+        "Partie 1 — Position 1", "Partie 1 — Courbe de ", "Partie 2 — Position 1", "Partie 2 — Courbe de "]
     assert result["text"].startswith("Partie 1 — A – staroflexeur (0-1)\nexplication")
     assert "\n\nPartie 2 — B – staroflexeur (0-1)\nexplication" in result["text"]
     assert write_game.call_count == 2
@@ -537,7 +539,7 @@ def test_new_game_keeps_pipeline(monkeypatch, tmp_path):
 
     analyze.assert_called_once()
     write_game.assert_called_once()
-    assert len(result["images"]) == 1
+    assert len(result["images"]) == 2
 
 
 def test_multi_games_known_and_repeated(monkeypatch, tmp_path):
@@ -551,7 +553,7 @@ def test_multi_games_known_and_repeated(monkeypatch, tmp_path):
     assert write_game.call_count == 1
     assert result["text"].startswith("Partie 1 — déjà envoyée\n\nPartie 2 — ")
     assert result["text"].endswith("\n\nPartie 3 — déjà envoyée")
-    assert [i["caption"][:21] for i in result["images"]] == ["Partie 2 — Position 1"]
+    assert [i["caption"][:21] for i in result["images"]] == ["Partie 2 — Position 1", "Partie 2 — Courbe de "]
 
 
 def test_multi_games_all_known_text_only(monkeypatch, tmp_path):
