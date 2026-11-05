@@ -18,7 +18,7 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 - **Recherche web :** essayée au run live 1, retirée (Nico, 2026-11-05) : sources génériques ou boutiques, pas d'apport visible au bilan.
 - **Pièges :** flèche cyan selon la règle de l'échiquier (`_TRAP_GAIN`, `_TRAP_P_MIN`), sur des données déjà calculées ; autres explosifs en orange ; ligne « Piège » écrite par le code dans la légende, le LLM ne parle plus du piège.
 - **Erreurs jouées :** sortes a et b, flèche de la couleur de la gravité, échelle fixe et dégradé continu : 10 pts rose pâle (255, 190, 205), 25 pts rouge (215, 20, 35), 50 pts et plus noir (0, 0, 0), opacité 235. Autres coups joués en bleu ; erreurs adverses sans flèche.
-- **Échiquier :** la stratégie passe du rose au blanc, pour ne pas confondre avec la couleur des erreurs.
+- **Échiquier :** la stratégie passe du rose au jaune (d'abord blanc, illisible dans la liste des coups), pour ne pas confondre avec la couleur des erreurs.
 - **Matériel (run live 1) :** la ligne donnée au LLM nomme les pièces et les pions (`Nico R contre N, 3 pions contre 4`) : le solde en points (+2) était lu comme « deux pions ».
 - **Chutes proches (run live 1) :** le déroulé cite aussi tout coup d'au moins 20 pts et d'au moins 3/4 de la perte maximale (seuil 3/4 posé à l'implémentation, à juger au run live 2).
 - **Corrections de code :** variante jusqu'au mat annoncé dans `clear_advantage` ; « roqué » remplacé par « à l'aile ».
@@ -33,6 +33,7 @@ Partie du 2026-11-05 (La_Bagouze – Mama_dor_de_pene, 0-1) : « deux mats en un
 ## Retours du run live 3 (Nico, 2026-11-05)
 Partie glend0, nulle, sans erreur : les deux suites et « Pourquoi » restent à observer ; flèche cyan observée (coup 17).
 - Points de la courbe colorés, Telegram et échiquier : le point d'une position porte le coup joué depuis elle ; priorité erreur, piège, explosif, stratégie, meilleur coup, neutre. Fait, interprétation à confirmer par Nico. Sur Telegram : tous les explosifs trouvés, côté Nico, sans stratégie (non calculée) ; meilleur coup en vert comme sa flèche. À l'échiquier : piège, explosif et stratégie n'apparaissent que sur les positions déjà analysées ; meilleur coup = perte sous 1 pt.
+- Liste des coups de l'échiquier à la couleur de leur point ; erreurs en pastille, lisibles sur fond sombre. Fait.
 - À arbitrer à la clôture : l'analyse a duré 211,6 s dont 197,7 s de recherche d'explosifs [n=1, 31 positions], alors que le message annonce « jusqu'à 2 minutes ».
 
 ## Carte des tronçons
