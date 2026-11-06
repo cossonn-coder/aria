@@ -27,7 +27,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
-from chess_coach.explosive import _GAIN_MIN
+from chess_coach.explosive import _GAIN_MIN, is_brilliant
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
@@ -114,6 +114,23 @@ _QUALITY_FR = [
     ("best", "meilleurs"), ("correct", "corrects"), ("inaccuracy", "imprécisions"),
     ("mistake", "erreurs"), ("blunder", "gaffes"),
 ]
+
+# Pastille d'un coup dans les légendes (sprint 50) : Telegram n'affiche que du texte brut.
+_MARK_BEST, _MARK_EXPLOSIVE, _MARK_TRAP = "🟢", "🟠", "🩵"
+_QUALITY_MARK = {"best": _MARK_BEST, "correct": "🔵", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
+_MARKS_KEY = ("🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · "
+              "🟠 explosif / brillant · 🩵 piège")
+# Erreurs par gravité dans le bilan : (qualité, singulier, pluriel).
+_ERRORS_FR = (("inaccuracy", "imprécision", "imprécisions"), ("mistake", "erreur", "erreurs"),
+              ("blunder", "gaffe", "gaffes"))
+
+
+def _played_mark(p) -> str:
+    """Pastille du coup joué : orange s'il est brillant, sinon celle de sa qualité."""
+    if is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
+        return _MARK_EXPLOSIVE
+    return _QUALITY_MARK[p.quality]
+
 
 def _move_label(move_number: int, color: str, san: str) -> str:
     """« 17.Cg4+ » pour les blancs, « 17...Cg4+ » pour les noirs."""
@@ -291,10 +308,11 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
     )
 
 
-def _told_moves(label: str, p, moves: list) -> str:
-    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits."""
+def _told_moves(label: str, p, moves: list, mark: str = "") -> str:
+    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits ; mark,
+    pastille éventuelle du premier coup."""
     items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
-    return f"{label} : " + " ; ".join(
+    return f"{label} : {mark + ' ' if mark else ''}" + " ; ".join(
         f"{move} {', '.join(facts)}" if facts else move for move, facts in items
     ) + "."
 
@@ -337,9 +355,9 @@ def _compared_lines(critical) -> str:
     """Suites du meilleur coup et du coup joué, avec leur fin : le code dit où chacune mène."""
     p = critical.ply
     return "\n".join((
-        _told_moves("Meilleur coup", p, critical.best_line_san),
+        _told_moves("Meilleur coup", p, critical.best_line_san, _MARK_BEST),
         _line_end(p, critical.best_line_san, p.win_before),
-        _told_moves("Ton coup", p, critical.played_line_san),
+        _told_moves("Ton coup", p, critical.played_line_san, _played_mark(p)),
         _line_end(p, critical.played_line_san, p.win_after),
     ))
 
@@ -394,18 +412,40 @@ def _level_line(summary: dict) -> str:
     return "Niveau (données) : " + " ; ".join(parts)
 
 
+def _errors_by_gravity(summary: dict, side: str) -> str:
+    """« 2 imprécisions, 1 gaffe » (catégories à zéro omises), « aucune » sinon."""
+    parts = [f"{summary[f'{side}_{q}']} {one if summary[f'{side}_{q}'] == 1 else many}"
+             for q, one, many in _ERRORS_FR if summary[f"{side}_{q}"]]
+    return ", ".join(parts) or "aucune"
+
+
 def _moves_line(summary: dict) -> str:
-    """Ligne déterministe sous le texte LLM : précision, meilleur et pire coup (tronçon 08)."""
-    parts = []
+    """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
+    coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
+    lines = []
     if summary["accuracy"] is not None:
-        parts.append(f"Précision {summary['accuracy']:.0f} %")
+        line = f"🎯 Précision : toi {summary['accuracy']:.0f} %"
+        if summary["accuracy_opponent"] is not None:
+            line += f" · adversaire {summary['accuracy_opponent']:.0f} %"
+        lines.append(line)
+    lines.append(f"Meilleurs coups : toi {summary['nico_best']}/{summary['nico_moves']}"
+                 f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
+    lines.append(f"Erreurs : toi {_errors_by_gravity(summary, 'nico')}"
+                 f" · adversaire {_errors_by_gravity(summary, 'opponent')}")
+    if summary["brilliant_moves"]:
+        lines.append(f"💥 Coups brillants : {summary['brilliant_moves']}")
+    parts = []
     if summary["best_move"]:
         parts.append(f"meilleur coup {summary['best_move']} "
                      f"(trouvé par {summary['best_move_p'] * 100:.0f} % des joueurs de ton niveau)")
     if summary["worst_move"]:
         parts.append(f"pire coup {summary['worst_move']} "
                      f"({summary['worst_win_before']:.0f} % → {summary['worst_win_after']:.0f} %)")
-    return "🎯 " + " · ".join(parts) if parts else ""
+    if parts:
+        line = " · ".join(parts)
+        lines.append(line[0].upper() + line[1:])
+    lines.append(_MARKS_KEY)
+    return "\n".join(lines)
 
 
 def _signed(x: float) -> str:
@@ -554,7 +594,7 @@ def _win_drop(before: float, after: float, drop: float) -> str:
 
 def _point_colors(analysis) -> list:
     """Couleur de chaque point de la courbe : le point d'une position porte le coup joué depuis
-    elle. Par priorité : erreur, piège, explosif, meilleur coup, sinon neutre ; la dernière
+    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup, sinon neutre ; la dernière
     position n'a pas de coup. La stratégie n'est calculée qu'à l'échiquier."""
     explosive = {c.ply.ply: c for c in analysis.explosive}
     colors = []
@@ -564,7 +604,7 @@ def _point_colors(analysis) -> list:
             colors.append(error_arrow(p.loss)[:3])
         elif found and _trap_replies(found):
             colors.append(TRAP_ARROW[:3])
-        elif found:
+        elif found or is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
             colors.append(ALT_ARROW[:3])
         else:
             colors.append(CURVE_BEST if p.quality == "best" else CURVE_NEUTRAL)
@@ -576,21 +616,22 @@ def _caption(index: int, critical, plies: list) -> str:
     if critical.kind == "e":
         prev = plies[p.ply - 1]
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-                f"tournant après {_move_label(prev.move_number, prev.color, prev.san)}?, "
-                f"joué {_move_label(p.move_number, p.color, p.san)} "
-                f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
+                f"tournant après {_played_mark(prev)} {_move_label(prev.move_number, prev.color, prev.san)}?, "
+                f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)} "
+                f"(meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)})")
     if critical.kind == "c":
         return (f"Position {index} — coup {p.move_number} : "
-                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
+                f"{_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
                 f"2e meilleur coup : {_win_drop(p.win_before, p.win_before - p.second_gap, p.second_gap)}")
     if critical.kind == "d":
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-                f"joué {_move_label(p.move_number, p.color, p.san)}, "
-                f"explosif {_move_label(p.move_number, p.color, critical.explosive.san)}!? "
-                f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
+                f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
+                f"explosif {_MARK_TRAP if _trap_replies(critical) else _MARK_EXPLOSIVE} "
+                f"{_move_label(p.move_number, p.color, critical.explosive.san)}!? "
+                f"(meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)})")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-            f"joué {_move_label(p.move_number, p.color, p.san)}, "
-            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
+            f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
+            f"meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)}, "
             f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
 
 

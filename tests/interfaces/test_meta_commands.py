@@ -78,6 +78,17 @@ def test_parties_text_all_games_of_the_day_with_stats():
     assert meta_commands.parties_text(games, today="2026-11-05") == "Aucune partie aujourd'hui."
 
 
+def test_parties_opening_text_report_of_the_day_only():
+    game = {"nico_color": "black", "opening": "Scandinavian Defense", "opponent": "adv"}
+    games = [{**game, "date": "2026.11.03", "outcome": "loss"},
+             {**game, "date": "2026.11.04", "outcome": "win"},
+             {**game, "date": "2026.11.04", "outcome": "loss", "opening": "Italian Game"}]
+    assert meta_commands.parties_opening_text(games, "scandinavian", today="2026-11-04") == (
+        "Scandinavian Defense (noirs) : 1 V — 100 % [1 partie]")
+    assert meta_commands.parties_opening_text(games, "scandinavian", today="2026-11-05") == (
+        "Aucune partie aujourd'hui.")
+
+
 def test_openings_text_format_order_and_unknown_line():
     goring = {"opening": "x", "opening_group": "Göring Gambit", "nico_color": "white"}
     games = [{**goring, "outcome": o} for o in ["win"] * 5 + ["loss"] * 3]

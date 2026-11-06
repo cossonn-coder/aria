@@ -56,7 +56,7 @@ COMMANDS.update({
     "errors": "Avertissements et erreurs récents",
     "llm": "Derniers appels LLM",
     "intents": "Intents actifs",
-    "parties": "Parties d'échecs du jour et leur bilan",
+    "parties": "Parties d'échecs du jour et leur bilan (/parties ouverture)",
     "ouvertures": "Statistiques par ouverture (/ouvertures nom)",
 })
 
@@ -165,6 +165,13 @@ def parties_text(games: list[dict], today: str | None = None) -> str:
             game.get("opening") or "ouverture inconnue",
         ]))
     return "\n".join(lines)
+
+
+def parties_opening_text(games: list[dict], query: str, today: str | None = None) -> str:
+    """/parties <ouverture> : rapport de /ouvertures <nom>, limité aux parties du jour (sprint 50)."""
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    games = [game for game in games if _game_day(game) == today]
+    return opening_report_text(games, query) if games else NO_PARTIES
 
 
 # ── /ouvertures ──────────────────────────────────────────────────────────────

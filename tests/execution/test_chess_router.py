@@ -70,13 +70,16 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     # Ligne déterministe (tronçon 08) entre le texte LLM et le bloc Progression.
     assert result["text"].startswith(
         "explication\n➖ Issue inconnue : creux 30 % au coup 19, pic 50 % au coup 17. "
-        "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision 41 % · pire coup 17...Ng4+ (50 % → 30 %)\n\n"
+        "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 %\n"
+        "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
+        "Pire coup 17...Ng4+ (50 % → 30 %)\n"
+        "🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · 🟠 explosif / brillant · 🩵 piège\n\n"
         "🎮 Progression — saison 1, partie 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 3
     assert result["images"][-1]["caption"] == "Courbe de la partie : % de gain de Nico"
-    assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
+    assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 🔴 17...Ng4+")
     assert delegated["op_type"] == "reasoning"
     assert "skip_intent" not in delegated["metadata"]
     assert "Position 1" in delegated["content"]
@@ -139,7 +142,7 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)\n"
+        "Position 1 — coup 4 (noirs) : joué 🔴 4...Nf6, explosif 🟠 4...Qh4!? (meilleur 🟢 4...Nc6)\n"
         "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4, décloue pion f2 ; 5...e5.\n"
         "Variante du meilleur coup : 4...Nc6 ; 5.Bb5."
     )
@@ -232,7 +235,7 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 8 (blancs) : tournant après 7...h6?, joué 8.e5 (meilleur 8.e5)\n"
+        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🟢 8.e5 (meilleur 🟢 8.e5)\n"
         "Variante : 8.e5 ; 8...d5 ; 9.exd6 prend pion d5."
     )
     assert "Position 1 (tournant (erreur adverse punie))" in content
@@ -386,7 +389,7 @@ def test_entries_move_to_captions(monkeypatch, tmp_path):
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
     caps = [img["caption"] for img in result["images"]]
-    assert caps[0].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
+    assert caps[0].startswith("Position 1 — coup 17 (noirs) : joué 🔴 17...Ng4+")
     assert caps[0].endswith("\nLe fou devait parer l'échec.")
     assert caps[1].endswith("\nNf6 développait avec tempo.")
     assert "Position 1 —" not in result["text"] and "Position 2 —" not in result["text"]
@@ -750,9 +753,9 @@ def test_error_caption_compares_both_lines():
                                 best_line_san=["Qxc5", "h4"],
                                 played_line_san=["Qxf1+", "Qxf1", "Rxf1+", "Kg2"])
     assert chess_router_mod._variant_line(critical) == (
-        "Meilleur coup : 35...Qxc5 prend pion c5 ; 36.h4.\n"
+        "Meilleur coup : 🟢 35...Qxc5 prend pion c5 ; 36.h4.\n"
         "  → matériel : Nico R contre N, 82 % de gain\n"
-        "Ton coup : 35...Qxf1+ prend Nf1, échec, attaque Qd1 ; 36.Qxf1 reprend, attaque Rf8 ; "
+        "Ton coup : 🔴 35...Qxf1+ prend Nf1, échec, attaque Qd1 ; 36.Qxf1 reprend, attaque Rf8 ; "
         "36...Rxf1+ reprend, échec ; 37.Kg2 attaque Rf1.\n"
         "  → matériel : Nico R de plus, 3 pions contre 4, 11 % de gain"
     )

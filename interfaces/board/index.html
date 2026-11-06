@@ -832,15 +832,36 @@ function graphLength() {
 // valeur avant le coup, pointillée, et le segment joué), repères « #N » de mat sur pastille.
 const NEUTRAL_POINT = "#999999";
 
+// Coup brillant (sprint 50), même règle que chess_coach.explosive.is_brilliant : perte
+// sous 2 pts, position pas déjà gagnée (< 90 % pour le camp qui joue), pièce (cavalier ou
+// plus) laissée en prise, prenable avec gain de matériel, pour au moins 2 pions nets.
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+function isBrilliant(fen, next, before, lost) {
+  if (!next || lost === null || lost >= 2) return false;
+  const mover = fen.split(" ")[1];
+  if ((mover === "w" ? before.win : 100 - before.win) >= 90) return false;
+  const board = new Chess(fen);
+  const key = next.split(" ").slice(0, 4).join(" ");
+  const move = board.moves({ verbose: true }).find((m) => m.after.split(" ").slice(0, 4).join(" ") === key);
+  if (!move || PIECE_VALUES[move.piece] < 3) return false;
+  board.move(move);
+  const captures = board.moves({ verbose: true }).filter((m) => m.to === move.to && m.captured);
+  if (!captures.length) return false;
+  const cheapest = Math.min(...captures.map((m) => PIECE_VALUES[m.piece]));
+  if (cheapest >= PIECE_VALUES[move.piece] && board.isAttacked(move.to, mover)) return false;
+  return PIECE_VALUES[move.piece] - (move.captured ? PIECE_VALUES[move.captured] : 0) >= 2;
+}
+
 // Couleur du point d'une position, qui porte le coup joué depuis elle ; mêmes couleurs que
-// les flèches. Priorité : erreur, piège, explosif, stratégie, meilleur coup, sinon neutre.
-// Piège, explosif et stratégie ne sont connus que sur les positions déjà analysées (saved).
+// les flèches. Priorité : erreur, piège, explosif, brillant, stratégie, meilleur coup, sinon
+// neutre. Piège, explosif et stratégie ne sont connus que sur les positions déjà analysées (saved).
 function pointColor(fens, values, i) {
   const [before, after] = [values[i], values[i + 1]];
   const lost = before && after ? loss(fens[i], before, after) : null;
   if (lost !== null && lost >= 10) return errorColor(lost);
   if (saved.trap.has(fens[i])) return "#00e5ff";
   if (saved.explosive.has(fens[i])) return "#ff7f00";
+  if (isBrilliant(fens[i], fens[i + 1], before, lost)) return "#ff7f00";
   if (saved.strategy.has(fens[i])) return "#ffe100";
   return lost !== null && lost < 1 ? "#4d8dff" : NEUTRAL_POINT;
 }

@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Runs live 1 à 4 faits (2026-11-05) ; retours appliqués, run live 5 par Nico à suivre.
+Runs live 1 à 4 faits (2026-11-05) ; retours et demandes du 2026-11-06 appliqués, run live 5 par Nico à suivre.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -45,6 +45,13 @@ Arbitrages de Nico après ce run :
 - Point et coup de la liste gardent la couleur de l'occasion (cyan au coup 17 même si le meilleur coup a été joué).
 - Meilleurs coups de la liste en bleu même si « Meilleur coup » est décoché.
 - Pas de fait « cloue X » seul : à ajouter pour toutes les tactiques ou pas du tout. À reporter au tableau des dettes du sprint 51.
+
+## Demandes de Nico avant le run live 5 (2026-11-06)
+Arbitrages : bilan des deux camps, pastilles sur les coups nommés, règle chess.com pour le brillant, rapport /ouvertures du jour.
+- Bilan sous le texte du LLM : précision toi / adversaire (Lichess), meilleurs coups `n/total` des deux camps, erreurs par gravité (imprécision ≥ 10, erreur ≥ 20, gaffe ≥ 30), coups brillants de Nico, meilleur et pire coup, clé des pastilles. Fait.
+- Légendes : pastille emoji (Telegram en texte brut) sur le coup joué, le meilleur coup, l'explosif (🩵 si piège) et le 1er coup des lignes « Meilleur coup » et « Ton coup ». Coups des variantes sans pastille. Fait.
+- Coup brillant (`explosive.is_brilliant`, porté en JS `isBrilliant`) : perte < 2 pts, < 90 % de gain avant le coup, pièce (cavalier ou plus) laissée en prise et prenable avec gain de matériel, ≥ 2 pions nets. Orange sur la courbe Telegram et dans la liste de l'échiquier (les deux camps), après piège et explosif ; listé dans le bilan pour Nico seulement. Fait, non observé sur partie réelle.
+- `/parties <ouverture>` : rapport de `/ouvertures <nom>` limité aux parties du jour. Fait.
 
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.

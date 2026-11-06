@@ -16,6 +16,7 @@ import math
 import statistics
 
 from chess_coach.analysis import GameAnalysis
+from chess_coach.explosive import is_brilliant
 from chess_coach.openings import detect_opening, opening_group
 
 _OPENING_PLIES = 12
@@ -184,6 +185,10 @@ def summarize(analysis: GameAnalysis) -> dict:
 
     for quality in _QUALITIES:
         summary[f"nico_{quality}"] = sum(1 for p in nico if p.quality == quality)
+        # Sprint 50 : mêmes comptes pour l'adversaire (bilan des deux camps).
+        summary[f"opponent_{quality}"] = sum(1 for p in opponent if p.quality == quality)
+    summary["nico_moves"] = len(nico)
+    summary["opponent_moves"] = len(opponent)
 
     def first_error(side):
         return next((p.move_number for p in side if p.quality in _ERROR_QUALITIES), None)
@@ -200,6 +205,11 @@ def summarize(analysis: GameAnalysis) -> dict:
     # Sprint 29 : précision unique de la partie (Lichess) ; accuracy_{phase}
     # gardées pour la compatibilité des fiches, plus affichées.
     summary["accuracy"] = _game_accuracy(plies, color)
+    summary["accuracy_opponent"] = _game_accuracy(plies, "black" if color == "white" else "white")
+
+    # Sprint 50 : coups brillants de Nico (sacrifice de pièce sain), « 21.Nxf7!!, … ».
+    brilliant = [f"{_label(p)}!!" for p in nico if is_brilliant(p.fen_before, p.uci, p.win_before, p.loss)]
+    summary["brilliant_moves"] = ", ".join(brilliant) or None
 
     # Pire coup de Nico : plus forte perte, seulement à partir de 10 pts.
     worst = max(nico, key=lambda p: p.loss, default=None)

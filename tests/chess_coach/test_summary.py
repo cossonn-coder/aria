@@ -55,6 +55,7 @@ def test_summarize_nominal():
     assert s["eco"] == "A80"
     assert s["opening_line"] == "e4 f5 Qh5+ g6"
     assert (s["nico_best"], s["nico_blunder"], s["nico_mistake"]) == (1, 1, 0)
+    assert (s["opponent_best"], s["opponent_mistake"], s["opponent_moves"]) == (1, 1, 2)
     assert s["first_error_nico"] == 2 and s["first_error_opponent"] == 2
     assert s["accuracy_middlegame"] is None
     assert s["opponent_errors"] == 1 and s["opponent_errors_punished"] == 0

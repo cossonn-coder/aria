@@ -14,7 +14,8 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.analysis import forcing_line
-from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
+from chess_coach.explosive import (ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice,
+                                   is_brilliant)
 from chess_coach.render import (ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, error_arrow,
                                 render_curve, render_position)
 
@@ -515,3 +516,12 @@ def test_forcing_line_extends_truncated_pv():
     """Ligne tronquée : le moteur est relancé ; la menace (Nf3 sur e5) et sa réponse sont montrées."""
     engine = _ScriptedEngine(["e7e5"], ["g1f3"], ["b8c6"], ["a2a3"])
     assert forcing_line(engine, _START, ["e2e4"]) == ["e4", "e5", "Nf3", "Nc6"]
+
+
+def test_is_brilliant_piece_left_to_a_pawn():
+    # Ne5 laisse le cavalier au pion d6 ; Nd4 ne laisse rien ; perte ou position gagnée : non.
+    fen = "4k3/8/3p4/8/8/5N2/8/4K3 w - - 0 1"
+    assert is_brilliant(fen, "f3e5", 50, 0)
+    assert not is_brilliant(fen, "f3d4", 50, 0)
+    assert not is_brilliant(fen, "f3e5", 95, 0)
+    assert not is_brilliant(fen, "f3e5", 50, 3)
