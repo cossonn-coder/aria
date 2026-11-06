@@ -825,3 +825,47 @@ def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
     assert [img["caption"] for img in result["images"]] == [
         "Conversion — coup 3 : idée répétée 🟢 3.Kd2 (activer le roi), proposée 3 fois ; joué 🔵 3.b3",
         "Courbe de la partie : % de gain de Nico"]
+
+
+def test_game_without_clock_forbids_time_talk(monkeypatch, tmp_path):
+    """Sprint 51 : sans horloge, pas de ligne Temps et consigne interdisant la cause « temps »."""
+    result, delegated = _run_lost_game(monkeypatch, tmp_path)
+
+    assert "aucune donnée de pendule : ne parle pas de gestion du temps" in delegated["content"]
+    assert "Temps (données)" not in delegated["content"]
+    assert "⏱️" not in result["text"]
+
+
+def test_long_think_outside_critical_gets_image_and_caption(monkeypatch, tmp_path):
+    """Sprint 51 : réflexion de 54 s hors position critique → Position 2 numérotée à la suite,
+    légende « en 54 s », entrée LLM « Pour jouer vite : »."""
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6"), _ply(3, 18, "a6", "Nf6", "g8f6")]
+    plies[0].clock, plies[1].clock = 590.0, 536.0
+    analysis = GameAnalysis(
+        headers={"White": "Ami", "Black": "staroflexeur", "TimeControl": "600"},
+        nico_color="black", color_source="header", plies=plies,
+        critical=[CriticalPosition(kind="a", ply=plies[0], score=20.0)],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "Partie contre Ami\nPosition 1 — Plan : viser e4.\n"
+                                             "Position 2 — Pour jouer vite : jouer Nf6.\nBilan : ok."}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}})
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "Position 2 (réflexion longue de 54 s) — coup 18 :" in content
+    assert "de Position 1 à Position 2, aucune omise" in content
+    assert "« Pour jouer vite : »" in content
+    assert "Temps (données) : ⏱️ Temps : toi 32,0 s par coup." in content
+    captions = [img["caption"] for img in result["images"]]
+    assert len(captions) == 3
+    assert captions[1].startswith("Position 2 — coup 18 (noirs) : joué 🔴 18...a6 en 54 s, meilleur 🟢 18...Nf6")
+    assert captions[1].endswith("Pour jouer vite : jouer Nf6.")
+    assert "⏱️ Temps : toi 32,0 s par coup. Réflexions de 20 s ou plus : 18...a6 54 s." in result["text"]
