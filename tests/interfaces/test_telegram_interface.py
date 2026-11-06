@@ -404,3 +404,29 @@ async def test_document_other_becomes_file_event(monkeypatch, tmp_path):
         "file_name": "mon rapport.txt",
         "caption": None,
     }
+
+
+# ── Sprint 51 : PGN collé découpé en plusieurs messages par Telegram ─────────
+
+def _text_update(text, message_id):
+    update = MagicMock()
+    update.effective_user.id = 7
+    update.effective_chat.id = 42
+    update.message.text = text
+    update.message.message_id = message_id
+    return update
+
+
+@pytest.mark.asyncio
+async def test_pgn_split_in_two_messages_is_glued_back():
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface._process_text = AsyncMock()
+    head = '[White "Nico"]\n[Black "X"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3'
+    tail = "Nc6 3. Bb5 1-0"
+
+    await iface._handle_message(_text_update(head, 1), None)
+    iface._process_text.assert_not_awaited()
+    await iface._handle_message(_text_update(tail, 2), None)
+
+    iface._process_text.assert_awaited_once_with("7", 42, f"{head}\n{tail}")
+    assert iface.pgn_fragments == {}

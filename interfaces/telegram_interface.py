@@ -25,6 +25,7 @@ from telegram.ext import (
 
 from collections import defaultdict
 import asyncio
+import re
 from pathlib import Path
 
 from config import config
@@ -61,6 +62,21 @@ FILE_TOO_BIG = "Fichier trop gros : je ne peux lire que les fichiers de 20 Mo au
 PGN_MULTI_NOTICE = ("♟ {n} parties trouvées : je les analyse toutes et je t'envoie "
                     "le bilan groupé à la fin (≈ 2 min par partie).")
 
+# PGN collé trop long (> 4 096 caractères, fréquent avec les horloges) : le
+# client Telegram le découpe en plusieurs messages (sprint 51). Un texte dont
+# l'en-tête [Result "X"] existe mais qui ne finit pas par X est un fragment :
+# on le garde et on y recolle les messages suivants. Sans suite au bout de
+# PGN_FRAGMENT_WAIT secondes, le texte gardé est traité tel quel.
+PGN_FRAGMENT_WAIT = 10
+_RESULT_HEADER_RE = re.compile(r'\[Result "([^"]+)"\]')
+
+
+def _is_pgn_fragment(text: str) -> bool:
+    """True si le texte annonce un résultat PGN sans finir par lui (suite à venir)."""
+    results = _RESULT_HEADER_RE.findall(text)
+    return bool(results) and not text.rstrip().endswith(results[-1])
+
+
 # Marqueur posé par /reboot, lu au démarrage suivant pour annoncer le retour
 # (sprint 40). Constante module : surchargée en test.
 REBOOT_MARKER = Path.home() / ".aria" / "reboot_pending"
@@ -94,6 +110,9 @@ class TelegramInterface(BaseInterface):
         self.last_reply = {}
         # Posé par /reboot : bot.py sort alors en code 1, systemd relance.
         self.restart_requested = False
+        # Fragment de PGN en attente de sa suite, par chat_id : (texte, tâche
+        # de traitement différé). En RAM (sprint 51).
+        self.pgn_fragments = {}
 
     def start(self):
         self.app = ApplicationBuilder().token(self.token).post_init(self._post_init).build()
@@ -172,7 +191,26 @@ class TelegramInterface(BaseInterface):
             update.update_id, update.message.message_id,
         )
 
-        await self._process_text(str(update.effective_user.id), update.effective_chat.id, update.message.text)
+        user_id, chat_id = str(update.effective_user.id), update.effective_chat.id
+        text = update.message.text
+        pending = self.pgn_fragments.pop(chat_id, None)
+        if pending is not None:
+            pending_text, timer = pending
+            timer.cancel()
+            text = f"{pending_text}\n{text}"
+        if _is_pgn_fragment(text):
+            log.info("telegram_pgn_fragment chat_id=%s chars=%d", chat_id, len(text))
+            timer = asyncio.create_task(self._flush_pgn_fragment(user_id, chat_id))
+            self.pgn_fragments[chat_id] = (text, timer)
+            return
+        await self._process_text(user_id, chat_id, text)
+
+    async def _flush_pgn_fragment(self, user_id: str, chat_id: int):
+        """Sans suite dans le délai, traite le fragment gardé tel quel."""
+        await asyncio.sleep(PGN_FRAGMENT_WAIT)
+        text, _ = self.pgn_fragments.pop(chat_id)
+        log.warning("telegram_pgn_fragment incomplete chat_id=%s chars=%d", chat_id, len(text))
+        await self._process_text(user_id, chat_id, text)
 
     async def _process_text(self, user_id: str, chat_id: int, text: str):
         """Traite un texte de l'utilisateur : kernel sous verrou, puis envoi de la réponse."""

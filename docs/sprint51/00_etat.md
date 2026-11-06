@@ -14,6 +14,7 @@ plus pastilles alignées sur les flèches (demande de Nico du 2026-11-06).
 | 02 | `02_conversion.md` | période gagnante, idées répétées non jouées, ligne + miniature, fiche | ✅ (537 verts) |
 | 03 | `03_temps.md` | ligne Temps, 3 coups longs analysés, consigne sans horloge, fiche | ✅ (543 verts) |
 | 04 | `04_pastilles.md` | pastilles = couleur des flèches, comptes des deux camps, courbe | ✅ (544 verts) |
+| 06 | (hors kickoff, demandé par Nico le 2026-11-06) | PGN collé découpé par Telegram (> 4 096 car.) : fragments recollés dans `_handle_message` | ✅ |
 | 05 | `05_run_live.md` (+ `05_run_live.txt`) | run live par Nico | ⏳ |
 
 Ordre imposé : 03 réutilise la période de conversion de 02 ; 04 recolore les légendes de 02-03.
@@ -53,6 +54,12 @@ Ouvertes par le sprint :
 - Thème « Convertir l'avantage » du profil aveugle aux conversions lentes (`_is_trial` exige
   une perte ou un écart ≥ 10 et `win_before ≤ 90`).
 - Échiquier web : palette de la liste des coups non alignée sur les nouvelles pastilles.
+- **Candidat sprint 52 (accord de Nico)** : niveau joué estimé par Maia pour chaque camp, avec
+  fourchette (vraisemblance des coups joués par tranche Elo), + Elo officiels affichés dans le
+  bilan ; tendance multi-parties dans `/ouvertures` et `/parties`.
+- Fiche tronquée en palace prod : partie BaguetteChaussette – luismota32 du 2026-11-06, collée
+  avant le tronçon 06, analysée sur sa 1re moitié (`hash=2d5aed504532ea89`, 76 plies sur 107).
+  Comptée dans la progression ; suppression à arbitrer.
 
 Fermées / touchées : #170 (cause trouvée) ; #161 (horloges relues : ligne Temps, coups longs) ;
 #182 partielle (réanalyse sur apport d'horloges seulement).
@@ -65,5 +72,7 @@ Tronçons 01 (`89b7e4f`), 02 (`20c7ba0`), 03 (`ed8923e`) commités. Tronçon 04 
 comptes toi / adversaire (🟠 = explosifs non piégeants + brillants de Nico, 🩵 = explosifs piégeants) ;
 `_moves_line(summary, analysis)` ; `_point_colors` : best `CURVE_BEST` (= `PLAYED_ARROW[:3]`), correct
 `CURVE_CORRECT` blanc (`render.py`). Mention « (toi / adversaire) » placée après 🟢 coup du moteur.
-544 tests verts. Prochaine étape : run live 05 (`05_run_live.md`) par Nico.
+Tronçon 04 commité (`24fbbf2`). Tronçon 06 (recollage des fragments de PGN,
+`interfaces/telegram_interface.py`, attente 10 s sans suite) : 545 tests verts.
+Prochaine étape : run live 05 (`05_run_live.md`) par Nico.
 Diagnostic de référence : `audit_conversion.md`.
