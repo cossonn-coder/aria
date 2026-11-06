@@ -703,6 +703,25 @@ def _pgn_hash(text: str) -> str | None:
     return _game_hash(m.uci() for m in game.mainline_moves()) if game else None
 
 
+def _fiche_without_clock(fiche: dict) -> bool:
+    """Fiche dont aucun demi-coup n'a d'horloge (PGN envoyé sans `%clk`).
+    Fiche sans demi-coups (marqueur de doublon interne) → False : pas de réanalyse."""
+    plies = json.loads(fiche.get("plies_json") or "[]")
+    return bool(plies) and all(p.get("clock") is None for p in plies)
+
+
+def _pgn_has_clock(text: str) -> bool:
+    """Au moins un coup de la ligne principale porte une horloge `[%clk …]`."""
+    game = parse_pgn(text)
+    return game is not None and any(node.clock() is not None for node in game.mainline())
+
+
+def _reanalyze(fiche: dict, text: str) -> bool:
+    """Sprint 51 : une partie déjà envoyée sans horloge est réanalysée quand le PGN
+    recollé apporte les horloges ; sinon c'est un doublon."""
+    return _pgn_has_clock(text) and _fiche_without_clock(fiche)
+
+
 def _duplicate_text(game: dict) -> str:
     """Réponse à une partie déjà enregistrée : une phrase écrite par le code.
     La date est celle de l'envoi (timestamp de la fiche), pas celle de la partie."""
@@ -736,9 +755,13 @@ class ChessExecutionRouter(BaseRouter):
 
         game_hash = _pgn_hash(message)
         known = self._known_games().get(f"chess_game_{game_hash}")
+        timestamp = None
         if known is not None:
-            log.info("chess_router duplicate hash=%s", game_hash)
-            return {"text": _duplicate_text(known)}
+            if not _reanalyze(known, message):
+                log.info("chess_router duplicate hash=%s", game_hash)
+                return {"text": _duplicate_text(known)}
+            log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
+            timestamp = known.get("timestamp")
 
         analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir,
                            self._past_games())
@@ -749,7 +772,7 @@ class ChessExecutionRouter(BaseRouter):
                 "content" : f"[PGN illisible : dis-le à Nico en une phrase.]\n\n{message}",
                 "metadata": metadata,
             })
-        return self._execute_game(analysis, message, metadata)
+        return self._execute_game(analysis, message, metadata, timestamp=timestamp)
 
     def _past_games(self) -> list:
         """(couleur de Nico, coups UCI) des fiches ; palace indisponible → aucune, l'analyse continue."""
@@ -779,17 +802,22 @@ class ChessExecutionRouter(BaseRouter):
         known = self._known_games()
         for k, game in enumerate(games, 1):
             game_hash = _pgn_hash(game)
-            if f"chess_game_{game_hash}" in known:
-                log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
-                texts.append(f"Partie {k} — déjà envoyée")
-                continue
+            fiche = known.get(f"chess_game_{game_hash}")
+            timestamp = None
+            if fiche is not None:
+                if not _reanalyze(fiche, game):
+                    log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
+                    texts.append(f"Partie {k} — déjà envoyée")
+                    continue
+                log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
+                timestamp = fiche.get("timestamp")
             analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir,
                                self._past_games())
             if analysis is None:
                 log.warning("chess_router PGN unreadable game=%d", k)
                 texts.append(f"Partie {k} — PGN illisible")
                 continue
-            result = self._execute_game(analysis, game, metadata)
+            result = self._execute_game(analysis, game, metadata, timestamp=timestamp)
             # La même partie plus loin dans ce message est aussi un doublon.
             known[f"chess_game_{game_hash}"] = {}
             ok += 1
@@ -800,8 +828,10 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router multi games=%d ok=%d", len(games), ok)
         return {"text": "\n\n".join(texts), "images": images}
 
-    def _execute_game(self, analysis, message: str, metadata: dict) -> dict:
-        """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM."""
+    def _execute_game(self, analysis, message: str, metadata: dict,
+                      timestamp: str | None = None) -> dict:
+        """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM.
+        timestamp : date de la fiche réanalysée, conservée (None = nouvelle partie)."""
         # ── Diagrammes : un PNG par position critique ────────────────────────
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -830,7 +860,7 @@ class ChessExecutionRouter(BaseRouter):
         summary = summarize(analysis)
         try:
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
-                             room=opening_room(summary["opening_group"]))
+                             room=opening_room(summary["opening_group"]), timestamp=timestamp)
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)

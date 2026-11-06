@@ -587,6 +587,24 @@ def test_multi_games_all_known_text_only(monkeypatch, tmp_path):
     llm_exec.execute.assert_not_called()
 
 
+def test_known_game_without_clock_reanalyzed_when_pgn_has_clock(monkeypatch, tmp_path):
+    # Sprint 51 : fiche sans horloge + PGN avec %clk → réanalyse, date d'origine gardée.
+    fiche = {"id": f"chess_game_{_HASH_A}", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00",
+             "plies_json": json.dumps([{"uci": "e2e4", "clock": None}, {"uci": "e7e5"}])}
+    router, analyze, write_game, _ = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    router.execute({"content": '[White "A"]\n\n1. e4 { [%clk 0:09:58] } e5 { [%clk 0:09:57] } 0-1',
+                    "metadata": {}})
+    analyze.assert_called_once()
+    assert write_game.call_args.kwargs["timestamp"] == "2026-10-31T08:00:00+00:00"
+
+    # Même fiche, PGN sans horloge : toujours un doublon.
+    analyze.reset_mock()
+    result = router.execute({"content": _GAME_A, "metadata": {}})
+    assert result == {"text": "Cette partie contre X a déjà été envoyée le 2026-10-31."}
+    analyze.assert_not_called()
+
+
 def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     # Le plan d'un Göring vient de l'idée du gambit, pas de la reprise du pion (Scotch).
     plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]

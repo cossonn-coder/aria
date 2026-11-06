@@ -139,14 +139,17 @@ def write_image_artifact(
 # ── Écriture épisodique (fiche de partie d'échecs) ───────────────────────────
 
 def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None,
-                     room: str = "chess") -> None:
+                     room: str = "chess", timestamp: str | None = None) -> None:
     """
     Stocke la fiche d'une partie d'échecs analysée dans aria_episodic.
 
     doc_id = chess_game_<game_hash> : renvoyer la même partie remplace sa
     fiche (upsert). game_hash est calculé par le caller à partir des coups
-    joués. room = room de l'ouverture, passée par le caller. wing/room/type sont
-    structurels et non overridables par extra (invariant W4).
+    joués. room = room de l'ouverture, passée par le caller. timestamp : date
+    d'origine d'une fiche réanalysée (sprint 51), sinon maintenant ; garder la
+    date laisse la partie à sa place dans la chronologie (#97).
+    wing/room/type/timestamp sont structurels et non overridables par extra
+    (invariant W4).
     """
     col = get_collection(config.mempalace_path)
     doc_id = f"chess_game_{game_hash}"
@@ -156,7 +159,7 @@ def write_chess_game(text: str, game_hash: str, *, extra: dict | None = None,
         "wing": "aria_episodic",
         "room": room,
         "type": "chess_game",
-        "timestamp": _now_iso(),
+        "timestamp": timestamp or _now_iso(),
         "source": "chess_router",
     }
     _validate(meta)
