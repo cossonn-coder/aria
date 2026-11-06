@@ -1,7 +1,7 @@
 # Sprint 50 — état vivant (bilan de partie, flèches)
 
 ## Phase courante
-Runs live 1 à 4 faits (2026-11-05) ; retours et demandes du 2026-11-06 appliqués, run live 5 par Nico à suivre.
+CLOS (2026-11-06) : run live 5 fait par Nico, clôture demandée. Suite : `docs/sprint51/context_kickoff_sprint_51.md`.
 
 ## Objectif
 Un bilan de partie qui ne fait pas retenir une fausse leçon à Nico, et des miniatures dont les flèches disent la gravité de l'erreur et le piège.
@@ -56,7 +56,7 @@ Arbitrages : bilan des deux camps, pastilles sur les coups nommés, règle chess
 ## Carte des tronçons
 - 01 flèches et corrections (`01_fleches_corrections.md`) ✅ 519 tests verts ; rendus erreur et piège contrôlés en image ; à valider au run live.
 - 02 bilan (`02_bilan_web.md`) ✅ ; recherche web retirée après le run live 1.
-- 03 run live par Nico (`03_run_live.md`) ⏳ runs 1 à 3 faits, run 4 à faire.
+- 03 run live par Nico (`03_run_live.md`) ✅ runs 1 à 5 faits.
 
 ## Dettes
 Fermées par le sprint : aucune. #157 reste ouverte : le piège est lu sur les explosifs retenus, sans calcul du piège ni de la stratégie sur toute la partie.

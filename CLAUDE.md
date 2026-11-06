@@ -152,11 +152,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 49 clos (tag `sprint-49`, analyse reproductible des parties envoyées, meilleur coup immédiat sur l'échiquier,
-miniatures numérotées, doublons refusés ; voir `docs/sprint49/00_etat.md`).
-Prochain : **sprint 50**, sujet à choisir par Nico.
-Kickoff : `docs/sprint50/context_kickoff_sprint_50.md`.
-Prochaine étape : `/conception sprint 50`.
+Sprint 50 clos (tag `sprint-50`, bilan factuel des deux camps, suites comparées des erreurs, flèches et points
+colorés selon le coup, coups brillants, `/parties <ouverture>` ; voir `docs/sprint50/00_etat.md`).
+Prochain : **sprint 51**, convertir une position gagnante et analyse du temps d'un PGN.
+Kickoff : `docs/sprint51/context_kickoff_sprint_51.md`.
+Prochaine étape : `/conception sprint 51`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
