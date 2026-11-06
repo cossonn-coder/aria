@@ -2,7 +2,7 @@
 
 **Sujet** : convertir une position gagnante + analyse du temps d'un PGN (#161, #170),
 plus pastilles alignées sur les flèches (demande de Nico du 2026-11-06).
-**Phase** : B — conception figée (OK de Nico le 2026-11-06), prête pour `/sprint-auto sprint 51`.
+**Phase** : CLOS (2026-11-06, sur décision de Nico ; run live 05 non joué, dette #202).
 **Branche** : `feat/sprint51-conversion` (depuis `main` @ `4d3b3d9`, tag `sprint-50`).
 **Tests au départ** : 533 verts.
 
@@ -15,7 +15,7 @@ plus pastilles alignées sur les flèches (demande de Nico du 2026-11-06).
 | 03 | `03_temps.md` | ligne Temps, 3 coups longs analysés, consigne sans horloge, fiche | ✅ (543 verts) |
 | 04 | `04_pastilles.md` | pastilles = couleur des flèches, comptes des deux camps, courbe | ✅ (544 verts) |
 | 06 | (hors kickoff, demandé par Nico le 2026-11-06) | PGN collé découpé par Telegram (> 4 096 car.) : fragments recollés dans `_handle_message` | ✅ |
-| 05 | `05_run_live.md` (+ `05_run_live.txt`) | run live par Nico | ⏳ |
+| 05 | `05_run_live.md` (+ `05_run_live.txt`) | run live par Nico | ⏭️ non joué (clôture demandée par Nico) ; observé : bilan d'une partie réelle (luismota32), recollage en défaut puis corrigé (`cde22c0`) |
 
 Ordre imposé : 03 réutilise la période de conversion de 02 ; 04 recolore les légendes de 02-03.
 
@@ -66,13 +66,6 @@ Fermées / touchées : #170 (cause trouvée) ; #161 (horloges relues : ligne Tem
 
 ## §REPRISE
 
-Tronçons 01 (`89b7e4f`), 02 (`20c7ba0`), 03 (`ed8923e`) commités. Tronçon 04 fait (non commité) :
-`chess_router` : `_QUALITY_MARK` best 🔵 / correct ⚪, `_MARK_BEST` 🟢 réservé au coup du moteur ;
-`_MARKS_KEY` devient la liste (qualité, libellé) et `_marks_key(summary, analysis)` écrit la clé avec
-comptes toi / adversaire (🟠 = explosifs non piégeants + brillants de Nico, 🩵 = explosifs piégeants) ;
-`_moves_line(summary, analysis)` ; `_point_colors` : best `CURVE_BEST` (= `PLAYED_ARROW[:3]`), correct
-`CURVE_CORRECT` blanc (`render.py`). Mention « (toi / adversaire) » placée après 🟢 coup du moteur.
-Tronçon 04 commité (`24fbbf2`). Tronçon 06 (recollage des fragments de PGN,
-`interfaces/telegram_interface.py`, attente 10 s sans suite) : 545 tests verts.
-Prochaine étape : run live 05 (`05_run_live.md`) par Nico.
-Diagnostic de référence : `audit_conversion.md`.
+Sprint clos. Commits : 01 `89b7e4f`, 02 `20c7ba0`, 03 `ed8923e`, 04 `24fbbf2`, 06 `a065cc2` +
+`cde22c0` (recollage exact : Telegram a coupé dans « 39. Nxe5 »). 546 tests verts.
+Dettes numérotées (#195 à #202) et cible du sprint 52 : `docs/sprint52/context_kickoff_sprint_52.md`.
