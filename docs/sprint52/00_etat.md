@@ -7,7 +7,7 @@
 
 | # | Kickoff | Objet | État |
 |---|---------|-------|------|
-| 01 | `01_niveau_bilan.md` | `chess_coach/level.py` (performance, rang) + bilan Telegram (Elo sur 🎯, ligne 🏅 en bas) | ⏳ |
+| 01 | `01_niveau_bilan.md` | `chess_coach/level.py` (performance, rang) + bilan Telegram (Elo sur 🎯, ligne 🏅 en bas) | ✅ |
 | 02 | `02_parties_ouvertures.md` | `/parties`, `/ouvertures` : performance Elo, infos générales en bas | ⏳ |
 | 03 | `03_echiquier.md` | Échiquier : Elo sur la précision, rang + performance d'ouverture sur PGN chargé | ⏳ |
 | 04 | `04_run_live.md` | Run live (Nico) | ⏳ |
@@ -79,5 +79,7 @@ Maia-2 non exploitable comme estimateur de niveau : Spearman ≈ 0,35, erreur pa
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 52` (tronçons 01 → 03), puis run live 04 par Nico.
+Conception figée. Tronçon 01 fait (551 tests verts) : `chess_coach/level.py` (`performance`, `accuracy_rank`),
+bilan avec Elo sur 🎯 et ligne 🏅 en dernier. Prochaine étape : tronçon 02 (`02_parties_ouvertures.md`), puis 03,
+puis run live 04 par Nico.
 Mesures (Maia, Lichess) : `audit_niveau_maia.md` ; scripts de prototype hors repo (scratchpad), non nécessaires.

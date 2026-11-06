@@ -30,6 +30,7 @@ from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
 from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
 from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
 from chess_coach.explosive import _GAIN_MIN, is_brilliant
+from chess_coach.level import accuracy_rank
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
@@ -438,14 +439,27 @@ def _marks_key(summary: dict, analysis) -> str:
     return " · ".join(parts)
 
 
+def _elo_suffix(elo: int | None) -> str:
+    """« (1354) » si l'Elo est connu, sinon rien."""
+    return f" ({elo})" if elo is not None else ""
+
+
+def _rank_line(accuracy: float, games: list) -> str:
+    """Dernière ligne du bilan (sprint 52) : rang de la précision dans les parties de Nico."""
+    rank, total = accuracy_rank(accuracy, games)
+    which = "ta meilleure partie" if rank == 1 else f"ta {rank}e meilleure partie"
+    return f"🏅 Précision {accuracy:.0f} % : {which} sur {total}"
+
+
 def _moves_line(summary: dict, analysis) -> str:
     """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
     coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
     lines = []
     if summary["accuracy"] is not None:
-        line = f"🎯 Précision : toi {summary['accuracy']:.0f} %"
+        # Sprint 52 : Elo officiel de chaque camp entre parenthèses, quand il est connu.
+        line = f"🎯 Précision : toi {summary['accuracy']:.0f} %" + _elo_suffix(summary["elo_nico"])
         if summary["accuracy_opponent"] is not None:
-            line += f" · adversaire {summary['accuracy_opponent']:.0f} %"
+            line += f" · adversaire {summary['accuracy_opponent']:.0f} %" + _elo_suffix(summary["elo_opponent"])
         lines.append(line)
     lines.append(f"Meilleurs coups : toi {summary['nico_best']}/{summary['nico_moves']}"
                  f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
@@ -923,7 +937,7 @@ class ChessExecutionRouter(BaseRouter):
 
         # ── Progression (non bloquante) : profil avant / après cette partie ──
         # Recalculé depuis les fiches (la courante est en base depuis l'écriture).
-        block, history = "", None
+        block, history, games = "", None, None
         try:
             games = self.mempalace_bridge.load_chess_games()
             before = build_profile([g for g in games if g["id"] != f"chess_game_{game_hash}"])
@@ -981,6 +995,9 @@ class ChessExecutionRouter(BaseRouter):
             text += "\n\n" + moves_line
         if block:
             text += "\n\n" + block
+        # Rang de la précision : toujours la dernière ligne (fiches déjà chargées, courante incluse).
+        if summary["accuracy"] is not None and games is not None:
+            text += "\n\n" + _rank_line(summary["accuracy"], games)
         return {"text": text, "images": images}
 
     def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
