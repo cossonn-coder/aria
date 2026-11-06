@@ -177,7 +177,37 @@ def test_game_returns_white_win_curve(monkeypatch):
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
         assert _request(base, "/game", {"pgn": "1. e4 e5"}) == {
-            "wins": [60, 45, 70], "mates": [3, None, -1], "best": ["Qh5", "Nf6", None]}
+            "wins": [60, 45, 70], "mates": [3, None, -1], "best": ["Qh5", "Nf6", None], "history": []}
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_game_history_rank_and_opening_performance(monkeypatch):
+    # Sprint 52, tronçon 03 : PGN aux en-têtes d'un pseudo de Nico (noirs), fiches lues
+    # par un load_games factice → rang de précision et performance dans l'ouverture.
+    from types import SimpleNamespace
+
+    import interfaces.board_interface as board_interface
+
+    plies = [SimpleNamespace(color="white", win_before=50, win_after=50, eval_before_cp=0,
+                             eval_after_cp=0, best_san="d4", quality="best", loss=0),
+             SimpleNamespace(color="black", win_before=50, win_after=50, eval_before_cp=0,
+                             eval_after_cp=0, best_san="f5", quality="best", loss=0)]
+    monkeypatch.setattr(board_interface, "analyze_game", lambda game, color, path: plies)
+    dutch = {"opening": "Dutch-Defense", "opening_group": "Dutch Defense", "nico_color": "black"}
+    games = [{**dutch, "outcome": "win", "elo_opponent": 1400, "accuracy": 99.5, "date": "2026.11.01"},
+             {**dutch, "outcome": "loss", "elo_opponent": 1400, "accuracy": 70, "date": "2026.11.02"},
+             {"opening": "Dutch-Defense", "opening_group": "Dutch Defense", "nico_color": "white",
+              "outcome": "win", "elo_opponent": 1000, "accuracy": 80}]
+    server = make_server(0, BoardWorker(lambda: object(), ""), load_games=lambda: games)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    pgn = '[White "Bob"]\n[Black "La_Bagouze"]\n\n1. d4 f5'
+    try:
+        assert _request(base, "/game", {"pgn": pgn, "playing": ""})["history"] == [
+            "Précision 100 % : ta meilleure partie sur 3",
+            "Dutch Defense (noirs) : performance 1400 [2 parties]"]
     finally:
         server.shutdown()
         server.server_close()

@@ -24,17 +24,19 @@ def main():
     log.info("ARIA démarrage")
 
     kernel = AriaKernel()
+    # Bridge dédié aux métacommandes /status et /parties (sprint 40), partagé avec
+    # l'échiquier pour la lecture des fiches (sprint 52).
+    bridge = MempalaceBridge(store=search, get_by_metadata=get_by_metadata)
     telegram = TelegramInterface(
         kernel,
         token=os.environ["ARIA_BOT_TOKEN"],
-        # Bridge dédié aux métacommandes /status et /parties (sprint 40).
-        bridge=MempalaceBridge(store=search, get_by_metadata=get_by_metadata),
+        bridge=bridge,
     )
     log.info("Telegram interface prête")
     # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
     # Sprint 39 : « Envoyer à ARIA » passe par telegram.submit_text (503 avant
-    # que la boucle PTB tourne).
-    start_board_server(telegram.submit_text)
+    # que la boucle PTB tourne). Sprint 52 : lecture seule des fiches (historique /game).
+    start_board_server(telegram.submit_text, bridge.load_chess_games)
     telegram.start()
 
     # Sortie immédiate, sans finalisation Python : sous swap, le ramasse-miettes

@@ -9,7 +9,7 @@
 |---|---------|-------|------|
 | 01 | `01_niveau_bilan.md` | `chess_coach/level.py` (performance, rang) + bilan Telegram (Elo sur 🎯, ligne 🏅 en bas) | ✅ |
 | 02 | `02_parties_ouvertures.md` | `/parties`, `/ouvertures` : performance Elo, infos générales en bas | ✅ |
-| 03 | `03_echiquier.md` | Échiquier : Elo sur la précision, rang + performance d'ouverture sur PGN chargé | ⏳ |
+| 03 | `03_echiquier.md` | Échiquier : Elo sur la précision, rang + performance d'ouverture sur PGN chargé | ✅ |
 | 04 | `04_run_live.md` | Run live (Nico) | ⏳ |
 
 ## Cible d'origine (kickoff `context_kickoff_sprint_52.md`)
@@ -84,5 +84,9 @@ bilan avec Elo sur 🎯 et ligne 🏅 en dernier. Tronçon 02 fait (552 tests ve
 plus ancienne à la plus récente, bilan du jour + performance en dernier), `/ouvertures` (moins jouée → plus
 jouée, ligne Performance globale en dernier), `/ouvertures <nom>` (détail puis bilan + Performance en bas de
 chaque section, section la plus jouée en bas). Dans `/parties`, les stats d'ouvertures gardent l'ordre plus
-jouée → moins jouée (kickoff muet). Prochaine étape : tronçon 03 (`03_echiquier.md`), puis run live 04 par Nico.
+jouée → moins jouée (kickoff muet). Tronçon 03 fait (553 tests verts) : ligne précision de l'échiquier avec
+l'Elo des champs, `/game` renvoie `history` (rang de précision + performance dans l'ouverture et la couleur),
+fiches lues via `bridge.load_chess_games` injecté par `bot.py` (bridge sorti en variable partagée) ;
+`game_wins` prend désormais les plies (calculés une fois dans `_game`). Groupes d'ouverture en anglais
+(« Dutch Defense (noirs) »), comme les fiches. Prochaine étape : run live 04 par Nico.
 Mesures (Maia, Lichess) : `audit_niveau_maia.md` ; scripts de prototype hors repo (scratchpad), non nécessaires.
