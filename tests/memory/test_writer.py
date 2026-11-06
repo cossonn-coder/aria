@@ -289,6 +289,14 @@ def test_write_chess_game_room_from_caller_not_overridable(fake_col):
     assert fake_col.last_meta["room"] == "chess_goring-gambit"
 
 
+def test_write_chess_game_timestamp_kept_and_not_overridable(fake_col):
+    # Sprint 51 : la réanalyse garde la date d'origine ; extra ne la pose jamais.
+    w.write_chess_game("fiche", "abc123", timestamp="2026-10-31T08:00:00+00:00")
+    assert fake_col.last_meta["timestamp"] == "2026-10-31T08:00:00+00:00"
+    w.write_chess_game("fiche", "abc123", extra={"timestamp": "x"})
+    assert fake_col.last_meta["timestamp"] not in ("x", "2026-10-31T08:00:00+00:00")
+
+
 # ── write_conversation_reset — marqueur /oublie (sprint 40, tronçon 03) ─────
 
 def test_write_conversation_reset_structural_fields_not_overridable(fake_col):

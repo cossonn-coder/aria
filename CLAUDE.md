@@ -152,11 +152,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 50 clos (tag `sprint-50`, bilan factuel des deux camps, suites comparées des erreurs, flèches et points
-colorés selon le coup, coups brillants, `/parties <ouverture>` ; voir `docs/sprint50/00_etat.md`).
-Prochain : **sprint 51**, convertir une position gagnante et analyse du temps d'un PGN.
-Kickoff : `docs/sprint51/context_kickoff_sprint_51.md`.
-Prochaine étape : `/conception sprint 51`.
+Sprint 51 clos (tag `sprint-51`, conversion d'une position gagnante, ligne Temps et coups longs, réanalyse sur
+apport d'horloges, pastilles 🔵 🟢 ⚪, PGN découpé par Telegram recollé ; voir `docs/sprint51/00_etat.md`).
+Prochain : **sprint 52**, niveau joué estimé par Maia (par camp, avec fourchette) et tendance dans
+`/ouvertures` et `/parties`. Kickoff : `docs/sprint52/context_kickoff_sprint_52.md`.
+Prochaine étape : `/conception sprint 52`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

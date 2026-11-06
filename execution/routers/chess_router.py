@@ -27,11 +27,13 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
+from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
+from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
 from chess_coach.explosive import _GAIN_MIN, is_brilliant
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
                                 render_curve, render_position)
 from chess_coach.structure import structure_line
 from chess_coach.summary import nico_wins, story_line, summarize, summary_text
@@ -116,10 +118,13 @@ _QUALITY_FR = [
 ]
 
 # Pastille d'un coup dans les légendes (sprint 50) : Telegram n'affiche que du texte brut.
+# Sprint 51 : même couleur que la flèche des miniatures — meilleur coup du moteur vert
+# (_MARK_BEST), coup joué meilleur bleu, coup joué correct blanc.
 _MARK_BEST, _MARK_EXPLOSIVE, _MARK_TRAP = "🟢", "🟠", "🩵"
-_QUALITY_MARK = {"best": _MARK_BEST, "correct": "🔵", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
-_MARKS_KEY = ("🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · "
-              "🟠 explosif / brillant · 🩵 piège")
+_QUALITY_MARK = {"best": "🔵", "correct": "⚪", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
+# Clé des pastilles de qualité, dans l'ordre de la légende : (qualité, libellé).
+_MARKS_KEY = (("best", "meilleur"), ("correct", "correct"), ("inaccuracy", "imprécision"),
+              ("mistake", "erreur"), ("blunder", "gaffe"))
 # Erreurs par gravité dans le bilan : (qualité, singulier, pluriel).
 _ERRORS_FR = (("inaccuracy", "imprécision", "imprécisions"), ("mistake", "erreur", "erreurs"),
               ("blunder", "gaffe", "gaffes"))
@@ -419,7 +424,21 @@ def _errors_by_gravity(summary: dict, side: str) -> str:
     return ", ".join(parts) or "aucune"
 
 
-def _moves_line(summary: dict) -> str:
+def _marks_key(summary: dict, analysis) -> str:
+    """Clé des pastilles avec comptes (sprint 51) : qualités toi / adversaire ; explosif / brillant
+    et piège pour Nico seul (non calculés pour l'adversaire)."""
+    parts = [f"{_QUALITY_MARK[q]} {label} {summary[f'nico_{q}']} / {summary[f'opponent_{q}']}"
+             for q, label in _MARKS_KEY]
+    traps = sum(1 for c in analysis.explosive if _trap_replies(c))
+    brilliant = sum(1 for p in analysis.plies if p.color == analysis.nico_color
+                    and is_brilliant(p.fen_before, p.uci, p.win_before, p.loss))
+    parts.append(f"{_MARK_EXPLOSIVE} explosif / brillant {len(analysis.explosive) - traps + brilliant}")
+    parts.append(f"{_MARK_TRAP} piège {traps}")
+    parts.append(f"{_MARK_BEST} coup du moteur (toi / adversaire)")
+    return " · ".join(parts)
+
+
+def _moves_line(summary: dict, analysis) -> str:
     """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
     coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
     lines = []
@@ -444,7 +463,7 @@ def _moves_line(summary: dict) -> str:
     if parts:
         line = " · ".join(parts)
         lines.append(line[0].upper() + line[1:])
-    lines.append(_MARKS_KEY)
+    lines.append(_marks_key(summary, analysis))
     return "\n".join(lines)
 
 
@@ -594,7 +613,7 @@ def _win_drop(before: float, after: float, drop: float) -> str:
 
 def _point_colors(analysis) -> list:
     """Couleur de chaque point de la courbe : le point d'une position porte le coup joué depuis
-    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup, sinon neutre ; la dernière
+    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup (bleu), correct (blanc), sinon neutre ; la dernière
     position n'a pas de coup. La stratégie n'est calculée qu'à l'échiquier."""
     explosive = {c.ply.ply: c for c in analysis.explosive}
     colors = []
@@ -607,7 +626,7 @@ def _point_colors(analysis) -> list:
         elif found or is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
             colors.append(ALT_ARROW[:3])
         else:
-            colors.append(CURVE_BEST if p.quality == "best" else CURVE_NEUTRAL)
+            colors.append({"best": CURVE_BEST, "correct": CURVE_CORRECT}.get(p.quality, CURVE_NEUTRAL))
     return colors + [CURVE_NEUTRAL]
 
 
@@ -633,6 +652,23 @@ def _caption(index: int, critical, plies: list) -> str:
             f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
             f"meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)}, "
             f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
+
+
+def _think_caption(index: int, p, seconds: float, think_verdict: str) -> str:
+    """Légende d'une réflexion longue hors positions critiques, écrite par le code."""
+    caption = (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
+               f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)} en {seconds:.0f} s, "
+               f"meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)}, "
+               f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
+    return caption + (f"\nVerdict : {think_verdict}." if think_verdict else "")
+
+
+def _conversion_caption(idea) -> str:
+    """Légende de la miniature de conversion : idée répétée et coup joué à sa 1re apparition."""
+    p = idea.first
+    return (f"Conversion — coup {p.move_number} : idée répétée {_MARK_BEST} "
+            f"{_move_label(p.move_number, p.color, idea.san)} ({idea.concept}), proposée {len(idea.moves)} fois ; "
+            f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}")
 
 
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
@@ -703,6 +739,25 @@ def _pgn_hash(text: str) -> str | None:
     return _game_hash(m.uci() for m in game.mainline_moves()) if game else None
 
 
+def _fiche_without_clock(fiche: dict) -> bool:
+    """Fiche dont aucun demi-coup n'a d'horloge (PGN envoyé sans `%clk`).
+    Fiche sans demi-coups (marqueur de doublon interne) → False : pas de réanalyse."""
+    plies = json.loads(fiche.get("plies_json") or "[]")
+    return bool(plies) and all(p.get("clock") is None for p in plies)
+
+
+def _pgn_has_clock(text: str) -> bool:
+    """Au moins un coup de la ligne principale porte une horloge `[%clk …]`."""
+    game = parse_pgn(text)
+    return game is not None and any(node.clock() is not None for node in game.mainline())
+
+
+def _reanalyze(fiche: dict, text: str) -> bool:
+    """Sprint 51 : une partie déjà envoyée sans horloge est réanalysée quand le PGN
+    recollé apporte les horloges ; sinon c'est un doublon."""
+    return _pgn_has_clock(text) and _fiche_without_clock(fiche)
+
+
 def _duplicate_text(game: dict) -> str:
     """Réponse à une partie déjà enregistrée : une phrase écrite par le code.
     La date est celle de l'envoi (timestamp de la fiche), pas celle de la partie."""
@@ -736,9 +791,13 @@ class ChessExecutionRouter(BaseRouter):
 
         game_hash = _pgn_hash(message)
         known = self._known_games().get(f"chess_game_{game_hash}")
+        timestamp = None
         if known is not None:
-            log.info("chess_router duplicate hash=%s", game_hash)
-            return {"text": _duplicate_text(known)}
+            if not _reanalyze(known, message):
+                log.info("chess_router duplicate hash=%s", game_hash)
+                return {"text": _duplicate_text(known)}
+            log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
+            timestamp = known.get("timestamp")
 
         analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir,
                            self._past_games())
@@ -749,7 +808,7 @@ class ChessExecutionRouter(BaseRouter):
                 "content" : f"[PGN illisible : dis-le à Nico en une phrase.]\n\n{message}",
                 "metadata": metadata,
             })
-        return self._execute_game(analysis, message, metadata)
+        return self._execute_game(analysis, message, metadata, timestamp=timestamp)
 
     def _past_games(self) -> list:
         """(couleur de Nico, coups UCI) des fiches ; palace indisponible → aucune, l'analyse continue."""
@@ -779,17 +838,22 @@ class ChessExecutionRouter(BaseRouter):
         known = self._known_games()
         for k, game in enumerate(games, 1):
             game_hash = _pgn_hash(game)
-            if f"chess_game_{game_hash}" in known:
-                log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
-                texts.append(f"Partie {k} — déjà envoyée")
-                continue
+            fiche = known.get(f"chess_game_{game_hash}")
+            timestamp = None
+            if fiche is not None:
+                if not _reanalyze(fiche, game):
+                    log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
+                    texts.append(f"Partie {k} — déjà envoyée")
+                    continue
+                log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
+                timestamp = fiche.get("timestamp")
             analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir,
                                self._past_games())
             if analysis is None:
                 log.warning("chess_router PGN unreadable game=%d", k)
                 texts.append(f"Partie {k} — PGN illisible")
                 continue
-            result = self._execute_game(analysis, game, metadata)
+            result = self._execute_game(analysis, game, metadata, timestamp=timestamp)
             # La même partie plus loin dans ce message est aussi un doublon.
             known[f"chess_game_{game_hash}"] = {}
             ok += 1
@@ -800,12 +864,20 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router multi games=%d ok=%d", len(games), ok)
         return {"text": "\n\n".join(texts), "images": images}
 
-    def _execute_game(self, analysis, message: str, metadata: dict) -> dict:
-        """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM."""
+    def _execute_game(self, analysis, message: str, metadata: dict,
+                      timestamp: str | None = None) -> dict:
+        """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM.
+        timestamp : date de la fiche réanalysée, conservée (None = nouvelle partie)."""
         # ── Diagrammes : un PNG par position critique ────────────────────────
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)
         images = []
+        # Sprint 51 : réflexions longues de Nico (PGN avec horloges), verdict écrit par le code.
+        times = move_times(analysis.plies, analysis.headers.get("TimeControl"))
+        elo = analysis.headers.get("WhiteElo" if analysis.nico_color == "white" else "BlackElo", "")
+        elo = int(elo) if elo.isdigit() else None
+        thinks = [(p, t, verdict(p, elo)) for p, t in long_thinks(analysis.plies, times, analysis.nico_color)]
+        think_of = {p.ply: (t, v) for p, t, v in thinks}
         for i, critical in enumerate(analysis.critical, 1):
             out_path = out_dir / f"{uuid4().hex[:8]}_{i}.png"
             # Sorte d : 2e flèche pour le coup explosif, cyan s'il est piégeant, sinon orange.
@@ -823,14 +895,28 @@ class ChessExecutionRouter(BaseRouter):
             variant = _variant_line(critical)
             if variant:
                 caption += "\n" + variant
+            # Réflexion longue déjà position critique : pas de doublon, une ligne en plus.
+            if critical.ply.ply in think_of:
+                seconds, think_verdict = think_of[critical.ply.ply]
+                caption += f"\n⏱️ réfléchi {seconds:.0f} s" + (f" · {think_verdict}" if think_verdict else "")
             images.append({"path": str(out_path), "caption": caption})
+        # Autres réflexions longues : positions numérotées à la suite des critiques ;
+        # elles reçoivent une entrée LLM « Pour jouer vite : » (avant _split_entries).
+        critical_plies = {c.ply.ply for c in analysis.critical}
+        extra_thinks = [(p, t, v) for p, t, v in thinks if p.ply not in critical_plies]
+        for p, seconds, think_verdict in extra_thinks:
+            index = len(images) + 1
+            out_path = out_dir / f"{uuid4().hex[:8]}_{index}.png"
+            render_position(p.fen_before, analysis.nico_color, p.best_uci, str(out_path),
+                            played_uci=p.uci, best_line_uci=p.pv_uci[:3])
+            images.append({"path": str(out_path), "caption": _think_caption(index, p, seconds, think_verdict)})
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
         game_hash = _game_hash(p.uci for p in analysis.plies)
         summary = summarize(analysis)
         try:
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
-                             room=opening_room(summary["opening_group"]))
+                             room=opening_room(summary["opening_group"]), timestamp=timestamp)
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
@@ -851,7 +937,14 @@ class ChessExecutionRouter(BaseRouter):
             log.exception("chess_progression ERROR")
 
         story = story_line(analysis.plies, analysis.nico_color, summary["outcome"])
-        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, story, history)
+        # Sprint 51 : période gagnante non convertie, ligne écrite par le code.
+        period = winning_period(analysis.plies, analysis.nico_color, summary["outcome"])
+        ideas = repeated_ideas(period, analysis.plies) if period else []
+        conversion = conversion_line(period, ideas) if period else None
+        timing = time_line(analysis.plies, times, analysis.nico_color, period, summary["errors_low_clock"],
+                           summary["outcome"], summary["termination"], summary["time_control"])
+        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, story, history,
+                                        conversion, timing, extra_thinks)
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
@@ -866,15 +959,24 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
         text, images = _split_entries(_to_english(result["text"]), images)
-        # Déroulé du code sous le titre, au-dessus du bilan du LLM.
+        # Déroulé du code sous le titre, puis les lignes Conversion et Temps, au-dessus du bilan du LLM.
         title, _, rest = text.partition("\n")
-        text = f"{title}\n{story}" + (f"\n{rest}" if rest else "")
+        head = "\n".join(line for line in (story, conversion, timing) if line)
+        text = f"{title}\n{head}" + (f"\n{rest}" if rest else "")
+        # Miniature de l'idée principale, hors budget des positions : ajoutée après le
+        # découpage (le LLM n'a pas d'entrée « Position » pour elle), avant la courbe.
+        if ideas:
+            p = ideas[0].first
+            mini_path = out_dir / f"{uuid4().hex[:8]}_conversion.png"
+            render_position(p.fen_before, analysis.nico_color, p.best_uci, str(mini_path),
+                            played_uci=p.uci, best_line_uci=p.pv_uci[:3])
+            images.append({"path": str(mini_path), "caption": _conversion_caption(ideas[0])})
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
         render_curve(nico_wins(analysis.plies, analysis.nico_color),
                      [p.move_number for p in analysis.plies], _point_colors(analysis), str(curve_path))
         images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
-        moves_line = _moves_line(summary)
+        moves_line = _moves_line(summary, analysis)
         if moves_line:
             text += "\n\n" + moves_line
         if block:
@@ -882,7 +984,8 @@ class ChessExecutionRouter(BaseRouter):
         return {"text": text, "images": images}
 
     def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
-                        story: str, history: str | None = None) -> str:
+                        story: str, history: str | None = None, conversion: str | None = None,
+                        timing: str | None = None, extra_thinks: list = ()) -> str:
         """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         opening = summary["opening"]
@@ -897,6 +1000,10 @@ class ChessExecutionRouter(BaseRouter):
         lines.append(f"Compteurs Nico : {counts}")
         lines.append(_level_line(summary))
         lines.append(f"Déroulé (données) : {story}")
+        if conversion:
+            lines.append(f"Conversion (données) : {conversion}")
+        if timing:
+            lines.append(f"Temps (données) : {timing}")
         if history:
             lines.append(history)
         for i, critical in enumerate(analysis.critical, 1):
@@ -938,11 +1045,30 @@ class ChessExecutionRouter(BaseRouter):
             # Piège : sa ligne est écrite par le code, le LLM n'en reçoit pas les faits.
             if critical.kind == "d" and not trap:
                 lines += _explosive_lines(p, critical.explosive, color)
+        # Réflexions longues hors positions critiques : numérotées à la suite.
+        for k, (p, seconds, think_verdict) in enumerate(extra_thinks, len(analysis.critical) + 1):
+            lines += [
+                f"Position {k} (réflexion longue de {seconds:.0f} s) — coup {p.move_number} :",
+                f"  joué {_move_label(p.move_number, p.color, p.san)}, perte {p.loss:.0f} pts "
+                f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
+                f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
+                f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
+                f"  faits : {_move_facts(p.fen_before, p.pv_san, p.move_number, p.color)}",
+                _pieces_line(p.fen_before),
+                f"  {_material_line(p.fen_before, color)}",
+                f"  {_attacked_line(p.fen_before)}",
+                f"  structure : {structure_line(p.fen_before, color)}",
+                f"  évaluation : {_evaluation(p.win_before)} ({p.win_before:.0f} %)",
+            ]
+            if p.motifs:
+                lines.append(f"  motifs : {', '.join(_motif_fr(m) for m in p.motifs)}")
+            if think_verdict:
+                lines.append(f"  verdict : {think_verdict}")
         block = "\n".join(lines) + "]"
 
         elo = analysis.headers.get("WhiteElo" if color == "white" else "BlackElo", "")
         player = f"joueur d'environ {elo} Elo" if elo and elo != "?" else "joueur amateur"
-        n = len(analysis.critical)
+        n = len(analysis.critical) + len(extra_thinks)
         consigne = (
             f"[Consigne : réponse COURTE à Nico, {player}. Format imposé : 1re ligne "
             f"exacte « {anchor} » ; puis une entrée pour chacune des {n} positions, de "
@@ -1017,6 +1143,27 @@ class ChessExecutionRouter(BaseRouter):
                 "« si … ». Ne donne ni le coût, ni quand le tenter, et ne le présente jamais "
                 "comme le meilleur coup. Si la ligne « pari » est présente, une demi-phrase "
                 "la présente comme une idée risquée. Cette entrée peut dépasser 3 phrases.]"
+            )
+        if extra_thinks:
+            parts.append(
+                "[Consigne : pour chaque position « réflexion longue », l'entrée commence par "
+                "« Pour jouer vite : » au lieu de « Plan : » et donne en 1 à 2 phrases l'idée ou le plan "
+                "qui permettait de choisir vite, d'après ses lignes de données ; elle ne répète pas "
+                "le verdict.]"
+            )
+        if not timing:
+            if lost_on_time(summary["outcome"], summary["termination"]):
+                parts.append(
+                    "[Consigne : aucune donnée de pendule : ne parle pas de gestion du temps ; la partie "
+                    "est perdue au temps : dis seulement « perdu au temps, pendule non fournie ».]"
+                )
+            else:
+                parts.append("[Consigne : aucune donnée de pendule : ne parle pas de gestion du temps.]")
+        if conversion:
+            parts.append(
+                "[Consigne : dans le Bilan, une phrase par idée nommée dans la ligne « Conversion "
+                "(données) », expliquant pourquoi ce concept fait progresser une position gagnante, "
+                "sans autre coup que ceux fournis.]"
             )
         if analysis.color_source == "default":
             parts.append(

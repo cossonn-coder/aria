@@ -16,6 +16,8 @@ import math
 import statistics
 
 from chess_coach.analysis import GameAnalysis
+from chess_coach.clock import long_thinks, long_thinks_text, move_times
+from chess_coach.conversion import ideas_text, repeated_ideas, winning_period
 from chess_coach.explosive import is_brilliant
 from chess_coach.openings import detect_opening, opening_group
 
@@ -233,6 +235,11 @@ def summarize(analysis: GameAnalysis) -> dict:
     summary["unconverted"] = bool(wins) and max(wins) >= 80 and outcome != "win"
     summary["saved"] = bool(wins) and min(wins) <= 20 and outcome != "loss"
 
+    # Sprint 51 : période gagnante non convertie et idées du moteur répétées non jouées.
+    period = winning_period(plies, color, outcome)
+    summary["conversion_moves"] = len(period) if period else None
+    summary["conversion_ideas"] = ideas_text(repeated_ideas(period, plies)) if period else None
+
     # Erreurs adverses (perte ≥ 20) et réponse de Nico au demi-coup suivant.
     punished = 0
     errors = [p for p in opponent if p.loss >= 20]
@@ -248,6 +255,9 @@ def summarize(analysis: GameAnalysis) -> dict:
         sum(1 for p in nico if p.quality in _ERROR_QUALITIES and p.clock is not None and p.clock < 60)
         if has_clock else None
     )
+    # Sprint 51 : les 3 réflexions de Nico les plus longues (≥ 20 s), « 14.Rxb4 54 s, … ».
+    times = move_times(plies, summary["time_control"])
+    summary["long_thinks"] = long_thinks_text(long_thinks(plies, times, color))
 
     summary["plies_json"] = json.dumps([
         {

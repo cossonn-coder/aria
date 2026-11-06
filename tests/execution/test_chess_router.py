@@ -14,7 +14,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
-from chess_coach.render import ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, TRAP_ARROW, error_arrow
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow)
 from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
 
 
@@ -73,7 +73,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
         "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 %\n"
         "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
         "Pire coup 17...Ng4+ (50 % → 30 %)\n"
-        "🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · 🟠 explosif / brillant · 🩵 piège\n\n"
+        "🔵 meilleur 0 / 0 · ⚪ correct 0 / 0 · 🩷 imprécision 0 / 0 · 🔴 erreur 2 / 0 · ⚫ gaffe 0 / 0 · "
+        "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 coup du moteur (toi / adversaire)\n\n"
         "🎮 Progression — saison 1, partie 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
@@ -235,7 +236,7 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🟢 8.e5 (meilleur 🟢 8.e5)\n"
+        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🔵 8.e5 (meilleur 🟢 8.e5)\n"
         "Variante : 8.e5 ; 8...d5 ; 9.exd6 prend pion d5."
     )
     assert "Position 1 (tournant (erreur adverse punie))" in content
@@ -587,6 +588,24 @@ def test_multi_games_all_known_text_only(monkeypatch, tmp_path):
     llm_exec.execute.assert_not_called()
 
 
+def test_known_game_without_clock_reanalyzed_when_pgn_has_clock(monkeypatch, tmp_path):
+    # Sprint 51 : fiche sans horloge + PGN avec %clk → réanalyse, date d'origine gardée.
+    fiche = {"id": f"chess_game_{_HASH_A}", "opponent": "X", "timestamp": "2026-10-31T08:00:00+00:00",
+             "plies_json": json.dumps([{"uci": "e2e4", "clock": None}, {"uci": "e7e5"}])}
+    router, analyze, write_game, _ = _duplicate_router(monkeypatch, tmp_path, [fiche])
+
+    router.execute({"content": '[White "A"]\n\n1. e4 { [%clk 0:09:58] } e5 { [%clk 0:09:57] } 0-1',
+                    "metadata": {}})
+    analyze.assert_called_once()
+    assert write_game.call_args.kwargs["timestamp"] == "2026-10-31T08:00:00+00:00"
+
+    # Même fiche, PGN sans horloge : toujours un doublon.
+    analyze.reset_mock()
+    result = router.execute({"content": _GAME_A, "metadata": {}})
+    assert result == {"text": "Cette partie contre X a déjà été envoyée le 2026-10-31."}
+    analyze.assert_not_called()
+
+
 def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     # Le plan d'un Göring vient de l'idée du gambit, pas de la reprise du pion (Scotch).
     plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]
@@ -761,11 +780,11 @@ def test_error_caption_compares_both_lines():
     )
 
 
-def test_point_colors_follow_each_move():
-    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange, meilleur coup, neutre."""
-    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(5)]
+def _colors_analysis():
+    """Erreur, piège, explosif, coup meilleur, coup correct, coup « good »."""
+    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(6)]
     for p, (loss, quality) in zip(plies, [(30.0, "mistake"), (0.0, "best"), (0.0, "best"),
-                                          (0.0, "best"), (3.0, "good")]):
+                                          (0.0, "best"), (1.0, "correct"), (3.0, "good")]):
         p.loss, p.quality, p.win_before = loss, quality, 50.0
     def explosive(replies):
         return ExplosiveMove(san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3,
@@ -776,6 +795,96 @@ def test_point_colors_follow_each_move():
         CriticalPosition(kind="d", ply=plies[1], score=1.0, explosive=trap),
         CriticalPosition(kind="d", ply=plies[2], score=1.0, explosive=explosive([])),
     ])
-    assert chess_router_mod._point_colors(analysis) == [
-        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_NEUTRAL, CURVE_NEUTRAL,
+    return analysis
+
+
+def test_point_colors_follow_each_move():
+    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange ; sprint 51 : meilleur
+    coup en bleu (flèche du coup joué), correct en blanc, sinon neutre."""
+    assert CURVE_BEST == PLAYED_ARROW[:3] and CURVE_CORRECT == (255, 255, 255)
+    assert chess_router_mod._point_colors(_colors_analysis()) == [
+        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL,
+        CURVE_NEUTRAL,
     ]
+
+
+def test_marks_key_counts_both_sides():
+    """Sprint 51 : clé des pastilles avec comptes toi / adversaire ; explosif et piège pour Nico seul."""
+    summary = {"nico_best": 23, "opponent_best": 22, "nico_correct": 31, "opponent_correct": 32,
+               "nico_inaccuracy": 1, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 1,
+               "nico_blunder": 0, "opponent_blunder": 0}
+    assert chess_router_mod._marks_key(summary, _colors_analysis()) == (
+        "🔵 meilleur 23 / 22 · ⚪ correct 31 / 32 · 🩷 imprécision 1 / 0 · 🔴 erreur 0 / 1 · "
+        "⚫ gaffe 0 / 0 · 🟠 explosif / brillant 1 · 🩵 piège 1 · 🟢 coup du moteur (toi / adversaire)")
+
+
+def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
+    """Sprint 51 : partie perdue après 12 coups à 85 % : ligne Conversion sous le déroulé,
+    miniature de l'idée principale juste avant la courbe."""
+    from tests.chess_coach.test_conversion import conversion_plies
+    plies = conversion_plies()
+    analysis = GameAnalysis(headers={"White": "staroflexeur", "Black": "Ami", "Result": "0-1"},
+                            nico_color="white", color_source="header", plies=plies, critical=[])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "Partie contre Ami\nBilan : à travailler."}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}})
+
+    lines = result["text"].split("\n")
+    assert lines[1].startswith("📉 Défaite")
+    assert lines[2].startswith("🔄 Conversion : 12 coups à 80 % ou plus")
+    assert "Conversion (données) : 🔄 Conversion" in llm_exec.execute.call_args.args[0]["content"]
+    assert [img["caption"] for img in result["images"]] == [
+        "Conversion — coup 3 : idée répétée 🟢 3.Kd2 (activer le roi), proposée 3 fois ; joué ⚪ 3.b3",
+        "Courbe de la partie : % de gain de Nico"]
+
+
+def test_game_without_clock_forbids_time_talk(monkeypatch, tmp_path):
+    """Sprint 51 : sans horloge, pas de ligne Temps et consigne interdisant la cause « temps »."""
+    result, delegated = _run_lost_game(monkeypatch, tmp_path)
+
+    assert "aucune donnée de pendule : ne parle pas de gestion du temps" in delegated["content"]
+    assert "Temps (données)" not in delegated["content"]
+    assert "⏱️" not in result["text"]
+
+
+def test_long_think_outside_critical_gets_image_and_caption(monkeypatch, tmp_path):
+    """Sprint 51 : réflexion de 54 s hors position critique → Position 2 numérotée à la suite,
+    légende « en 54 s », entrée LLM « Pour jouer vite : »."""
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6"), _ply(3, 18, "a6", "Nf6", "g8f6")]
+    plies[0].clock, plies[1].clock = 590.0, 536.0
+    analysis = GameAnalysis(
+        headers={"White": "Ami", "Black": "staroflexeur", "TimeControl": "600"},
+        nico_color="black", color_source="header", plies=plies,
+        critical=[CriticalPosition(kind="a", ply=plies[0], score=20.0)],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "Partie contre Ami\nPosition 1 — Plan : viser e4.\n"
+                                             "Position 2 — Pour jouer vite : jouer Nf6.\nBilan : ok."}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}})
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "Position 2 (réflexion longue de 54 s) — coup 18 :" in content
+    assert "de Position 1 à Position 2, aucune omise" in content
+    assert "« Pour jouer vite : »" in content
+    assert "Temps (données) : ⏱️ Temps : toi 32,0 s par coup." in content
+    captions = [img["caption"] for img in result["images"]]
+    assert len(captions) == 3
+    assert captions[1].startswith("Position 2 — coup 18 (noirs) : joué 🔴 18...a6 en 54 s, meilleur 🟢 18...Nf6")
+    assert captions[1].endswith("Pour jouer vite : jouer Nf6.")
+    assert "⏱️ Temps : toi 32,0 s par coup. Réflexions de 20 s ou plus : 18...a6 54 s." in result["text"]

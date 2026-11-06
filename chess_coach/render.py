@@ -43,7 +43,9 @@ CURVE_LINE = (110, 110, 110)
 CURVE_DOT = 3
 # Anneau clair : un point noir (erreur de 50 pts et plus) reste visible sur le fond noir.
 CURVE_DOT_RING = (200, 200, 200)
-CURVE_BEST = (90, 210, 100)
+# Sprint 51 : point d'un coup meilleur en bleu (teinte de la flèche du coup joué), coup correct en blanc.
+CURVE_BEST = PLAYED_ARROW[:3]
+CURVE_CORRECT = (255, 255, 255)
 CURVE_NEUTRAL = (150, 150, 150)
 
 # Glyphe plein par type de pièce (même forme pour les deux couleurs).
