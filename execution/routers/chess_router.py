@@ -33,7 +33,7 @@ from chess_coach.explosive import _GAIN_MIN, is_brilliant
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
                                 render_curve, render_position)
 from chess_coach.structure import structure_line
 from chess_coach.summary import nico_wins, story_line, summarize, summary_text
@@ -118,10 +118,13 @@ _QUALITY_FR = [
 ]
 
 # Pastille d'un coup dans les légendes (sprint 50) : Telegram n'affiche que du texte brut.
+# Sprint 51 : même couleur que la flèche des miniatures — meilleur coup du moteur vert
+# (_MARK_BEST), coup joué meilleur bleu, coup joué correct blanc.
 _MARK_BEST, _MARK_EXPLOSIVE, _MARK_TRAP = "🟢", "🟠", "🩵"
-_QUALITY_MARK = {"best": _MARK_BEST, "correct": "🔵", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
-_MARKS_KEY = ("🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · "
-              "🟠 explosif / brillant · 🩵 piège")
+_QUALITY_MARK = {"best": "🔵", "correct": "⚪", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
+# Clé des pastilles de qualité, dans l'ordre de la légende : (qualité, libellé).
+_MARKS_KEY = (("best", "meilleur"), ("correct", "correct"), ("inaccuracy", "imprécision"),
+              ("mistake", "erreur"), ("blunder", "gaffe"))
 # Erreurs par gravité dans le bilan : (qualité, singulier, pluriel).
 _ERRORS_FR = (("inaccuracy", "imprécision", "imprécisions"), ("mistake", "erreur", "erreurs"),
               ("blunder", "gaffe", "gaffes"))
@@ -421,7 +424,21 @@ def _errors_by_gravity(summary: dict, side: str) -> str:
     return ", ".join(parts) or "aucune"
 
 
-def _moves_line(summary: dict) -> str:
+def _marks_key(summary: dict, analysis) -> str:
+    """Clé des pastilles avec comptes (sprint 51) : qualités toi / adversaire ; explosif / brillant
+    et piège pour Nico seul (non calculés pour l'adversaire)."""
+    parts = [f"{_QUALITY_MARK[q]} {label} {summary[f'nico_{q}']} / {summary[f'opponent_{q}']}"
+             for q, label in _MARKS_KEY]
+    traps = sum(1 for c in analysis.explosive if _trap_replies(c))
+    brilliant = sum(1 for p in analysis.plies if p.color == analysis.nico_color
+                    and is_brilliant(p.fen_before, p.uci, p.win_before, p.loss))
+    parts.append(f"{_MARK_EXPLOSIVE} explosif / brillant {len(analysis.explosive) - traps + brilliant}")
+    parts.append(f"{_MARK_TRAP} piège {traps}")
+    parts.append(f"{_MARK_BEST} coup du moteur (toi / adversaire)")
+    return " · ".join(parts)
+
+
+def _moves_line(summary: dict, analysis) -> str:
     """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
     coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
     lines = []
@@ -446,7 +463,7 @@ def _moves_line(summary: dict) -> str:
     if parts:
         line = " · ".join(parts)
         lines.append(line[0].upper() + line[1:])
-    lines.append(_MARKS_KEY)
+    lines.append(_marks_key(summary, analysis))
     return "\n".join(lines)
 
 
@@ -596,7 +613,7 @@ def _win_drop(before: float, after: float, drop: float) -> str:
 
 def _point_colors(analysis) -> list:
     """Couleur de chaque point de la courbe : le point d'une position porte le coup joué depuis
-    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup, sinon neutre ; la dernière
+    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup (bleu), correct (blanc), sinon neutre ; la dernière
     position n'a pas de coup. La stratégie n'est calculée qu'à l'échiquier."""
     explosive = {c.ply.ply: c for c in analysis.explosive}
     colors = []
@@ -609,7 +626,7 @@ def _point_colors(analysis) -> list:
         elif found or is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
             colors.append(ALT_ARROW[:3])
         else:
-            colors.append(CURVE_BEST if p.quality == "best" else CURVE_NEUTRAL)
+            colors.append({"best": CURVE_BEST, "correct": CURVE_CORRECT}.get(p.quality, CURVE_NEUTRAL))
     return colors + [CURVE_NEUTRAL]
 
 
@@ -959,7 +976,7 @@ class ChessExecutionRouter(BaseRouter):
         render_curve(nico_wins(analysis.plies, analysis.nico_color),
                      [p.move_number for p in analysis.plies], _point_colors(analysis), str(curve_path))
         images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
-        moves_line = _moves_line(summary)
+        moves_line = _moves_line(summary, analysis)
         if moves_line:
             text += "\n\n" + moves_line
         if block:

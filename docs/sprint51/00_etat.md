@@ -13,7 +13,7 @@ plus pastilles alignées sur les flèches (demande de Nico du 2026-11-06).
 | 01 | `01_reanalyse.md` | PGN avec horloges → réanalyse d'une fiche sans horloge, date conservée | ✅ (535 verts) |
 | 02 | `02_conversion.md` | période gagnante, idées répétées non jouées, ligne + miniature, fiche | ✅ (537 verts) |
 | 03 | `03_temps.md` | ligne Temps, 3 coups longs analysés, consigne sans horloge, fiche | ✅ (543 verts) |
-| 04 | `04_pastilles.md` | pastilles = couleur des flèches, comptes des deux camps, courbe | ⏳ |
+| 04 | `04_pastilles.md` | pastilles = couleur des flèches, comptes des deux camps, courbe | ✅ (544 verts) |
 | 05 | `05_run_live.md` (+ `05_run_live.txt`) | run live par Nico | ⏳ |
 
 Ordre imposé : 03 réutilise la période de conversion de 02 ; 04 recolore les légendes de 02-03.
@@ -59,15 +59,11 @@ Fermées / touchées : #170 (cause trouvée) ; #161 (horloges relues : ligne Tem
 
 ## §REPRISE
 
-Tronçons 01 (`89b7e4f`) et 02 (`20c7ba0`) commités. Tronçon 03 fait (non commité) :
-`chess_coach/clock.py` (`move_times`, `long_thinks`, `verdict`, `lost_on_time`, `time_line`,
-`long_thinks_text`) ; `chess_router` : ligne ⏱️ Temps sous Conversion (texte + `Temps (données)`),
-consigne « aucune donnée de pendule » sans horloge (variante « perdu au temps, pendule non
-fournie » si `Termination` le dit), coup long déjà critique → ligne `⏱️ réfléchi N s · verdict`
-dans sa légende, autres coups longs → Position n+1… (miniature, légende code, bloc de données,
-consigne « Pour jouer vite : »), avant `_split_entries` ; fiche : `long_thinks`.
-Choix non tranchés par le kickoff : « Réflexions de 20 s ou plus » liste tous les coups ≥ 20 s
-de Nico ; « puis toi X s par coup » = moyenne du début de la période à la fin de la partie ;
-Elo de Nico lu dans l'en-tête (`WhiteElo`/`BlackElo`) avant le calcul de la fiche.
-543 tests verts. Prochaine étape : tronçon 04 (`04_pastilles.md`), puis run live 05.
+Tronçons 01 (`89b7e4f`), 02 (`20c7ba0`), 03 (`ed8923e`) commités. Tronçon 04 fait (non commité) :
+`chess_router` : `_QUALITY_MARK` best 🔵 / correct ⚪, `_MARK_BEST` 🟢 réservé au coup du moteur ;
+`_MARKS_KEY` devient la liste (qualité, libellé) et `_marks_key(summary, analysis)` écrit la clé avec
+comptes toi / adversaire (🟠 = explosifs non piégeants + brillants de Nico, 🩵 = explosifs piégeants) ;
+`_moves_line(summary, analysis)` ; `_point_colors` : best `CURVE_BEST` (= `PLAYED_ARROW[:3]`), correct
+`CURVE_CORRECT` blanc (`render.py`). Mention « (toi / adversaire) » placée après 🟢 coup du moteur.
+544 tests verts. Prochaine étape : run live 05 (`05_run_live.md`) par Nico.
 Diagnostic de référence : `audit_conversion.md`.

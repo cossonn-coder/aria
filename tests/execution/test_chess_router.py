@@ -14,7 +14,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
-from chess_coach.render import ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, TRAP_ARROW, error_arrow
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow)
 from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
 
 
@@ -73,7 +73,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
         "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 %\n"
         "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
         "Pire coup 17...Ng4+ (50 % → 30 %)\n"
-        "🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · 🟠 explosif / brillant · 🩵 piège\n\n"
+        "🔵 meilleur 0 / 0 · ⚪ correct 0 / 0 · 🩷 imprécision 0 / 0 · 🔴 erreur 2 / 0 · ⚫ gaffe 0 / 0 · "
+        "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 coup du moteur (toi / adversaire)\n\n"
         "🎮 Progression — saison 1, partie 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
@@ -235,7 +236,7 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🟢 8.e5 (meilleur 🟢 8.e5)\n"
+        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🔵 8.e5 (meilleur 🟢 8.e5)\n"
         "Variante : 8.e5 ; 8...d5 ; 9.exd6 prend pion d5."
     )
     assert "Position 1 (tournant (erreur adverse punie))" in content
@@ -779,11 +780,11 @@ def test_error_caption_compares_both_lines():
     )
 
 
-def test_point_colors_follow_each_move():
-    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange, meilleur coup, neutre."""
-    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(5)]
+def _colors_analysis():
+    """Erreur, piège, explosif, coup meilleur, coup correct, coup « good »."""
+    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(6)]
     for p, (loss, quality) in zip(plies, [(30.0, "mistake"), (0.0, "best"), (0.0, "best"),
-                                          (0.0, "best"), (3.0, "good")]):
+                                          (0.0, "best"), (1.0, "correct"), (3.0, "good")]):
         p.loss, p.quality, p.win_before = loss, quality, 50.0
     def explosive(replies):
         return ExplosiveMove(san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3,
@@ -794,9 +795,27 @@ def test_point_colors_follow_each_move():
         CriticalPosition(kind="d", ply=plies[1], score=1.0, explosive=trap),
         CriticalPosition(kind="d", ply=plies[2], score=1.0, explosive=explosive([])),
     ])
-    assert chess_router_mod._point_colors(analysis) == [
-        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_NEUTRAL, CURVE_NEUTRAL,
+    return analysis
+
+
+def test_point_colors_follow_each_move():
+    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange ; sprint 51 : meilleur
+    coup en bleu (flèche du coup joué), correct en blanc, sinon neutre."""
+    assert CURVE_BEST == PLAYED_ARROW[:3] and CURVE_CORRECT == (255, 255, 255)
+    assert chess_router_mod._point_colors(_colors_analysis()) == [
+        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL,
+        CURVE_NEUTRAL,
     ]
+
+
+def test_marks_key_counts_both_sides():
+    """Sprint 51 : clé des pastilles avec comptes toi / adversaire ; explosif et piège pour Nico seul."""
+    summary = {"nico_best": 23, "opponent_best": 22, "nico_correct": 31, "opponent_correct": 32,
+               "nico_inaccuracy": 1, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 1,
+               "nico_blunder": 0, "opponent_blunder": 0}
+    assert chess_router_mod._marks_key(summary, _colors_analysis()) == (
+        "🔵 meilleur 23 / 22 · ⚪ correct 31 / 32 · 🩷 imprécision 1 / 0 · 🔴 erreur 0 / 1 · "
+        "⚫ gaffe 0 / 0 · 🟠 explosif / brillant 1 · 🩵 piège 1 · 🟢 coup du moteur (toi / adversaire)")
 
 
 def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
@@ -823,7 +842,7 @@ def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
     assert lines[2].startswith("🔄 Conversion : 12 coups à 80 % ou plus")
     assert "Conversion (données) : 🔄 Conversion" in llm_exec.execute.call_args.args[0]["content"]
     assert [img["caption"] for img in result["images"]] == [
-        "Conversion — coup 3 : idée répétée 🟢 3.Kd2 (activer le roi), proposée 3 fois ; joué 🔵 3.b3",
+        "Conversion — coup 3 : idée répétée 🟢 3.Kd2 (activer le roi), proposée 3 fois ; joué ⚪ 3.b3",
         "Courbe de la partie : % de gain de Nico"]
 
 
