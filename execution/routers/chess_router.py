@@ -26,13 +26,15 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze, parse_pgn, split_pgn
-from chess_coach.explosive import _GAIN_MIN
+from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
+from chess_coach.explosive import _GAIN_MIN, is_brilliant
+from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
-from chess_coach.render import render_curve, render_position
+from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
+                                render_curve, render_position)
 from chess_coach.structure import structure_line
-from chess_coach.summary import summarize, summary_text
+from chess_coach.summary import nico_wins, story_line, summarize, summary_text
 from config import config
 from cognition.cognitive_context import CognitiveOperation
 from execution.routers.execution_base import BaseRouter
@@ -57,13 +59,17 @@ _KIND_FR = {
     "e": "tournant (erreur adverse punie)",
 }
 
+# Perte à partir de laquelle un point de la courbe prend la couleur d'une erreur.
+_ERROR_POINT_MIN = 10
+
+# Sorte d piégeante : remplace « occasion explosive » dans les faits donnés au LLM.
+_TRAP_KIND_FR = "piège affiché"
+
 # Critère d'avantage clair (chess_coach.analysis.clear_advantage) → libellé français.
 _EVIDENCE_FR = {
     "material": "gain matériel", "crushing": "position écrasante", "mate": "attaque de mat",
     "development": "avance de développement", "activity": "avance d'activité",
 }
-
-_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
 _OUTCOME_FR = {"win": "victoire", "loss": "défaite", "draw": "nulle", "unknown": "issue inconnue"}
 
@@ -108,6 +114,22 @@ _QUALITY_FR = [
     ("best", "meilleurs"), ("correct", "corrects"), ("inaccuracy", "imprécisions"),
     ("mistake", "erreurs"), ("blunder", "gaffes"),
 ]
+
+# Pastille d'un coup dans les légendes (sprint 50) : Telegram n'affiche que du texte brut.
+_MARK_BEST, _MARK_EXPLOSIVE, _MARK_TRAP = "🟢", "🟠", "🩵"
+_QUALITY_MARK = {"best": _MARK_BEST, "correct": "🔵", "inaccuracy": "🩷", "mistake": "🔴", "blunder": "⚫"}
+_MARKS_KEY = ("🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · "
+              "🟠 explosif / brillant · 🩵 piège")
+# Erreurs par gravité dans le bilan : (qualité, singulier, pluriel).
+_ERRORS_FR = (("inaccuracy", "imprécision", "imprécisions"), ("mistake", "erreur", "erreurs"),
+              ("blunder", "gaffe", "gaffes"))
+
+
+def _played_mark(p) -> str:
+    """Pastille du coup joué : orange s'il est brillant, sinon celle de sa qualité."""
+    if is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
+        return _MARK_EXPLOSIVE
+    return _QUALITY_MARK[p.quality]
 
 
 def _move_label(move_number: int, color: str, san: str) -> str:
@@ -179,16 +201,22 @@ def _pieces_line(fen: str) -> str:
 
 
 def _material_line(fen: str, nico_color: str) -> str:
-    """Bilan matériel du point de vue de Nico (valeurs 1/3/3/5/9)."""
+    """Matériel en toutes lettres : un solde en points se lit à tort comme des pions (sprint 50)."""
     board = chess.Board(fen)
     nico = chess.WHITE if nico_color == "white" else chess.BLACK
-    balance = sum(
-        value * (len(board.pieces(piece, nico)) - len(board.pieces(piece, not nico)))
-        for piece, value in _VALUES.items()
-    )
-    if balance == 0:
-        return "matériel : égal"
-    return f"matériel : Nico {'+' if balance > 0 else '−'}{abs(balance)}"
+    mine, theirs = [], []
+    for piece in (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT):
+        gap = len(board.pieces(piece, nico)) - len(board.pieces(piece, not nico))
+        (mine if gap > 0 else theirs).extend([chess.piece_symbol(piece).upper()] * abs(gap))
+    parts = []
+    if mine and theirs:
+        parts.append(f"{', '.join(mine)} contre {', '.join(theirs)}")
+    elif mine or theirs:
+        parts.append(f"{', '.join(mine or theirs)} de {'plus' if mine else 'moins'}")
+    my_pawns, their_pawns = len(board.pieces(chess.PAWN, nico)), len(board.pieces(chess.PAWN, not nico))
+    if my_pawns != their_pawns:
+        parts.append(f"{my_pawns} pion{'s' if my_pawns > 1 else ''} contre {their_pawns}")
+    return f"matériel : Nico {', '.join(parts)}" if parts else "matériel : égal"
 
 
 def _square_label(board: chess.Board, sq: int) -> str:
@@ -224,8 +252,9 @@ def _attacked_line(fen: str) -> str:
 
 def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) -> list:
     """Ligne rejouée depuis `fen` : liste de (libellé du coup, faits observables) —
-    prise, échec, mat, roque, promotion, et pièces adverses nouvellement attaquées
-    par la pièce jouée (non défendues ou de valeur supérieure). Calcul unique partagé
+    prise, échec, mat, roque, promotion, pièces adverses nouvellement attaquées par la
+    pièce jouée (non défendues ou de valeur supérieure), et pièces de son camp qu'il
+    décloue (clouage sur le roi seulement). Calcul unique partagé
     par la ligne « faits : » du message enrichi et la ligne « Variante : » des légendes."""
     board = chess.Board(fen)
     parts = []
@@ -249,24 +278,20 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
         recapture_square = move.to_square if board.is_capture(move) else None
         if move.promotion:
             facts.append(f"promotion en {chess.piece_symbol(move.promotion).upper()}")
-        before = chess.SquareSet() if castling else board.attacks(move.from_square)
-        # Le roi n'attaque utilement qu'une pièce non défendue (valeur 0 dans _VALUES).
-        attacker_value = _VALUES[move.promotion or board.piece_type_at(move.from_square)] or 100
+        attacked = new_targets(board, move)
+        # La pièce jouée elle-même n'est pas « déclouée » : seules celles restées en place.
+        pinned = [sq for sq in chess.SquareSet(board.occupied_co[mover])
+                  if sq != move.from_square and board.is_pinned(mover, sq)]
         board.push(move)
         if board.is_checkmate():
             facts.append("mat")
         elif board.is_check():
             facts.append("échec")
-        if not castling and not board.is_checkmate():
-            targets = [
-                _square_label(board, sq)
-                for sq in board.attacks(move.to_square) & board.occupied_co[not mover]
-                if sq not in before and board.piece_type_at(sq) != chess.KING
-                and (not board.attackers(not mover, sq)
-                     or _VALUES[board.piece_type_at(sq)] > attacker_value)
-            ]
-            if targets:
-                facts.append("attaque " + ", ".join(targets))
+        if attacked and not board.is_checkmate():
+            facts.append("attaque " + ", ".join(_square_label(board, sq) for sq in attacked))
+        unpinned = [sq for sq in pinned if not board.is_pinned(mover, sq)]
+        if unpinned:
+            facts.append("décloue " + ", ".join(_square_label(board, sq) for sq in unpinned))
         parts.append((_move_label(move_number, color, san), facts))
         if color == "black":
             move_number += 1
@@ -283,19 +308,68 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
     )
 
 
-def _told_moves(label: str, p, moves: list) -> str:
-    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits."""
+def _told_moves(label: str, p, moves: list, mark: str = "") -> str:
+    """« label : » puis les coups séparés par « ; », chacun suivi de ses faits ; mark,
+    pastille éventuelle du premier coup."""
     items = _move_fact_items(p.fen_before, moves, p.move_number, p.color)
-    return f"{label} : " + " ; ".join(
+    return f"{label} : {mark + ' ' if mark else ''}" + " ; ".join(
         f"{move} {', '.join(facts)}" if facts else move for move, facts in items
     ) + "."
 
 
+def _trap_replies(critical) -> list:
+    """Réponses piégeantes d'une position de sorte d, sinon []. La règle est celle de
+    l'échiquier, le coup analysé donnant le % de gain du meilleur coup."""
+    if critical.kind != "d":
+        return []
+    return trapping_replies(critical.explosive.replies, critical.ply.win_before)
+
+
+def _trap_line(p, explosive, reply: dict) -> str:
+    """Ligne « Piège : » d'une légende, écrite par le code à partir de la réponse piégeante
+    la plus probable. « Sinon, pas de mat. » : seule cette réponse connue mène au mat."""
+    number, color = _reply_start(p)
+    head = (f"Piège : {_move_label(p.move_number, p.color, explosive.san)}!? "
+            f"Si {_move_label(number, color, reply['san'])} ({reply['p'] * 100:.0f} %)")
+    # Après la réponse adverse, le trait revient à Nico, au coup suivant.
+    if len(reply["line_san"]) > 1:
+        head += ", " + _format_line(reply["line_san"][1:], p.move_number + 1, p.color)
+    if reply["line_san"][-1].endswith("#"):
+        others = [r for r in explosive.replies if r is not reply]
+        no_other_mate = not any("#" in san for r in others for san in r["line_san"])
+        return f"{head}." + (" Sinon, pas de mat." if no_other_mate else "")
+    return f"{head}, {reply['win']:.0f} % pour toi."
+
+
+def _line_end(p, moves: list, win: float) -> str:
+    """Fin d'une suite comparée : mat, ou matériel et % de gain de la ligne du moteur."""
+    board = chess.Board(p.fen_before)
+    for san in moves:
+        board.push_san(san)
+    if board.is_checkmate():
+        return "  → mat"
+    return f"  → {_material_line(board.fen(), p.color)}, {win:.0f} % de gain"
+
+
+def _compared_lines(critical) -> str:
+    """Suites du meilleur coup et du coup joué, avec leur fin : le code dit où chacune mène."""
+    p = critical.ply
+    return "\n".join((
+        _told_moves("Meilleur coup", p, critical.best_line_san, _MARK_BEST),
+        _line_end(p, critical.best_line_san, p.win_before),
+        _told_moves("Ton coup", p, critical.played_line_san, _played_mark(p)),
+        _line_end(p, critical.played_line_san, p.win_after),
+    ))
+
+
 def _variant_line(critical) -> str:
     """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
-    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis une seconde
-    ligne pour celle du meilleur coup (les autres sortes la donnent déjà)."""
+    la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis la ligne « Piège : »
+    s'il est piégeant, puis une ligne pour la variante du meilleur coup (les autres
+    sortes la donnent déjà). Sortes a et b : les deux suites comparées."""
     p = critical.ply
+    if critical.best_line_san:
+        return _compared_lines(critical)
     if critical.kind in ("c", "e"):
         moves = critical.line_san
     elif critical.kind == "d":
@@ -305,6 +379,9 @@ def _variant_line(critical) -> str:
     if not moves:
         return ""
     line = _told_moves("Variante", p, moves)
+    trapping = _trap_replies(critical)
+    if trapping:
+        line += "\n" + _trap_line(p, critical.explosive, trapping[0])
     if critical.kind == "d" and p.pv_san:
         line += "\n" + _told_moves("Variante du meilleur coup", p, p.pv_san)
     return line
@@ -335,18 +412,40 @@ def _level_line(summary: dict) -> str:
     return "Niveau (données) : " + " ; ".join(parts)
 
 
+def _errors_by_gravity(summary: dict, side: str) -> str:
+    """« 2 imprécisions, 1 gaffe » (catégories à zéro omises), « aucune » sinon."""
+    parts = [f"{summary[f'{side}_{q}']} {one if summary[f'{side}_{q}'] == 1 else many}"
+             for q, one, many in _ERRORS_FR if summary[f"{side}_{q}"]]
+    return ", ".join(parts) or "aucune"
+
+
 def _moves_line(summary: dict) -> str:
-    """Ligne déterministe sous le texte LLM : précision, meilleur et pire coup (tronçon 08)."""
-    parts = []
+    """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
+    coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
+    lines = []
     if summary["accuracy"] is not None:
-        parts.append(f"Précision {summary['accuracy']:.0f} %")
+        line = f"🎯 Précision : toi {summary['accuracy']:.0f} %"
+        if summary["accuracy_opponent"] is not None:
+            line += f" · adversaire {summary['accuracy_opponent']:.0f} %"
+        lines.append(line)
+    lines.append(f"Meilleurs coups : toi {summary['nico_best']}/{summary['nico_moves']}"
+                 f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
+    lines.append(f"Erreurs : toi {_errors_by_gravity(summary, 'nico')}"
+                 f" · adversaire {_errors_by_gravity(summary, 'opponent')}")
+    if summary["brilliant_moves"]:
+        lines.append(f"💥 Coups brillants : {summary['brilliant_moves']}")
+    parts = []
     if summary["best_move"]:
         parts.append(f"meilleur coup {summary['best_move']} "
                      f"(trouvé par {summary['best_move_p'] * 100:.0f} % des joueurs de ton niveau)")
     if summary["worst_move"]:
         parts.append(f"pire coup {summary['worst_move']} "
                      f"({summary['worst_win_before']:.0f} % → {summary['worst_win_after']:.0f} %)")
-    return "🎯 " + " · ".join(parts) if parts else ""
+    if parts:
+        line = " · ".join(parts)
+        lines.append(line[0].upper() + line[1:])
+    lines.append(_MARKS_KEY)
+    return "\n".join(lines)
 
 
 def _signed(x: float) -> str:
@@ -356,7 +455,7 @@ def _signed(x: float) -> str:
 
 
 def _history_line(after) -> str:
-    """Données d'historique pour la ligne « Niveau : » du LLM."""
+    """Données d'historique pour la ligne « Bilan : » du LLM."""
     g = after.ratings["global"]
     return (f"Historique (données) : {after.n_games} parties saison 1, classement global "
             f"{round(g.value)} (niveau {g.level}), {_signed(after.last_game['global'].delta)} "
@@ -493,12 +592,23 @@ def _win_drop(before: float, after: float, drop: float) -> str:
     return f"{before:.0f} % → {after:.0f} % (−{drop:.0f} pts)"
 
 
-def _nico_wins(plies: list, nico_color: str) -> list:
-    """% de gain de Nico à chaque position : N+1 valeurs, du point de vue de Nico."""
-    wins = [p.win_before if p.color == nico_color else 100 - p.win_before for p in plies]
-    last = plies[-1]
-    wins.append(last.win_after if last.color == nico_color else 100 - last.win_after)
-    return wins
+def _point_colors(analysis) -> list:
+    """Couleur de chaque point de la courbe : le point d'une position porte le coup joué depuis
+    elle. Par priorité : erreur, piège, explosif, brillant, meilleur coup, sinon neutre ; la dernière
+    position n'a pas de coup. La stratégie n'est calculée qu'à l'échiquier."""
+    explosive = {c.ply.ply: c for c in analysis.explosive}
+    colors = []
+    for p in analysis.plies:
+        found = explosive.get(p.ply)
+        if p.loss >= _ERROR_POINT_MIN:
+            colors.append(error_arrow(p.loss)[:3])
+        elif found and _trap_replies(found):
+            colors.append(TRAP_ARROW[:3])
+        elif found or is_brilliant(p.fen_before, p.uci, p.win_before, p.loss):
+            colors.append(ALT_ARROW[:3])
+        else:
+            colors.append(CURVE_BEST if p.quality == "best" else CURVE_NEUTRAL)
+    return colors + [CURVE_NEUTRAL]
 
 
 def _caption(index: int, critical, plies: list) -> str:
@@ -506,28 +616,29 @@ def _caption(index: int, critical, plies: list) -> str:
     if critical.kind == "e":
         prev = plies[p.ply - 1]
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-                f"tournant après {_move_label(prev.move_number, prev.color, prev.san)}?, "
-                f"joué {_move_label(p.move_number, p.color, p.san)} "
-                f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
+                f"tournant après {_played_mark(prev)} {_move_label(prev.move_number, prev.color, prev.san)}?, "
+                f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)} "
+                f"(meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)})")
     if critical.kind == "c":
         return (f"Position {index} — coup {p.move_number} : "
-                f"{_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
+                f"{_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, seul bon coup — bien joué, "
                 f"2e meilleur coup : {_win_drop(p.win_before, p.win_before - p.second_gap, p.second_gap)}")
     if critical.kind == "d":
         return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-                f"joué {_move_label(p.move_number, p.color, p.san)}, "
-                f"explosif {_move_label(p.move_number, p.color, critical.explosive.san)}!? "
-                f"(meilleur {_move_label(p.move_number, p.color, p.best_san)})")
+                f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
+                f"explosif {_MARK_TRAP if _trap_replies(critical) else _MARK_EXPLOSIVE} "
+                f"{_move_label(p.move_number, p.color, critical.explosive.san)}!? "
+                f"(meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)})")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
-            f"joué {_move_label(p.move_number, p.color, p.san)}, "
-            f"meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
+            f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
+            f"meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)}, "
             f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
 
 
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
-# une ligne « Niveau : » clôt la dernière entrée.
+# une ligne « Bilan : » clôt la dernière entrée.
 _ENTRY_RE = re.compile(r"^\**Position (\d+)\**\s*[—–-]\**\s*", re.MULTILINE)
-_LEVEL_RE = re.compile(r"^\**Niveau\b", re.MULTILINE)
+_LEVEL_RE = re.compile(r"^\**Bilan\b", re.MULTILINE)
 _SENTENCE_END_RE = re.compile(r"[.!?…](?=\s|$)")
 
 # Limite Telegram d'une légende de photo.
@@ -557,7 +668,7 @@ def _split_entries(text: str, images: list) -> tuple:
                  len(images), sorted(found))
         return text, images
 
-    # Fin d'une entrée : début de l'entrée suivante, ligne « Niveau », ou fin du texte.
+    # Fin d'une entrée : début de l'entrée suivante, ligne « Bilan », ou fin du texte.
     bounds = [m.start() for m in marks] + [m.start() for m in _LEVEL_RE.finditer(text)]
     rest, cursor, captioned = [], 0, []
     for m in marks:
@@ -697,12 +808,15 @@ class ChessExecutionRouter(BaseRouter):
         images = []
         for i, critical in enumerate(analysis.critical, 1):
             out_path = out_dir / f"{uuid4().hex[:8]}_{i}.png"
-            # Sorte d : 2e flèche (orange) pour le coup explosif.
+            # Sorte d : 2e flèche pour le coup explosif, cyan s'il est piégeant, sinon orange.
             alt_uci = critical.explosive.uci if critical.kind == "d" else None
+            # Sortes a et b : le coup joué est une erreur, sa flèche en dit la gravité.
+            played_color = error_arrow(critical.ply.loss) if critical.kind in ("a", "b") else PLAYED_ARROW
             render_position(critical.ply.fen_before, analysis.nico_color,
                             critical.ply.best_uci, str(out_path), alt_uci=alt_uci,
                             played_uci=critical.ply.uci,
-                            best_line_uci=critical.ply.pv_uci[:3])
+                            best_line_uci=critical.ply.pv_uci[:3], played_color=played_color,
+                            alt_color=TRAP_ARROW if _trap_replies(critical) else ALT_ARROW)
             # La variante est écrite sous la ligne factuelle dès la création de la
             # légende : elle survit au repli chess_caption_split FALLBACK.
             caption = _caption(i, critical, analysis.plies)
@@ -736,7 +850,8 @@ class ChessExecutionRouter(BaseRouter):
         except Exception:
             log.exception("chess_progression ERROR")
 
-        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, history)
+        story = story_line(analysis.plies, analysis.nico_color, summary["outcome"])
+        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, story, history)
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
@@ -751,10 +866,13 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
         text, images = _split_entries(_to_english(result["text"]), images)
+        # Déroulé du code sous le titre, au-dessus du bilan du LLM.
+        title, _, rest = text.partition("\n")
+        text = f"{title}\n{story}" + (f"\n{rest}" if rest else "")
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
-        render_curve(_nico_wins(analysis.plies, analysis.nico_color),
-                     [p.move_number for p in analysis.plies], str(curve_path))
+        render_curve(nico_wins(analysis.plies, analysis.nico_color),
+                     [p.move_number for p in analysis.plies], _point_colors(analysis), str(curve_path))
         images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
         moves_line = _moves_line(summary)
         if moves_line:
@@ -764,7 +882,7 @@ class ChessExecutionRouter(BaseRouter):
         return {"text": text, "images": images}
 
     def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
-                        history: str | None = None) -> str:
+                        story: str, history: str | None = None) -> str:
         """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         opening = summary["opening"]
@@ -778,13 +896,15 @@ class ChessExecutionRouter(BaseRouter):
         lines += _header_lines(analysis.headers)
         lines.append(f"Compteurs Nico : {counts}")
         lines.append(_level_line(summary))
+        lines.append(f"Déroulé (données) : {story}")
         if history:
             lines.append(history)
         for i, critical in enumerate(analysis.critical, 1):
             p = critical.ply
             tags = ", ".join(_TAG_FR.get(t, t) for t in p.tags) or "aucune"
+            trap = bool(_trap_replies(critical))
             lines += [
-                f"Position {i} ({_KIND_FR[critical.kind]}) — coup {p.move_number} :",
+                f"Position {i} ({_TRAP_KIND_FR if trap else _KIND_FR[critical.kind]}) — coup {p.move_number} :",
                 f"  joué {_move_label(p.move_number, p.color, p.san)}, perte {p.loss:.0f} pts "
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
@@ -804,11 +924,19 @@ class ChessExecutionRouter(BaseRouter):
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
                              f"perte {prev.loss:.0f} pts "
                              f"(meilleur {_move_label(prev.move_number, prev.color, prev.best_san)})")
+            if critical.best_line_san:
+                lines.append(f"  suite du meilleur coup, faits : "
+                             f"{_move_facts(p.fen_before, critical.best_line_san, p.move_number, p.color)}")
+                lines.append(_line_end(p, critical.best_line_san, p.win_before))
+                lines.append(f"  suite du coup joué, faits : "
+                             f"{_move_facts(p.fen_before, critical.played_line_san, p.move_number, p.color)}")
+                lines.append(_line_end(p, critical.played_line_san, p.win_after))
             if critical.kind in ("c", "e"):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
                 lines.append(f"  faits : {_move_facts(p.fen_before, critical.line_san, p.move_number, p.color)}")
-            if critical.kind == "d":
+            # Piège : sa ligne est écrite par le code, le LLM n'en reçoit pas les faits.
+            if critical.kind == "d" and not trap:
                 lines += _explosive_lines(p, critical.explosive, color)
         block = "\n".join(lines) + "]"
 
@@ -823,14 +951,24 @@ class ChessExecutionRouter(BaseRouter):
             "« Plan : » et dis quoi viser dans cette position (pièce à améliorer, colonne à "
             "occuper, pion ou roi à attaquer) d'après les lignes « structure », « évaluation », "
             "« motifs » et le but du meilleur coup (d'après ses faits) ; ne nomme une colonne, "
-            "un pion ou un roi que s'il figure dans ces lignes ; n'énumère pas les coups "
+            "un pion ou un roi que s'il figure dans ces lignes ; exception, si la position a les "
+            "lignes « suite du meilleur coup » et « suite du coup joué » : commence par « Pourquoi : » "
+            "au lieu de « Plan : » et explique en 1 à 2 phrases pourquoi le meilleur coup vaut mieux "
+            "que le coup joué, en comparant uniquement ces deux suites, leurs faits et leur fin ; "
+            "si un de ces faits dit « décloue », cite-le : le coup libère cette pièce ; "
+            "ne dis qu'une pièce est prise ou épargnée que si ces faits le montrent ; n'énumère pas les coups "
             "de la variante : elle est affichée sous le diagramme ; au plus un chiffre "
             "réduit à « 50 % → 37 % », ou aucun ; chaque entrée commence en début de ligne par "
             "« Position N — » et ne recopie pas la ligne « coup … joué … meilleur … » "
-            "(elle est déjà sous le diagramme) ; puis une ligne « Niveau : » de 2 phrases (mal joué, "
-            "passif, solide ou brillant), justifiée par la ligne « Niveau (données) » et, si "
-            "présente, par la ligne « Historique (données) ». Rien "
-            "d'autre : pas de section « ce qui se passe » ni « pourquoi ». Utilise "
+            "(elle est déjà sous le diagramme) ; puis une ligne « Bilan : » de 3 à 5 phrases : part "
+            "de la ligne « Déroulé (données) », relie la partie aux idées d'ouverture et de position, "
+            "dis quoi travailler, en t'appuyant sur "
+            "la ligne « Niveau (données) » et, si présente, la ligne « Historique (données) ». Les "
+            "faits de la partie (coups, évaluations, causes) viennent uniquement des données du code. "
+            "Aucune cause de "
+            "défaite ou de victoire absente du déroulé ; n'annonce un mat que s'il est joué ou s'il "
+            "figure dans une ligne, en disant s'il dépend d'une réponse adverse. Rien "
+            "d'autre : pas de section « ce qui se passe ». Utilise "
             "uniquement les coups et lignes fournis ci-dessus ; n'invente aucun coup "
             "ni évaluation, ni emplacement de pièce : fie-toi à la liste des pièces. "
             "Ne décris aucune attaque, défense, menace ou colonne absente des lignes "
@@ -849,7 +987,7 @@ class ChessExecutionRouter(BaseRouter):
             # Partie entièrement dans le répertoire : rien à numéroter.
             parts.append(
                 "[Consigne : aucune position à commenter dans cette partie : n'écris aucune entrée "
-                "« Position », seulement la 1re ligne et la ligne « Niveau : ».]"
+                "« Position », seulement la 1re ligne et la ligne « Bilan : ».]"
             )
         if summary["opening_group"] == "Göring Gambit" and color == "white":
             parts.append(
@@ -864,7 +1002,12 @@ class ChessExecutionRouter(BaseRouter):
                 "[Consigne : pour chaque tournant, nomme l'erreur adverse et montre la "
                 "variante qui la punit (coups fournis).]"
             )
-        if any(c.kind == "d" for c in analysis.critical):
+        if any(_trap_replies(c) for c in analysis.critical):
+            parts.append(
+                f"[Consigne : pour chaque position « {_TRAP_KIND_FR} », écris seulement le plan, "
+                "sans parler du piège ni de mat : la ligne « Piège » est sous le diagramme.]"
+            )
+        if any(c.kind == "d" and not _trap_replies(c) for c in analysis.critical):
             parts.append(
                 "[Consigne : pour chaque occasion explosive : d'abord le plan, puis l'idée en une phrase ; la "
                 "variante si l'adversaire joue la réponse humaine la plus probable (coups fournis, rien "

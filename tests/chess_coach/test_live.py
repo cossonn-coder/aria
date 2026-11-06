@@ -128,3 +128,11 @@ def test_trap_and_strategy(monkeypatch):
     assert [r["san"] for r in outcome["trap"]["replies"]] == ["Nf6"]
     assert outcome["strategy"]["uci"] == "g1f3"
     assert (outcome["strategy"]["value"], outcome["strategy"]["best_value"]) == (80, 50)
+
+
+def test_trapping_replies_thresholds():
+    high = {"san": "Bxd8", "p": 0.36, "win": 100.0}
+    low = {"san": "Kg8", "p": 0.30, "win": 60.0}
+    rare = {"san": "h6", "p": 0.05, "win": 90.0}
+    assert live.trapping_replies([high, low], 60.0) == [high]
+    assert live.trapping_replies([low, rare], 60.0) == []

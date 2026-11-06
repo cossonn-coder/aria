@@ -1,0 +1,13 @@
+===== Partie 1 — mat de Légal, 5.Nxe5!! attendu en coup brillant (Nico blancs) =====
+[Event "Run live 5"]
+[White "Nico"]
+[Black "Test"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5# 1-0
+
+===== Message 2 — liste du jour =====
+/parties
+
+===== Message 3 — rapport du jour sur une ouverture (remplacer par une ouverture jouée aujourd'hui) =====
+/parties scandinavian

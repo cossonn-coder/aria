@@ -49,9 +49,10 @@ def _passed(board: chess.Board, color: chess.Color) -> list:
 
 
 def _king_text(board: chess.Board, color: chess.Color) -> str:
-    """Case du roi, roqué ou au centre si l'une des deux s'applique, pions devant lui.
+    """Case du roi, à l'aile ou au centre si l'une des deux s'applique, pions devant lui.
 
-    Le FEN ne garde pas l'historique : « roqué » = roi sur sa 1re rangée, à l'aile.
+    Le FEN ne garde pas l'historique : seul « à l'aile » est affirmable (roi sur sa
+    1re rangée), pas « roqué ».
     """
     king = board.king(color)
     file, rank = chess.square_file(king), chess.square_rank(king)
@@ -65,7 +66,7 @@ def _king_text(board: chess.Board, color: chess.Color) -> str:
     if file in (3, 4):
         parts.append("au centre")
     elif rank == home and file != 5:
-        parts.append("roqué")
+        parts.append("à l'aile")
     parts.append(f"{shield} pion{'s' if shield > 1 else ''} devant")
     return ", ".join(parts)
 

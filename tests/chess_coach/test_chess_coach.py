@@ -13,8 +13,11 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
                                   parse_pgn, select_critical)
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
-from chess_coach.explosive import ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice
-from chess_coach.render import ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, render_curve, render_position
+from chess_coach.analysis import forcing_line
+from chess_coach.explosive import (ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice,
+                                   is_brilliant)
+from chess_coach.render import (ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, error_arrow,
+                                render_curve, render_position)
 
 STOCKFISH = "/usr/games/stockfish"
 
@@ -121,6 +124,20 @@ def test_clear_advantage_material():
     board = chess.Board(HANGING_FEN)
     n, criterion = clear_advantage(board, _line(HANGING_FEN, ["e3", "a6", "exd4"]), 50.0, False)
     assert n <= 4 and criterion == "material"
+
+
+def test_clear_advantage_announced_mate_goes_to_mate():
+    # Sprint 50 : le critère de développement répondait (2, …) avant 21.Qxd8#.
+    fen = "r1b2k1r/4bppp/p1p1p1q1/B1N2n2/4N3/7P/2P2PP1/R2Q1RK1 w - - 9 20"
+    line = _line(fen, ["Bd8", "Bxd8", "Qxd8"])
+    assert clear_advantage(chess.Board(fen), line, 60.0, True) == (3, "mate")
+
+
+def test_error_arrow_scale():
+    assert error_arrow(10) == (255, 190, 205, 235)
+    assert error_arrow(25) == (215, 20, 35, 235)
+    assert error_arrow(60) == (0, 0, 0, 235)
+    assert error_arrow(3) == error_arrow(10)
 
 
 def test_clear_advantage_quiet_line_none():
@@ -465,10 +482,46 @@ def test_find_explosive_starts_at_first_move(monkeypatch):
 def test_render_curve(tmp_path):
     """La courbe suit le % de gain : haut au début, bas à la fin."""
     out = tmp_path / "curve.png"
-    render_curve([100, 100, 0], [10, 10], str(out))
+    render_curve([100, 100, 0], [10, 10], [(1, 2, 3), (4, 5, 6), (7, 8, 9)], str(out))
     image = Image.open(out).convert("RGB")
     assert image.size == CURVE_SIZE
     width, height = CURVE_SIZE
     top, bottom = CURVE_MARGIN // 2, height - CURVE_MARGIN
+    # Segment entre deux points, puis centre de chaque point à sa couleur (sprint 50).
     assert image.getpixel((CURVE_MARGIN + 10, top)) == CURVE_LINE
-    assert image.getpixel((width - CURVE_MARGIN // 2 - 1, bottom)) == CURVE_LINE
+    assert image.getpixel((CURVE_MARGIN, top)) == (1, 2, 3)
+    assert image.getpixel((width - CURVE_MARGIN // 2, bottom)) == (7, 8, 9)
+
+
+class _ScriptedEngine:
+    """Moteur factice : chaque analyse rend la ligne suivante du script."""
+
+    def __init__(self, *lines):
+        self.lines = list(lines)
+
+    def analyse(self, board, limit):
+        return {"pv": [chess.Move.from_uci(uci) for uci in self.lines.pop(0)]}
+
+
+_START = chess.STARTING_FEN
+
+
+def test_forcing_line_stops_on_quiet_moves():
+    """Le coup et sa réponse sont montrés ; deux coups calmes de suite arrêtent la suite."""
+    engine = _ScriptedEngine()
+    assert forcing_line(engine, _START, ["a2a3", "a7a6", "h2h3", "h7h6"]) == ["a3", "a6"]
+
+
+def test_forcing_line_extends_truncated_pv():
+    """Ligne tronquée : le moteur est relancé ; la menace (Nf3 sur e5) et sa réponse sont montrées."""
+    engine = _ScriptedEngine(["e7e5"], ["g1f3"], ["b8c6"], ["a2a3"])
+    assert forcing_line(engine, _START, ["e2e4"]) == ["e4", "e5", "Nf3", "Nc6"]
+
+
+def test_is_brilliant_piece_left_to_a_pawn():
+    # Ne5 laisse le cavalier au pion d6 ; Nd4 ne laisse rien ; perte ou position gagnée : non.
+    fen = "4k3/8/3p4/8/8/5N2/8/4K3 w - - 0 1"
+    assert is_brilliant(fen, "f3e5", 50, 0)
+    assert not is_brilliant(fen, "f3d4", 50, 0)
+    assert not is_brilliant(fen, "f3e5", 95, 0)
+    assert not is_brilliant(fen, "f3e5", 50, 3)

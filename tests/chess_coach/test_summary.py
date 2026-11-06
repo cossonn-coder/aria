@@ -9,7 +9,7 @@ import pytest
 
 import chess_coach.summary as summary_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
-from chess_coach.summary import summarize, summary_text
+from chess_coach.summary import story_line, summarize, summary_text
 
 
 @pytest.fixture
@@ -55,6 +55,7 @@ def test_summarize_nominal():
     assert s["eco"] == "A80"
     assert s["opening_line"] == "e4 f5 Qh5+ g6"
     assert (s["nico_best"], s["nico_blunder"], s["nico_mistake"]) == (1, 1, 0)
+    assert (s["opponent_best"], s["opponent_mistake"], s["opponent_moves"]) == (1, 1, 2)
     assert s["first_error_nico"] == 2 and s["first_error_opponent"] == 2
     assert s["accuracy_middlegame"] is None
     assert s["opponent_errors"] == 1 and s["opponent_errors_punished"] == 0
@@ -119,3 +120,44 @@ def test_best_move_is_rarest_played_move(no_detection):
 
     assert s["best_move"] == "12.Nb3"
     assert s["best_move_p"] == 0.1
+
+
+def _story_plies(*losses):
+    """Coups de Nico (blancs) ; (coup, san, % avant, perte), un coup adverse neutre derrière chacun."""
+    plies = []
+    for number, san, before, loss in losses:
+        plies.append(_ply(len(plies), number, "white", san, "a2a3", "correct", loss, before, None))
+        plies.append(_ply(len(plies), number, "black", "a6", "a7a6", "best", 0.0, 100 - before + loss, None))
+    return plies
+
+
+def test_story_line_loss_by_erosion():
+    plies = _story_plies((17, "Bd3", 68.0, 4.0), (18, "Nc5", 64.0, 10.0), (33, "Kh1", 10.0, 4.0))
+    assert story_line(plies, "white", "loss") == (
+        "📉 Défaite sans coup décisif : de 68 % au coup 17 à 6 % au coup 33. Pire coup 18.Nc5 (−10 pts)."
+    )
+
+
+def test_story_line_loss_with_turning_point():
+    plies = _story_plies((10, "Nf3", 60.0, 0.0), (11, "Qd2", 60.0, 35.0), (20, "Kh1", 25.0, 15.0))
+    assert story_line(plies, "white", "loss") == (
+        "📉 Défaite : de 60 % au coup 10 à 10 % au coup 20. Tournant : coup 11.Qd2 (−35 pts)."
+    )
+
+
+def test_story_line_cites_near_drops_in_game_order():
+    # 37 pts dépasse 3/4 de 39 : cité. 21 pts est décisif mais loin du maximum : non cité.
+    plies = _story_plies((14, "e5", 77.0, 21.0), (32, "Kg1", 84.0, 37.0), (34, "b6", 49.0, 39.0))
+    assert story_line(plies, "white", "loss").endswith("Tournants : coups 32.Kg1 (−37 pts) et 34.b6 (−39 pts).")
+
+
+def test_story_line_win_without_worst_move():
+    plies = _story_plies((5, "Nf3", 30.0, 2.0), (30, "Qh7", 97.0, 0.0))
+    assert story_line(plies, "white", "win") == "📈 Victoire sans coup décisif : de 28 % au coup 5 à 97 % au coup 30."
+
+
+def test_story_line_draw_gives_trough_and_peak():
+    plies = _story_plies((5, "Nf3", 40.0, 12.0), (30, "Kh1", 70.0, 20.0))
+    assert story_line(plies, "white", "draw") == (
+        "➖ Nulle : creux 28 % au coup 5, pic 70 % au coup 30. Tournant : coup 30.Kh1 (−20 pts)."
+    )

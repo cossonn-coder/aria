@@ -16,6 +16,7 @@ import math
 import statistics
 
 from chess_coach.analysis import GameAnalysis
+from chess_coach.explosive import is_brilliant
 from chess_coach.openings import detect_opening, opening_group
 
 _OPENING_PLIES = 12
@@ -26,6 +27,13 @@ _PHASES = ("opening", "middlegame", "endgame")
 _COLOR_FR = {"white": "blancs", "black": "noirs"}
 _OUTCOME_FR = {"win": "victoire", "loss": "défaite", "draw": "nulle", "unknown": "issue inconnue"}
 _PHASE_FR = {"opening": "ouverture", "middlegame": "milieu", "endgame": "finale"}
+_STORY_HEAD = {"win": "📈 Victoire", "loss": "📉 Défaite", "draw": "➖ Nulle", "unknown": "➖ Issue inconnue"}
+
+# Pire coup de Nico : décisif à partir de 20 pts de perte, cité à partir de 10 (sprint 50).
+_DECISIVE_LOSS = 20
+_WORST_MOVE_MIN = 10
+# Chute proche : un autre coup décisif d'au moins 3/4 de la perte maximale est cité aussi.
+_NEAR_DROP_RATIO = 0.75
 
 
 def _header(headers: dict, key: str) -> str:
@@ -99,6 +107,44 @@ def _effective_loss(p) -> float:
     return 0.0 if p.quality == "best" else p.loss
 
 
+def nico_wins(plies: list, nico_color: str) -> list:
+    """% de gain de Nico à chaque position : N+1 valeurs, du point de vue de Nico."""
+    wins = [p.win_before if p.color == nico_color else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    wins.append(last.win_after if last.color == nico_color else 100 - last.win_after)
+    return wins
+
+
+def story_line(plies: list, nico_color: str, outcome: str) -> str:
+    """Déroulé de la partie en une ligne, écrit par le code (sprint 50)."""
+    wins = nico_wins(plies, nico_color)
+
+    def at(index: int) -> str:
+        # La position N+1 (après le dernier coup) porte le numéro du dernier coup.
+        return f"{wins[index]:.0f} % au coup {plies[min(index, len(plies) - 1)].move_number}"
+
+    peak = at(wins.index(max(wins)))
+    trough = at(wins.index(min(wins)))
+    last = at(len(wins) - 1)
+    span = {"loss": f"de {peak} à {last}", "win": f"de {trough} à {last}"}.get(
+        outcome, f"creux {trough}, pic {peak}")
+
+    worst = max((p for p in plies if p.color == nico_color), key=lambda p: p.loss, default=None)
+    loss = worst.loss if worst else 0
+    head = _STORY_HEAD[outcome] + ("" if loss >= _DECISIVE_LOSS else " sans coup décisif")
+    line = f"{head} : {span}."
+    if loss >= _DECISIVE_LOSS:
+        floor = max(_DECISIVE_LOSS, loss * _NEAR_DROP_RATIO)
+        drops = [f"{_label(p)} (−{p.loss:.0f} pts)" for p in plies if p.color == nico_color and p.loss >= floor]
+        if len(drops) == 1:
+            line += f" Tournant : coup {drops[0]}."
+        else:
+            line += f" Tournants : coups {', '.join(drops[:-1])} et {drops[-1]}."
+    elif loss >= _WORST_MOVE_MIN:
+        line += f" Pire coup {_label(worst)} (−{loss:.0f} pts)."
+    return line
+
+
 def summarize(analysis: GameAnalysis) -> dict:
     """GameAnalysis → métadonnées scalaires de la fiche `chess_game`."""
     headers = analysis.headers
@@ -139,6 +185,10 @@ def summarize(analysis: GameAnalysis) -> dict:
 
     for quality in _QUALITIES:
         summary[f"nico_{quality}"] = sum(1 for p in nico if p.quality == quality)
+        # Sprint 50 : mêmes comptes pour l'adversaire (bilan des deux camps).
+        summary[f"opponent_{quality}"] = sum(1 for p in opponent if p.quality == quality)
+    summary["nico_moves"] = len(nico)
+    summary["opponent_moves"] = len(opponent)
 
     def first_error(side):
         return next((p.move_number for p in side if p.quality in _ERROR_QUALITIES), None)
@@ -155,6 +205,11 @@ def summarize(analysis: GameAnalysis) -> dict:
     # Sprint 29 : précision unique de la partie (Lichess) ; accuracy_{phase}
     # gardées pour la compatibilité des fiches, plus affichées.
     summary["accuracy"] = _game_accuracy(plies, color)
+    summary["accuracy_opponent"] = _game_accuracy(plies, "black" if color == "white" else "white")
+
+    # Sprint 50 : coups brillants de Nico (sacrifice de pièce sain), « 21.Nxf7!!, … ».
+    brilliant = [f"{_label(p)}!!" for p in nico if is_brilliant(p.fen_before, p.uci, p.win_before, p.loss)]
+    summary["brilliant_moves"] = ", ".join(brilliant) or None
 
     # Pire coup de Nico : plus forte perte, seulement à partir de 10 pts.
     worst = max(nico, key=lambda p: p.loss, default=None)

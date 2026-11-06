@@ -215,6 +215,25 @@ def _natural_capture(board: chess.Board, square: int) -> chess.Move | None:
     return None
 
 
+def is_brilliant(fen_before: str, uci: str, win_before: float, loss: float) -> bool:
+    """Coup brillant (sprint 50, règle chess.com) : le coup joué perd moins de 2 pts, la
+    position n'était pas déjà gagnée (< 90 % pour le camp qui joue), et il laisse en prise
+    une pièce (cavalier ou plus), prenable avec gain de matériel (_natural_capture) pour
+    au moins 2 pions nets. Même règle à l'échiquier (isBrilliant, interfaces/board)."""
+    if loss >= 2 or win_before >= 90:
+        return False
+    board = chess.Board(fen_before)
+    move = chess.Move.from_uci(uci)
+    piece = board.piece_type_at(move.from_square)
+    if piece is None or _VALUES[piece] < 3:
+        return False
+    taken = chess.PAWN if board.is_en_passant(move) else board.piece_type_at(move.to_square)
+    board.push(move)
+    if _natural_capture(board, move.to_square) is None:
+        return False
+    return _VALUES[piece] - (_VALUES[taken] if taken else 0) >= 2
+
+
 def _priority(board: chess.Board, move: chess.Move) -> bool:
     """Candidat prioritaire : échec, prise, ou matériel offert sur la case d'arrivée."""
     if board.gives_check(move) or board.is_capture(move):

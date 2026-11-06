@@ -390,7 +390,11 @@ class TelegramInterface(BaseInterface):
     async def _cmd_parties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=parties")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
-        await self._deliver(update.effective_chat.id, meta_commands.parties_text(games))
+        if context.args:
+            text = meta_commands.parties_opening_text(games, " ".join(context.args))
+        else:
+            text = meta_commands.parties_text(games)
+        await self._deliver(update.effective_chat.id, text)
 
     async def _cmd_ouvertures(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=ouvertures")

@@ -14,6 +14,7 @@ import execution.routers.chess_router as chess_router_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
+from chess_coach.render import ALT_ARROW, CURVE_BEST, CURVE_NEUTRAL, TRAP_ARROW, error_arrow
 from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
 
 
@@ -68,20 +69,25 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     delegated = llm_exec.execute.call_args.args[0]
     # Ligne déterministe (tronçon 08) entre le texte LLM et le bloc Progression.
     assert result["text"].startswith(
-        "explication\n\n🎯 Précision 41 % · pire coup 17...Ng4+ (50 % → 30 %)\n\n"
+        "explication\n➖ Issue inconnue : creux 30 % au coup 19, pic 50 % au coup 17. "
+        "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 %\n"
+        "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
+        "Pire coup 17...Ng4+ (50 % → 30 %)\n"
+        "🟢 meilleur · 🔵 correct · 🩷 imprécision · 🔴 erreur · ⚫ gaffe · 🟠 explosif / brillant · 🩵 piège\n\n"
         "🎮 Progression — saison 1, partie 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 3
     assert result["images"][-1]["caption"] == "Courbe de la partie : % de gain de Nico"
-    assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
+    assert result["images"][0]["caption"].startswith("Position 1 — coup 17 (noirs) : joué 🔴 17...Ng4+")
     assert delegated["op_type"] == "reasoning"
     assert "skip_intent" not in delegated["metadata"]
     assert "Position 1" in delegated["content"]
     assert delegated["metadata"]["forced_intent_name"] == "jeux echecs"
     assert delegated["content"].startswith("Partie contre Ami\n[Analyse Stockfish")
     assert "1re ligne exacte « Partie contre Ami »" in delegated["content"]
-    assert "Niveau" in delegated["content"]
+    assert "Niveau (données)" in delegated["content"]
+    assert "une ligne « Bilan : » de 3 à 5 phrases" in delegated["content"]
     # Sprint 46 : l'entrée est un plan, nombre exact d'entrées, sans historique.
     assert "commence par « Plan : »" in delegated["content"]
     assert "  structure : " in delegated["content"]
@@ -136,8 +142,8 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 4 (noirs) : joué 4...Nf6, explosif 4...Qh4!? (meilleur 4...Nc6)\n"
-        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4 ; 5...e5.\n"
+        "Position 1 — coup 4 (noirs) : joué 🔴 4...Nf6, explosif 🟠 4...Qh4!? (meilleur 🟢 4...Nc6)\n"
+        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4, décloue pion f2 ; 5...e5.\n"
         "Variante du meilleur coup : 4...Nc6 ; 5.Bb5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
@@ -147,8 +153,8 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     assert "réponse humaine la plus probable : Nxh4 (62 %)" in content
     assert "espérance face à un humain : Nico 58 % (meilleur coup : 46 %)" in content
     assert "variante : 5.Nxh4 e5 (avance de développement)" in content
-    assert "faits : 5.Nxh4 (prend Qh4) 5...e5" in content
-    assert "fin de variante : matériel : Nico −9, % de gain Nico 75 %" in content
+    assert "faits : 5.Nxh4 (prend Qh4, décloue pion f2) 5...e5" in content
+    assert "fin de variante : matériel : Nico Q de moins, % de gain Nico 75 %" in content
     assert "coût" not in content.split("[Consigne")[0]
     assert "si Nxh4 (62 %) : 5.Nxh4, 62 % pour Nico" in content
     assert "si d3 (20 %) : 5.d3 Nc6, 47 % pour Nico" in content
@@ -229,7 +235,7 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
 
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
-        "Position 1 — coup 8 (blancs) : tournant après 7...h6?, joué 8.e5 (meilleur 8.e5)\n"
+        "Position 1 — coup 8 (blancs) : tournant après 🔴 7...h6?, joué 🟢 8.e5 (meilleur 🟢 8.e5)\n"
         "Variante : 8.e5 ; 8...d5 ; 9.exd6 prend pion d5."
     )
     assert "Position 1 (tournant (erreur adverse punie))" in content
@@ -237,7 +243,8 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     assert "variante : 8.e5 d5 9.exd6 (gain matériel)" in content
     assert "montre la variante qui la punit" in content
     # Conversion de la notation française résiduelle en sortie ; bridge en échec → pas de bloc.
-    assert result["text"].startswith("2.Qh5 Nxe5 Rae1 Be7, Cela\n\n🎯 Précision")
+    assert result["text"].startswith("2.Qh5 Nxe5 Rae1 Be7, Cela\n➖ Issue inconnue ")
+    assert "\n\n🎯 Précision" in result["text"]
     assert "Historique (données) :" not in content
 
 
@@ -350,6 +357,10 @@ def test_normalize_images_result_is_images_text():
     assert out == {"type": "images_text", "images": images, "text": "t"}
 
 
+# Déroulé des deux coups factices de _run_with_llm_text (Nico noir, 50 % puis 30 % à chaque coup).
+_STORY = "➖ Issue inconnue : creux 30 % au coup 19, pic 50 % au coup 17. Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts)."
+
+
 def _run_with_llm_text(monkeypatch, tmp_path, llm_text):
     """Deux positions critiques, LLM factice rendant llm_text ; deux fiches → bloc Progression."""
     plies = [_ply(1, 17, "Ng4+", "d6", "d7d6"), _ply(3, 19, "a6", "Nf6", "g8f6")]
@@ -374,23 +385,24 @@ def _run_with_llm_text(monkeypatch, tmp_path, llm_text):
 
 def test_entries_move_to_captions(monkeypatch, tmp_path):
     llm = ("Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\n"
-           "Position 2 — Nf6 développait avec tempo.\n\nNiveau : solide. Peu d'erreurs.")
+           "Position 2 — Nf6 développait avec tempo.\n\nBilan : solide. Peu d'erreurs.")
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
     caps = [img["caption"] for img in result["images"]]
-    assert caps[0].startswith("Position 1 — coup 17 (noirs) : joué 17...Ng4+")
+    assert caps[0].startswith("Position 1 — coup 17 (noirs) : joué 🔴 17...Ng4+")
     assert caps[0].endswith("\nLe fou devait parer l'échec.")
     assert caps[1].endswith("\nNf6 développait avec tempo.")
     assert "Position 1 —" not in result["text"] and "Position 2 —" not in result["text"]
-    assert result["text"].startswith("Partie contre Ami\n\nNiveau : solide. Peu d'erreurs.\n\n🎯 ")
+    assert result["text"].startswith(
+        f"Partie contre Ami\n{_STORY}\n\nBilan : solide. Peu d'erreurs.\n\n🎯 ")
     assert "\n\n🎮 Progression" in result["text"]
 
 
 def test_missing_entry_keeps_current_behavior(monkeypatch, tmp_path):
-    llm = "Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\nNiveau : solide."
+    llm = "Partie contre Ami\n\nPosition 1 — Le fou devait parer l'échec.\n\nBilan : solide."
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
-    assert result["text"].startswith(llm + "\n\n🎯 ")
+    assert result["text"].startswith(llm.replace("\n", f"\n{_STORY}\n", 1) + "\n\n🎯 ")
     # Repli : légende = ligne factuelle + ligne « Variante : » du code, rien d'autre.
     assert result["images"][0]["caption"].count("\n") == 1
     assert result["images"][1]["caption"].endswith("\nVariante : 19...Nf6 attaque pion e4 ; 20.Nf3.")
@@ -398,12 +410,19 @@ def test_missing_entry_keeps_current_behavior(monkeypatch, tmp_path):
 
 def test_long_entry_cut_at_last_sentence(monkeypatch, tmp_path):
     long_entry = "Une phrase d'explication assez longue pour remplir. " * 30  # ~1500 car.
-    llm = f"Partie contre Ami\nPosition 1 — {long_entry}\nPosition 2 — Court.\nNiveau : solide."
+    llm = f"Partie contre Ami\nPosition 1 — {long_entry}\nPosition 2 — Court.\nBilan : solide."
     result = _run_with_llm_text(monkeypatch, tmp_path, llm)
 
     caption = result["images"][0]["caption"]
     assert len(caption) <= 1024
     assert caption.endswith("remplir. …")
+
+
+def test_move_facts_names_unpinned_piece():
+    # Partie du run live : le roi quitte la colonne d et libère le fou cloué par la tour.
+    fen = "4r3/3k2pp/1ppb1p1n/p7/P1B2PP1/2P4P/1P3K2/2BR4 b - - 0 24"
+    assert _move_facts(fen, ["Kc7"], 24, "black") == "24...Kc7 (décloue Bd6)"
+    assert "décloue" not in _move_facts(fen, ["g5"], 24, "black")
 
 
 def test_move_facts_capture_and_numbering():
@@ -591,3 +610,172 @@ def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     content = llm_exec.execute.call_args.args[0]["content"]
     assert "colonnes c et d et les diagonales a1-h8 et a2-g8" in content
     assert "c'est la Scotch normale" in content
+
+
+# Position avant 20.Bd8 (La_Bagouze – Mama_dor_de_pene, 2026-11-05).
+_TRAP_FEN = "r1b2k1r/4bppp/p1p1p1q1/B1N2n2/4N3/7P/2P2PP1/R2Q1RK1 w - - 9 20"
+
+
+def _trap_critical(replies):
+    ply = _ply(39, 20, "Nd3", "Bb6", "a5b6")
+    ply.color = "white"
+    ply.fen_before = _TRAP_FEN
+    ply.win_before = 60.0
+    ply.pv_san = []
+    explosive = ExplosiveMove(
+        san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3, forcing=[],
+        trap_reply_san="Bxd8", score=10.0, trap_line_san=["Bxd8", "Qxd8#"], replies=replies,
+        evidence="mate", trap_end_fen=_TRAP_FEN, trap_end_win=100.0, expected=70.0, best_expected=60.0,
+    )
+    return CriticalPosition(kind="d", ply=ply, score=10.0, explosive=explosive)
+
+
+_BXD8_MATE = {"san": "Bxd8", "p": 0.36, "line_san": ["Bxd8", "Qxd8#"], "win": 100.0}
+_KG8_CALM = {"san": "Kg8", "p": 0.30, "line_san": ["Kg8", "Nd3", "e5"], "win": 55.0}
+
+
+def test_trap_line_with_mate():
+    line = _variant_line(_trap_critical([_BXD8_MATE, _KG8_CALM]))
+    assert "\nPiège : 20.Bd8!? Si 20...Bxd8 (36 %), 21.Qxd8#. Sinon, pas de mat." in line
+
+
+def test_trap_line_other_mate_drops_otherwise():
+    other = {**_KG8_CALM, "line_san": ["Kg8", "Qd8#"]}
+    assert "21.Qxd8#.\n" in _variant_line(_trap_critical([_BXD8_MATE, other])) + "\n"
+
+
+def test_trap_line_without_mate():
+    reply = {"san": "Kg8", "p": 0.40, "line_san": ["Kg8", "Nd3", "e5"], "win": 80.0}
+    line = _variant_line(_trap_critical([reply]))
+    assert "\nPiège : 20.Bd8!? Si 20...Kg8 (40 %), 21.Nd3 e5, 80 % pour toi." in line
+
+
+def test_trap_position_is_cyan_and_llm_writes_plan_only(monkeypatch, tmp_path):
+    critical = _trap_critical([_BXD8_MATE, _KG8_CALM])
+    analysis = GameAnalysis(headers={}, nico_color="white", color_source="header",
+                            plies=[critical.ply], critical=[critical])
+    render = MagicMock(side_effect=lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", render)
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert render.call_args.kwargs["alt_color"] == chess_router_mod.TRAP_ARROW
+    assert render.call_args.kwargs["played_color"] == chess_router_mod.PLAYED_ARROW
+    assert "Position 1 (piège affiché)" in content
+    assert "sans parler du piège ni de mat" in content
+    assert "explosif 20.Bd8" not in content
+    assert "pour chaque occasion explosive" not in content
+
+
+def test_error_played_arrow_takes_severity_color(monkeypatch, tmp_path):
+    ply = _ply(7, 4, "Nf6", "Nc6", "b8c6")
+    ply.loss = 25.0
+    analysis = GameAnalysis(headers={}, nico_color="black", color_source="header", plies=[ply],
+                            critical=[CriticalPosition(kind="a", ply=ply, score=25.0)])
+    render = MagicMock(side_effect=lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", render)
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    assert render.call_args.kwargs["played_color"] == (215, 20, 35, 235)
+
+
+def _run_lost_game(monkeypatch, tmp_path):
+    """Une position critique, partie perdue dans une ouverture connue ; renvoie (résultat, appel LLM)."""
+    plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]
+    analysis = GameAnalysis(
+        headers={"White": "Ami", "Black": "staroflexeur", "Result": "1-0", "Opening": "Dutch Defense"},
+        nico_color="black", color_source="header", plies=plies,
+        critical=[CriticalPosition(kind="a", ply=plies[0], score=20.0)],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "Partie contre Ami\nPosition 1 — Plan : viser e4.\nBilan : à travailler."}
+    bridge = MagicMock()
+    current = "chess_game_" + hashlib.sha256(b"a7a6").hexdigest()[:16]
+    bridge.load_chess_games.return_value = [_season_game("chess_game_old"), _season_game(current)]
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "[White \"Ami\"] 1. e4", "metadata": {}}
+    )
+    return result, llm_exec.execute.call_args[0][0]
+
+
+def test_story_goes_to_llm_and_above_the_bilan(monkeypatch, tmp_path):
+    result, delegated = _run_lost_game(monkeypatch, tmp_path)
+
+    assert "Déroulé (données) : 📉 Défaite : " in delegated["content"]
+    # Ordre : titre, déroulé, bilan, 🎯, Progression.
+    text = result["text"]
+    assert text.startswith("Partie contre Ami\n📉 Défaite : ")
+    assert text.index("Bilan :") < text.index("🎯") < text.index("🎮 Progression")
+
+
+def test_material_line_names_pieces_and_pawns():
+    # Position du coup 35 de la partie du run live : tour contre cavalier, 3 pions contre 4.
+    fen = "5r1k/1P4pp/8/2Pp4/8/6P1/5q1P/3Q1N1K b - - 1 35"
+    assert chess_router_mod._material_line(fen, "black") == "matériel : Nico R contre N, 3 pions contre 4"
+    assert chess_router_mod._material_line(fen, "white") == "matériel : Nico N contre R, 4 pions contre 3"
+    # Une pièce sans contrepartie ; pions égaux : rien à leur sujet.
+    fen = "4k3/8/8/8/8/8/8/3QK3 w - - 0 1"
+    assert chess_router_mod._material_line(fen, "white") == "matériel : Nico Q de plus"
+    assert chess_router_mod._material_line(fen, "black") == "matériel : Nico Q de moins"
+
+
+def test_error_caption_compares_both_lines():
+    """Sprint 50 : une erreur montre les deux suites et où chacune mène, écrit par le code."""
+    # Position du coup 35 de la partie du run live : la dame prend le cavalier, puis les dames partent.
+    ply = _ply(0, 35, "Qxf1+", "Qxc5", "f2c5")
+    ply.fen_before = "5r1k/1P4pp/8/2Pp4/8/6P1/5q1P/3Q1N1K b - - 1 35"
+    ply.win_before, ply.win_after = 82.0, 11.0
+    critical = CriticalPosition(kind="a", ply=ply, score=71.0,
+                                best_line_san=["Qxc5", "h4"],
+                                played_line_san=["Qxf1+", "Qxf1", "Rxf1+", "Kg2"])
+    assert chess_router_mod._variant_line(critical) == (
+        "Meilleur coup : 🟢 35...Qxc5 prend pion c5 ; 36.h4.\n"
+        "  → matériel : Nico R contre N, 82 % de gain\n"
+        "Ton coup : 🔴 35...Qxf1+ prend Nf1, échec, attaque Qd1 ; 36.Qxf1 reprend, attaque Rf8 ; "
+        "36...Rxf1+ reprend, échec ; 37.Kg2 attaque Rf1.\n"
+        "  → matériel : Nico R de plus, 3 pions contre 4, 11 % de gain"
+    )
+
+
+def test_point_colors_follow_each_move():
+    """Sprint 50 : erreur en dégradé, piège en cyan, explosif en orange, meilleur coup, neutre."""
+    plies = [_ply(i, 10 + i, "Nf3", "d6", "d7d6") for i in range(5)]
+    for p, (loss, quality) in zip(plies, [(30.0, "mistake"), (0.0, "best"), (0.0, "best"),
+                                          (0.0, "best"), (3.0, "good")]):
+        p.loss, p.quality, p.win_before = loss, quality, 50.0
+    def explosive(replies):
+        return ExplosiveMove(san="Bd8", uci="a5d8", loss=5.0, win_after=55.0, pv_san=["Bd8"], sacrifice=3,
+                             forcing=[], trap_reply_san="Bxd8", score=1.0, replies=replies)
+
+    trap = explosive([{"san": "Bxd8", "p": 0.5, "line_san": ["Bxd8"], "win": 99.0}])
+    analysis = GameAnalysis(headers={}, nico_color="black", color_source="header", plies=plies, explosive=[
+        CriticalPosition(kind="d", ply=plies[1], score=1.0, explosive=trap),
+        CriticalPosition(kind="d", ply=plies[2], score=1.0, explosive=explosive([])),
+    ])
+    assert chess_router_mod._point_colors(analysis) == [
+        error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_NEUTRAL, CURVE_NEUTRAL,
+    ]

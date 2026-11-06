@@ -24,7 +24,7 @@ FACTORS = (1, 2, 4, 8)
 _HEAD_TIME = 0.5
 # « Seul coup » : 2e coup à au moins cet écart (pts de % de gain) derrière le meilleur.
 _FORCED_GAP = 20
-# Piège (cyan) et stratégie (rose), sprint 37 : candidats MultiPV + coups de forme,
+# Piège (cyan) et stratégie (blanc), sprint 37 : candidats MultiPV + coups de forme,
 # à au plus _HUMAN_WINDOW pts de % de gain du meilleur coup.
 _HUMAN_MULTIPV = 8
 _HUMAN_WINDOW = 15
@@ -66,8 +66,18 @@ def _explosive_dict(move) -> dict:
             "replies": move.replies, "trap_line_san": move.trap_line_san}
 
 
+def trapping_replies(replies: list, win_best: float) -> list:
+    """Réponses piégeantes (≥ win_best + _TRAP_GAIN), si elles pèsent au moins _TRAP_P_MIN, sinon [].
+
+    replies : {"p", "win", …}, win au point de vue du camp qui tend le piège ;
+    l'ordre est conservé. win_best : % de gain de ce camp avec le meilleur coup.
+    """
+    trapping = [r for r in replies if r["win"] >= win_best + _TRAP_GAIN]
+    return trapping if sum(r["p"] for r in trapping) >= _TRAP_P_MIN else []
+
+
 def _human_moves(proxy, board: chess.Board, elo: int, models_dir: str) -> dict:
-    """Piège (cyan) et stratégie (rose) du camp au trait : {"trap", "strategy"}.
+    """Piège (cyan) et stratégie (blanc) du camp au trait : {"trap", "strategy"}.
 
     strategy = {"uci", "san", "value", "best_value", "pv_san"} : candidat au plus
     fort pronostic Maia-2 du trait (value, en %), best_value = pronostic du meilleur
@@ -113,9 +123,9 @@ def _human_moves(proxy, board: chess.Board, elo: int, models_dir: str) -> dict:
     trap = None
     for (move, _), distribution in zip(deep, distributions):
         replies, _ = _human_replies(proxy, after(move), distribution)
-        trapping = [r for r in replies if r["win"] >= win_best + _TRAP_GAIN]
+        trapping = trapping_replies(replies, win_best)
         p = sum(r["p"] for r in trapping)
-        if p >= _TRAP_P_MIN and (trap is None or p > trap["p"]):
+        if trapping and (trap is None or p > trap["p"]):
             trap = {"uci": move.uci(), "san": board.san(move), "p": p, "replies": trapping}
     return {"trap": trap, "strategy": strategy}
 
@@ -127,7 +137,7 @@ def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
     du seul coup (coup légal unique ou 2e coup ≥ _FORCED_GAP derrière), sinon None ;
     best = {"uci", "san", "pv_san"} du meilleur coup moteur (même longueur de suite
     que les réponses du coup explosif), None en fin de partie.
-    trap / strategy = piège (cyan) et stratégie (rose) de _human_moves, calculés
+    trap / strategy = piège (cyan) et stratégie (blanc) de _human_moves, calculés
     hors fenêtre de l'orange aussi (decided compris) ; None, None en fin de partie.
     elo = Elo de l'adversaire du trait (réponses humaines Maia).
     """

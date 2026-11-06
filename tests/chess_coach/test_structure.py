@@ -17,7 +17,7 @@ def test_structure_line_from_white_side():
         "pions isolés : Nico b2 d4, adversaire a7 ; "
         "pions doublés : adversaire h6 h7 ; "
         "pions passés : Nico d4 ; "
-        "roi de Nico : g1, roqué, 3 pions devant ; "
+        "roi de Nico : g1, à l'aile, 3 pions devant ; "
         "roi adverse : e8, au centre, 1 pion devant ; "
         "pièces mineures sur leur case de départ : Nico Nb1 Bc1, adversaire Nb8 Bf8 Ng8"
     )
@@ -28,7 +28,7 @@ def test_structure_line_swaps_sides_for_black():
     assert "colonnes semi-ouvertes pour Nico : b, d" in line
     assert "pions passés : adversaire d4" in line
     assert "roi de Nico : e8, au centre, 1 pion devant" in line
-    assert "roi adverse : g1, roqué, 3 pions devant" in line
+    assert "roi adverse : g1, à l'aile, 3 pions devant" in line
 
 
 def test_structure_line_hides_empty_categories():
