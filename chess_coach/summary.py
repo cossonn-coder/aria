@@ -16,6 +16,7 @@ import math
 import statistics
 
 from chess_coach.analysis import GameAnalysis
+from chess_coach.conversion import ideas_text, repeated_ideas, winning_period
 from chess_coach.explosive import is_brilliant
 from chess_coach.openings import detect_opening, opening_group
 
@@ -232,6 +233,11 @@ def summarize(analysis: GameAnalysis) -> dict:
     summary["min_win_nico"] = round(min(wins), 1) if wins else None
     summary["unconverted"] = bool(wins) and max(wins) >= 80 and outcome != "win"
     summary["saved"] = bool(wins) and min(wins) <= 20 and outcome != "loss"
+
+    # Sprint 51 : période gagnante non convertie et idées du moteur répétées non jouées.
+    period = winning_period(plies, color, outcome)
+    summary["conversion_moves"] = len(period) if period else None
+    summary["conversion_ideas"] = ideas_text(repeated_ideas(period, plies)) if period else None
 
     # Erreurs adverses (perte ≥ 20) et réponse de Nico au demi-coup suivant.
     punished = 0

@@ -797,3 +797,31 @@ def test_point_colors_follow_each_move():
     assert chess_router_mod._point_colors(analysis) == [
         error_arrow(30.0)[:3], TRAP_ARROW[:3], ALT_ARROW[:3], CURVE_BEST, CURVE_NEUTRAL, CURVE_NEUTRAL,
     ]
+
+
+def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
+    """Sprint 51 : partie perdue après 12 coups à 85 % : ligne Conversion sous le déroulé,
+    miniature de l'idée principale juste avant la courbe."""
+    from tests.chess_coach.test_conversion import conversion_plies
+    plies = conversion_plies()
+    analysis = GameAnalysis(headers={"White": "staroflexeur", "Black": "Ami", "Result": "0-1"},
+                            nico_color="white", color_source="header", plies=plies, critical=[])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "Partie contre Ami\nBilan : à travailler."}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}})
+
+    lines = result["text"].split("\n")
+    assert lines[1].startswith("📉 Défaite")
+    assert lines[2].startswith("🔄 Conversion : 12 coups à 80 % ou plus")
+    assert "Conversion (données) : 🔄 Conversion" in llm_exec.execute.call_args.args[0]["content"]
+    assert [img["caption"] for img in result["images"]] == [
+        "Conversion — coup 3 : idée répétée 🟢 3.Kd2 (activer le roi), proposée 3 fois ; joué 🔵 3.b3",
+        "Courbe de la partie : % de gain de Nico"]

@@ -11,7 +11,7 @@ plus pastilles alignées sur les flèches (demande de Nico du 2026-11-06).
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_reanalyse.md` | PGN avec horloges → réanalyse d'une fiche sans horloge, date conservée | ✅ (535 verts) |
-| 02 | `02_conversion.md` | période gagnante, idées répétées non jouées, ligne + miniature, fiche | ⏳ |
+| 02 | `02_conversion.md` | période gagnante, idées répétées non jouées, ligne + miniature, fiche | ✅ (537 verts) |
 | 03 | `03_temps.md` | ligne Temps, 3 coups longs analysés, consigne sans horloge, fiche | ⏳ |
 | 04 | `04_pastilles.md` | pastilles = couleur des flèches, comptes des deux camps, courbe | ⏳ |
 | 05 | `05_run_live.md` (+ `05_run_live.txt`) | run live par Nico | ⏳ |
@@ -59,9 +59,11 @@ Fermées / touchées : #170 (cause trouvée) ; #161 (horloges relues : ligne Tem
 
 ## §REPRISE
 
-Tronçon 01 fait (non commité) : `write_chess_game(timestamp=…)` posé après `extra` ;
-`chess_router` réanalyse une fiche sans horloge si le PGN a des `%clk` (partie unique et
-multi), log `chess_router reanalyze hash=… reason=clock`. Écart : une fiche sans `plies_json`
-(marqueur interne de doublon dans `_execute_many`) compte comme « avec horloge » → doublon.
-535 tests verts. Prochaine étape : tronçon 02 (`02_conversion.md`), puis 03, 04, run live 05.
+Tronçon 01 commité (`89b7e4f`). Tronçon 02 fait (non commité) : `chess_coach/conversion.py`
+(`winning_period`, `repeated_ideas`, `conversion_line`, `ideas_text`) ; `chess_router` affiche
+la ligne 🔄 Conversion sous le déroulé, la passe au LLM (`Conversion (données)` + consigne
+Bilan) et ajoute la miniature de l'idée principale avant la courbe ; fiche :
+`conversion_moves`, `conversion_ideas`. Concept : ordre du kickoff appliqué tel quel (roi,
+pion passé, autre pion, prise, autre pièce) : une prise de pion donne « avancer le pion ».
+537 tests verts. Prochaine étape : tronçon 03 (`03_temps.md`), puis 04, run live 05.
 Diagnostic de référence : `audit_conversion.md`.

@@ -27,6 +27,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
+from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
 from chess_coach.explosive import _GAIN_MIN, is_brilliant
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
@@ -635,6 +636,14 @@ def _caption(index: int, critical, plies: list) -> str:
             f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
 
 
+def _conversion_caption(idea) -> str:
+    """Légende de la miniature de conversion : idée répétée et coup joué à sa 1re apparition."""
+    p = idea.first
+    return (f"Conversion — coup {p.move_number} : idée répétée {_MARK_BEST} "
+            f"{_move_label(p.move_number, p.color, idea.san)} ({idea.concept}), proposée {len(idea.moves)} fois ; "
+            f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}")
+
+
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
 # une ligne « Bilan : » clôt la dernière entrée.
 _ENTRY_RE = re.compile(r"^\**Position (\d+)\**\s*[—–-]\**\s*", re.MULTILINE)
@@ -881,7 +890,12 @@ class ChessExecutionRouter(BaseRouter):
             log.exception("chess_progression ERROR")
 
         story = story_line(analysis.plies, analysis.nico_color, summary["outcome"])
-        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, story, history)
+        # Sprint 51 : période gagnante non convertie, ligne écrite par le code.
+        period = winning_period(analysis.plies, analysis.nico_color, summary["outcome"])
+        ideas = repeated_ideas(period, analysis.plies) if period else []
+        conversion = conversion_line(period, ideas) if period else None
+        enriched = self._build_enriched(analysis, message, _anchor(summary), summary, story, history,
+                                        conversion)
         result = self.llm_execution_router.execute({
             "op_type" : CognitiveOperation.REASONING.value,
             "content" : enriched,
@@ -896,9 +910,18 @@ class ChessExecutionRouter(BaseRouter):
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
         text, images = _split_entries(_to_english(result["text"]), images)
-        # Déroulé du code sous le titre, au-dessus du bilan du LLM.
+        # Déroulé du code sous le titre, puis la ligne Conversion, au-dessus du bilan du LLM.
         title, _, rest = text.partition("\n")
-        text = f"{title}\n{story}" + (f"\n{rest}" if rest else "")
+        head = f"{story}\n{conversion}" if conversion else story
+        text = f"{title}\n{head}" + (f"\n{rest}" if rest else "")
+        # Miniature de l'idée principale, hors budget des positions : ajoutée après le
+        # découpage (le LLM n'a pas d'entrée « Position » pour elle), avant la courbe.
+        if ideas:
+            p = ideas[0].first
+            mini_path = out_dir / f"{uuid4().hex[:8]}_conversion.png"
+            render_position(p.fen_before, analysis.nico_color, p.best_uci, str(mini_path),
+                            played_uci=p.uci, best_line_uci=p.pv_uci[:3])
+            images.append({"path": str(mini_path), "caption": _conversion_caption(ideas[0])})
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
         render_curve(nico_wins(analysis.plies, analysis.nico_color),
@@ -912,7 +935,7 @@ class ChessExecutionRouter(BaseRouter):
         return {"text": text, "images": images}
 
     def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
-                        story: str, history: str | None = None) -> str:
+                        story: str, history: str | None = None, conversion: str | None = None) -> str:
         """Ancre de la partie, puis faits moteur en français, puis message original."""
         color = analysis.nico_color
         opening = summary["opening"]
@@ -927,6 +950,8 @@ class ChessExecutionRouter(BaseRouter):
         lines.append(f"Compteurs Nico : {counts}")
         lines.append(_level_line(summary))
         lines.append(f"Déroulé (données) : {story}")
+        if conversion:
+            lines.append(f"Conversion (données) : {conversion}")
         if history:
             lines.append(history)
         for i, critical in enumerate(analysis.critical, 1):
@@ -1047,6 +1072,12 @@ class ChessExecutionRouter(BaseRouter):
                 "« si … ». Ne donne ni le coût, ni quand le tenter, et ne le présente jamais "
                 "comme le meilleur coup. Si la ligne « pari » est présente, une demi-phrase "
                 "la présente comme une idée risquée. Cette entrée peut dépasser 3 phrases.]"
+            )
+        if conversion:
+            parts.append(
+                "[Consigne : dans le Bilan, une phrase par idée nommée dans la ligne « Conversion "
+                "(données) », expliquant pourquoi ce concept fait progresser une position gagnante, "
+                "sans autre coup que ceux fournis.]"
             )
         if analysis.color_source == "default":
             parts.append(
