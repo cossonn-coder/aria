@@ -1,0 +1,9 @@
+1) Bilan : coller une partie chess.com récente jamais envoyée (PGN complet).
+
+2) /parties
+
+3) /ouvertures
+
+4) /ouvertures <nom de l'ouverture de la partie du 1>
+
+5) /board  → coller le même PGN dans l'échiquier, Charger
