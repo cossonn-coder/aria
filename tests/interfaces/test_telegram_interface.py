@@ -421,12 +421,19 @@ def _text_update(text, message_id):
 async def test_pgn_split_in_two_messages_is_glued_back():
     iface = TelegramInterface(kernel=MagicMock(), token="x")
     iface._process_text = AsyncMock()
-    head = '[White "Nico"]\n[Black "X"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3'
-    tail = "Nc6 3. Bb5 1-0"
+    # Coupure au milieu d'un coup, comme au run live (« N » | « xe5 »).
+    head = '[White "Nico"]\n[Black "X"]\n[Result "1-0"]\n\n1. e4 e5 2. N'
+    tail = "f3 Nc6 3. Bb5 1-0"
 
     await iface._handle_message(_text_update(head, 1), None)
     iface._process_text.assert_not_awaited()
     await iface._handle_message(_text_update(tail, 2), None)
 
-    iface._process_text.assert_awaited_once_with("7", 42, f"{head}\n{tail}")
+    iface._process_text.assert_awaited_once_with("7", 42, head + tail)
     assert iface.pgn_fragments == {}
+
+
+def test_glue_restores_space_dropped_at_cut():
+    head = '[White "Nico"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3'
+    tail = "Nc6 3. Bb5 1-0"
+    assert telegram_interface._glue(head, tail) == f"{head} {tail}"

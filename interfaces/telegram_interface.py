@@ -25,8 +25,11 @@ from telegram.ext import (
 
 from collections import defaultdict
 import asyncio
+import io
 import re
 from pathlib import Path
+
+import chess.pgn
 
 from config import config
 from interfaces import meta_commands
@@ -75,6 +78,20 @@ def _is_pgn_fragment(text: str) -> bool:
     """True si le texte annonce un résultat PGN sans finir par lui (suite à venir)."""
     results = _RESULT_HEADER_RE.findall(text)
     return bool(results) and not text.rstrip().endswith(results[-1])
+
+
+def _glue(head: str, tail: str) -> str:
+    """Recolle deux morceaux d'un PGN coupé par Telegram.
+
+    La coupure tombe n'importe où, même au milieu d'un coup (« N » | « xe5 ») :
+    on recolle bout à bout. Si elle est tombée sur un espace que Telegram a
+    retiré, il faut le remettre. On garde la jointure qui se lit sans erreur.
+    """
+    for sep in ("", " "):
+        game = chess.pgn.read_game(io.StringIO(head + sep + tail))
+        if game is not None and not game.errors:
+            return head + sep + tail
+    return head + tail
 
 
 # Marqueur posé par /reboot, lu au démarrage suivant pour annoncer le retour
@@ -197,7 +214,7 @@ class TelegramInterface(BaseInterface):
         if pending is not None:
             pending_text, timer = pending
             timer.cancel()
-            text = f"{pending_text}\n{text}"
+            text = _glue(pending_text, text)
         if _is_pgn_fragment(text):
             log.info("telegram_pgn_fragment chat_id=%s chars=%d", chat_id, len(text))
             timer = asyncio.create_task(self._flush_pgn_fragment(user_id, chat_id))
