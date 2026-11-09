@@ -37,7 +37,7 @@ from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_op
 from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow,
                                 render_curve, render_position)
 from chess_coach.structure import structure_line
-from chess_coach.summary import nico_wins, story_line, summarize, summary_text
+from chess_coach.summary import nico_wins, story_line, story_plies, summarize, summary_text
 from config import config
 from cognition.cognitive_context import CognitiveOperation
 from execution.routers.execution_base import BaseRouter
@@ -312,6 +312,15 @@ def _move_facts(fen: str, moves_san: list, move_number: int, color: str) -> str:
         f"{label} ({', '.join(facts)})" if facts else label
         for label, facts in _move_fact_items(fen, moves_san, move_number, color)
     )
+
+
+def _played_facts(analysis, p) -> str:
+    """Faits du coup joué suivi de la réponse adverse jouée dans la partie (seul s'il
+    termine la partie) : c'est la réponse qui dit si la pièce prise est reprise (sprint 53)."""
+    moves = [p.san]
+    if p.ply + 1 < len(analysis.plies):
+        moves.append(analysis.plies[p.ply + 1].san)
+    return _move_facts(p.fen_before, moves, p.move_number, p.color)
 
 
 def _told_moves(label: str, p, moves: list, mark: str = "") -> str:
@@ -1017,6 +1026,9 @@ class ChessExecutionRouter(BaseRouter):
         lines.append(f"Compteurs Nico : {counts}")
         lines.append(_level_line(summary))
         lines.append(f"Déroulé (données) : {story}")
+        cited = story_plies(analysis.plies, color)
+        if cited:
+            lines.append("Coups du déroulé, faits : " + " ; ".join(_played_facts(analysis, p) for p in cited))
         if conversion:
             lines.append(f"Conversion (données) : {conversion}")
         if timing:
@@ -1031,6 +1043,7 @@ class ChessExecutionRouter(BaseRouter):
                 f"Position {i} ({_TRAP_KIND_FR if trap else _KIND_FR[critical.kind]}) — coup {p.move_number} :",
                 f"  joué {_move_label(p.move_number, p.color, p.san)}, perte {p.loss:.0f} pts "
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
+                f"  suite jouée, faits : {_played_facts(analysis, p)}",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
                 f"  faits : {_move_facts(p.fen_before, p.pv_san, p.move_number, p.color)}",
@@ -1048,6 +1061,8 @@ class ChessExecutionRouter(BaseRouter):
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
                              f"perte {prev.loss:.0f} pts "
                              f"(meilleur {_move_label(prev.move_number, prev.color, prev.best_san)})")
+                lines.append(f"  erreur adverse, faits : "
+                             f"{_move_facts(prev.fen_before, [prev.san], prev.move_number, prev.color)}")
             if critical.best_line_san:
                 lines.append(f"  suite du meilleur coup, faits : "
                              f"{_move_facts(p.fen_before, critical.best_line_san, p.move_number, p.color)}")
@@ -1068,6 +1083,7 @@ class ChessExecutionRouter(BaseRouter):
                 f"Position {k} (réflexion longue de {seconds:.0f} s) — coup {p.move_number} :",
                 f"  joué {_move_label(p.move_number, p.color, p.san)}, perte {p.loss:.0f} pts "
                 f"de % de gain ({p.win_before:.0f} % → {p.win_after:.0f} %)",
+                f"  suite jouée, faits : {_played_facts(analysis, p)}",
                 f"  meilleur {_move_label(p.move_number, p.color, p.best_san)}, "
                 f"ligne : {_format_line(p.pv_san, p.move_number, p.color)}",
                 f"  faits : {_move_facts(p.fen_before, p.pv_san, p.move_number, p.color)}",
@@ -1108,6 +1124,8 @@ class ChessExecutionRouter(BaseRouter):
             "dis quoi travailler, en t'appuyant sur "
             "la ligne « Niveau (données) » et, si présente, la ligne « Historique (données) ». Les "
             "faits de la partie (coups, évaluations, causes) viennent uniquement des données du code. "
+            "Partout, entrées et Bilan : ne dis qu'une pièce est prise, échangée, reprise ou épargnée "
+            "que si une ligne « faits » le montre (dont « suite jouée » et « Coups du déroulé »). "
             "Aucune cause de "
             "défaite ou de victoire absente du déroulé ; n'annonce un mat que s'il est joué ou s'il "
             "figure dans une ligne, en disant s'il dépend d'une réponse adverse. Rien "

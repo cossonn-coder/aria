@@ -34,6 +34,16 @@ def no_opening_detection(monkeypatch):
     monkeypatch.setattr("chess_coach.summary.detect_opening", lambda ucis: None)
 
 
+_REAL_PLAYED_FACTS = chess_router_mod._played_facts
+
+
+@pytest.fixture(autouse=True)
+def no_played_facts(monkeypatch):
+    # Coups joués factices (17...Ng4+ illégal dans le FEN de _ply) : la ligne « suite
+    # jouée » ne rejoue rien ; les tests qui la vérifient remettent _REAL_PLAYED_FACTS.
+    monkeypatch.setattr(chess_router_mod, "_played_facts", lambda analysis, p: p.san)
+
+
 def _season_game(doc_id):
     """Fiche saison 1 minimale (clé difficulty, 20 demi-coups)."""
     plies = [{"color": "black", "move_number": 20, "san": "Nf6", "loss": 0.0, "win_before": 50.0,
@@ -251,6 +261,54 @@ def test_turning_point_caption_and_enriched(monkeypatch, tmp_path):
     assert result["text"].startswith("2.Qh5 Nxe5 Rae1 Be7, Cela\n➖ Issue inconnue ")
     assert "\n\n🎯 Précision" in result["text"]
     assert "Historique (données) :" not in content
+
+
+def _replayed_plies(sans: list) -> list:
+    """Demi-coups réels rejoués depuis la position initiale (FEN exacts), sans perte."""
+    board, plies = chess.Board(), []
+    for i, san in enumerate(sans):
+        move = board.parse_san(san)
+        plies.append(PlyAnalysis(
+            ply=i, move_number=board.fullmove_number, color="white" if board.turn else "black",
+            san=san, uci=move.uci(), fen_before=board.fen(), win_before=50.0, win_after=50.0,
+            loss=0.0, best_san=san, best_uci=move.uci(), pv_san=[san], second_gap=None,
+            quality="best", phase="opening", tags=[], clock=None, eval_before_cp=0, eval_after_cp=0,
+        ))
+        board.push(move)
+    return plies
+
+
+def test_enriched_gives_played_reply_opponent_error_and_story_facts(monkeypatch, tmp_path):
+    # Sprint 53 : 3...Nd4? (erreur adverse) puis 4.Nxe5 (tournant, prend sans reprise), 4...Qg5.
+    monkeypatch.setattr(chess_router_mod, "_played_facts", _REAL_PLAYED_FACTS)
+    plies = _replayed_plies(["e4", "e5", "Nf3", "Nc6", "Bc4", "Nd4", "Nxe5", "Qg5"])
+    plies[5].loss, plies[5].quality, plies[5].best_san = 20.0, "mistake", "Nf6"
+    # Nxe5 cité par le déroulé comme pire coup de Nico (perte décisive).
+    plies[6].loss, plies[6].win_after = 25.0, 25.0
+    analysis = GameAnalysis(
+        headers={}, nico_color="white", color_source="header", plies=plies,
+        critical=[CriticalPosition(kind="e", ply=plies[6], score=20.0,
+                                   evidence="material", line_san=["Nxe5", "Qg5"])],
+    )
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    played = "4.Nxe5 (prend pion e5) 4...Qg5 (attaque pion g2, Ne5)"
+    assert f"  suite jouée, faits : {played}\n" in content
+    assert "  erreur adverse, faits : 3...Nd4\n" in content
+    assert f"Coups du déroulé, faits : {played}\n" in content
+    assert "Partout, entrées et Bilan : ne dis qu'une pièce est prise, échangée, reprise" in content
 
 
 def test_progression_block_level_up_and_new_badge():

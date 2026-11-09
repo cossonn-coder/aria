@@ -9,7 +9,7 @@ import pytest
 
 import chess_coach.summary as summary_mod
 from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
-from chess_coach.summary import story_line, summarize, summary_text
+from chess_coach.summary import story_line, story_plies, summarize, summary_text
 
 
 @pytest.fixture
@@ -149,6 +149,15 @@ def test_story_line_cites_near_drops_in_game_order():
     # 37 pts dépasse 3/4 de 39 : cité. 21 pts est décisif mais loin du maximum : non cité.
     plies = _story_plies((14, "e5", 77.0, 21.0), (32, "Kg1", 84.0, 37.0), (34, "b6", 49.0, 39.0))
     assert story_line(plies, "white", "loss").endswith("Tournants : coups 32.Kg1 (−37 pts) et 34.b6 (−39 pts).")
+
+
+def test_story_plies_are_the_moves_cited_by_story_line():
+    # Sprint 53 : les coups cités par le déroulé (tournants) sont ceux rendus, dans l'ordre.
+    plies = _story_plies((14, "e5", 77.0, 21.0), (32, "Kg1", 84.0, 37.0), (34, "b6", 49.0, 39.0))
+    assert [p.san for p in story_plies(plies, "white")] == ["Kg1", "b6"]
+    # Sans coup décisif : le pire coup seul.
+    plies = _story_plies((5, "Nf3", 40.0, 12.0), (30, "Kh1", 70.0, 4.0))
+    assert [p.san for p in story_plies(plies, "white")] == ["Nf3"]
 
 
 def test_story_line_win_without_worst_move():

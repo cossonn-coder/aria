@@ -13,7 +13,7 @@
 
 | # | Kickoff | Objet | État |
 |---|---------|-------|------|
-| 01 | `01_faits_coups_cites.md` | Bloc enrichi : suite jouée sur chaque position, faits de l'erreur adverse (tournant), coups du déroulé, consigne étendue | ⏳ |
+| 01 | `01_faits_coups_cites.md` | Bloc enrichi : suite jouée sur chaque position, faits de l'erreur adverse (tournant), coups du déroulé, consigne étendue | ✅ |
 | 02 | `02_periodes_classement.md` | Périodes sur `/parties` et `/ouvertures`, 🏆 5 meilleures / 📉 5 pires par précision | ⏳ |
 | 03 | `03_run_live.md` (+ `03_run_live.txt`) | Run live (Nico) : 2 parties neuves + commandes | ⏳ |
 
@@ -60,4 +60,8 @@ Aucune nouvelle dette à ce stade.
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, `audit_recits.md`, puis le kickoff du tronçon en cours.
-Prochaine étape : `/sprint-auto sprint 53` (tronçons 01 puis 02), puis run live 03 par Nico.
+Tronçon 01 fait (2026-11-09) : `story_plies` public dans `chess_coach/summary.py` (utilisé par
+`story_line`), helper `_played_facts` dans `chess_router.py` ; 555 tests verts. Dans
+`tests/execution/test_chess_router.py`, une fixture autouse neutralise `_played_facts` (coups
+factices illégaux, ex. 17...Ng4+) ; le test du tronçon remet la vraie fonction.
+Prochaine étape : tronçon 02 (`02_periodes_classement.md`), puis run live 03 par Nico.

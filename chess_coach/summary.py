@@ -117,6 +117,21 @@ def nico_wins(plies: list, nico_color: str) -> list:
     return wins
 
 
+def story_plies(plies: list, nico_color: str) -> list:
+    """Coups de Nico cités par le déroulé (sprint 53, extrait de story_line) :
+    tournants (perte décisive, et chutes proches d'au moins 3/4 de la perte maximale),
+    sinon pire coup s'il perd au moins _WORST_MOVE_MIN pts, sinon aucun."""
+    nico = [p for p in plies if p.color == nico_color]
+    worst = max(nico, key=lambda p: p.loss, default=None)
+    loss = worst.loss if worst else 0
+    if loss >= _DECISIVE_LOSS:
+        floor = max(_DECISIVE_LOSS, loss * _NEAR_DROP_RATIO)
+        return [p for p in nico if p.loss >= floor]
+    if loss >= _WORST_MOVE_MIN:
+        return [worst]
+    return []
+
+
 def story_line(plies: list, nico_color: str, outcome: str) -> str:
     """Déroulé de la partie en une ligne, écrit par le code (sprint 50)."""
     wins = nico_wins(plies, nico_color)
@@ -131,19 +146,19 @@ def story_line(plies: list, nico_color: str, outcome: str) -> str:
     span = {"loss": f"de {peak} à {last}", "win": f"de {trough} à {last}"}.get(
         outcome, f"creux {trough}, pic {peak}")
 
-    worst = max((p for p in plies if p.color == nico_color), key=lambda p: p.loss, default=None)
-    loss = worst.loss if worst else 0
+    cited = story_plies(plies, nico_color)
+    # Perte maximale de Nico parmi les coups cités (0 si aucun : pas de coup décisif).
+    loss = max((p.loss for p in cited), default=0)
     head = _STORY_HEAD[outcome] + ("" if loss >= _DECISIVE_LOSS else " sans coup décisif")
     line = f"{head} : {span}."
     if loss >= _DECISIVE_LOSS:
-        floor = max(_DECISIVE_LOSS, loss * _NEAR_DROP_RATIO)
-        drops = [f"{_label(p)} (−{p.loss:.0f} pts)" for p in plies if p.color == nico_color and p.loss >= floor]
+        drops = [f"{_label(p)} (−{p.loss:.0f} pts)" for p in cited]
         if len(drops) == 1:
             line += f" Tournant : coup {drops[0]}."
         else:
             line += f" Tournants : coups {', '.join(drops[:-1])} et {drops[-1]}."
-    elif loss >= _WORST_MOVE_MIN:
-        line += f" Pire coup {_label(worst)} (−{loss:.0f} pts)."
+    elif cited:
+        line += f" Pire coup {_label(cited[0])} (−{loss:.0f} pts)."
     return line
 
 
