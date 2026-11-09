@@ -345,10 +345,17 @@ def _relative_pins(board: chess.Board, color: chess.Color) -> set:
     return pins
 
 
-def _intent_line(plies: list, p, seconds: float | None = None) -> str | None:
+_START_SQUARES = {chess.WHITE: (chess.B1, chess.G1, chess.C1, chess.F1),
+                  chess.BLACK: (chess.B8, chess.G8, chess.C8, chess.F8)}
+_CENTER = (chess.D4, chess.E4, chess.D5, chess.E5)
+
+
+def _intent_line(plies: list, p, seconds: float | None = None, human_line: list = ()) -> str | None:
     """Ligne « idée du coup joué » d'une erreur de Nico (sprint 54) : coup adverse précédent
-    et ses faits, ce que le coup joué cherchait (met à l'abri, défend, décloue), clouages
-    relatifs qu'il crée, temps passé. Matière de l'idée probable de Nico et de ce qu'elle a
+    et ses faits, ce que le coup joué cherchait (met à l'abri, défend, décloue, développe,
+    attaque, contrôle, vise le roi, active, libère), clouages relatifs qu'il crée, trace Maia
+    après le coup 10 (fréquence du coup à son niveau, suite humaine probable `human_line`,
+    coup joué en tête), temps passé. Indices de l'idée probable de Nico et de ce qu'elle a
     négligé ; None si aucun segment n'a de contenu."""
     segments = []
     if p.ply >= 1:
@@ -367,14 +374,45 @@ def _intent_line(plies: list, p, seconds: float | None = None) -> str | None:
                 and board.attackers(not mover, sq) and not board.attackers(mover, sq)
                 and after.piece_at(sq) == board.piece_at(sq) and after.attackers(mover, sq)):
             intent.append(f"défend {_square_label(board, sq)}")
-    # « décloue » : fait déjà calculé par _move_fact_items, repris tel quel.
-    intent += [f for f in _move_fact_items(p.fen_before, [p.san], p.move_number, p.color)[0][1]
-               if f.startswith("décloue")]
+    # « décloue » et « attaque » : faits déjà calculés par _move_fact_items, repris tels quels.
+    facts = _move_fact_items(p.fen_before, [p.san], p.move_number, p.color)[0][1]
+    intent += [f for f in facts if f.startswith("décloue")]
+    # Intentions élargies (tronçon 01b), sur la pièce jouée X (libellée à sa case d'arrivée).
+    piece = _square_label(after, move.to_square)
+    if (board.piece_type_at(move.from_square) in (chess.KNIGHT, chess.BISHOP)
+            and move.from_square in _START_SQUARES[mover]):
+        intent.append(f"développe {piece}")
+    intent += [f for f in facts if f.startswith("attaque")]
+    seen_before, seen_after = board.attacks(move.from_square), after.attacks(move.to_square)
+    center = [chess.square_name(sq) for sq in _CENTER if sq in seen_after and sq not in seen_before]
+    if center:
+        intent.append("contrôle " + ", ".join(center))
+    king_zone = chess.SquareSet(chess.BB_KING_ATTACKS[after.king(not mover)])
+    if (seen_after & king_zone) - (seen_before & king_zone):
+        intent.append("vise le roi")
+    # Mobilité : cases attaquées hors cases occupées par son propre camp.
+    n = len(seen_before - chess.SquareSet(board.occupied_co[mover]))
+    m = len(seen_after - chess.SquareSet(after.occupied_co[mover]))
+    if m - n >= 3:
+        intent.append(f"active {piece} ({n} → {m} cases)")
+    freed = [_square_label(board, sq) for sq in chess.SquareSet(board.occupied_co[mover])
+             if sq != move.from_square and board.piece_type_at(sq) in (chess.BISHOP, chess.ROOK, chess.QUEEN)
+             and after.piece_at(sq) == board.piece_at(sq) and len(after.attacks(sq)) > len(board.attacks(sq))]
+    if freed:
+        intent.append("libère " + ", ".join(freed))
     if intent:
         segments.append("ton coup : " + ", ".join(intent))
     pins = sorted(_relative_pins(after, mover) - _relative_pins(board, mover))
     if pins:
         segments.append("après ton coup : " + ", ".join(pins))
+    # Trace Maia : rien en ouverture (Maia non fiable jusqu'au coup 10) ni sans Maia.
+    if p.move_number > 10 and p.played_p is not None:
+        maia = f"Maia : coup choisi par {p.played_p * 100:.0f} % des joueurs de ton niveau"
+        if len(human_line) > 1:
+            items = _move_fact_items(p.fen_before, human_line, p.move_number, p.color)[1:]
+            maia += " ; suite probable : " + " ".join(
+                f"{label} ({', '.join(f)})" if f else label for label, f in items)
+        segments.append(maia)
     if seconds is not None:
         segments.append(f"temps : {seconds:.0f} s")
     return "  idée du coup joué, faits : " + " ; ".join(segments) if segments else None
@@ -1128,7 +1166,8 @@ class ChessExecutionRouter(BaseRouter):
                 lines.append(f"  suite du coup joué, faits : "
                              f"{_move_facts(p.fen_before, critical.played_line_san, p.move_number, p.color)}")
                 lines.append(_line_end(p, critical.played_line_san, p.win_after))
-                intent = _intent_line(analysis.plies, p, times[p.ply] if times else None)
+                intent = _intent_line(analysis.plies, p, times[p.ply] if times else None,
+                                      critical.human_line_san)
                 if intent:
                     lines.append(intent)
             if critical.kind in ("c", "e"):
@@ -1174,9 +1213,12 @@ class ChessExecutionRouter(BaseRouter):
             "un pion ou un roi que s'il figure dans ces lignes ; exception, si la position a les "
             "lignes « suite du meilleur coup » et « suite du coup joué » : commence par « Pourquoi : » "
             "au lieu de « Plan : » et écris 3 phrases au plus : (1) l'idée probable de Nico, au "
-            "conditionnel (« tu voulais sans doute… »), tirée de la ligne « idée du coup joué » "
-            "(menace du coup adverse précédent, met à l'abri / défend / décloue, temps : coup rapide "
-            "= réflexe, long = réfléchi) ; (2) ce que cette idée a négligé, d'après « après ton coup » "
+            "conditionnel (« tu voulais sans doute… »), tirée de la ligne « idée du coup joué », dont "
+            "les faits sont des indices et non une liste fermée (menace du coup adverse précédent, "
+            "faits de « ton coup », temps : coup rapide = réflexe, long = réfléchi ; Maia : coup "
+            "fréquent à ton niveau = coup naturel, rare = idée personnelle ; « suite probable » = ce "
+            "que Nico avait sans doute calculé) : retiens celui qui explique le mieux le coup ; si "
+            "aucun ne colle, dis que l'idée n'est pas claire plutôt que d'en inventer une ; (2) ce que cette idée a négligé, d'après « après ton coup » "
             "et la suite du coup joué, ses faits et sa fin ; (3) ce que fait le meilleur coup, d'après "
             "sa suite, ses faits et sa fin ; "
             "si un de ces faits dit « décloue », cite-le : le coup libère cette pièce ; "

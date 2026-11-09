@@ -511,6 +511,23 @@ def test_intent_line_threat_idea_and_self_pin():
     assert "temps : 3 s" in _intent_line(plies, p, 3.2)
 
 
+
+def test_intent_line_broadened_intents_and_maia_trace():
+    # Tronçon 01b : intentions élargies sur des coups simples, puis trace Maia après le coup 10.
+    def ply(san, move_number=1, played_p=None):
+        return SimpleNamespace(ply=0, move_number=move_number, color="white", san=san,
+                               fen_before=chess.STARTING_FEN, played_p=played_p)
+
+    assert "développe Nf3" in _intent_line([ply("Nf3")], ply("Nf3"))
+    assert "libère Qd1, Bf1" in _intent_line([ply("e4")], ply("e4"))
+
+    p = ply("e4", move_number=14, played_p=0.123)
+    line = _intent_line([p], p, human_line=["e4", "e5", "Nf3"])
+    assert "Maia : coup choisi par 12 % des joueurs de ton niveau" in line
+    assert "suite probable : 14...e5 15.Nf3 (attaque pion e5)" in line
+    early = ply("e4", move_number=10, played_p=0.123)
+    assert "Maia" not in _intent_line([early], early, human_line=["e4", "e5", "Nf3"])
+
 def test_move_facts_capture_and_numbering():
     text = _move_facts(chess.STARTING_FEN, ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"], 1, "white")
 

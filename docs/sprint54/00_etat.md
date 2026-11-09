@@ -23,7 +23,7 @@ que cette idée a négligé, au lieu d'une simple comparaison moteur.
 | # | Kickoff | Statut |
 |---|---|---|
 | 01 | `01_idee_et_oubli.md` — ligne « idée du coup joué » + consigne Pourquoi en 3 temps | ✅ (560 verts) |
-| 01b | `01b_intentions_maia.md` — intentions élargies, trace Maia, consigne « indices » | ⏳ |
+| 01b | `01b_intentions_maia.md` — intentions élargies, trace Maia, consigne « indices » | ✅ (562 verts) |
 | 02 | `02_run_live.md` — run live Nico (partie de référence avec pendule) | ⏳ |
 
 ## Questions ouvertes
@@ -40,4 +40,13 @@ Lire `CLAUDE.md`, ce fichier, `audit_pensee_erreur.md`. Tronçon 01 fait :
 `_intent_line` + `_relative_pins` dans `execution/routers/chess_router.py` (ligne « idée du coup
 joué » après « suite du coup joué » des sortes a/b, `times` passé à `_build_enriched`), consigne
 « Pourquoi : » en 3 temps ; test `test_intent_line_threat_idea_and_self_pin` (position de
-référence reconstruite, le PGN réel n'est pas dans le repo). Prochaine étape : run live 02 par Nico.
+référence reconstruite, le PGN réel n'est pas dans le repo).
+
+Tronçon 01b fait : `_intent_line` ajoute développe / attaque / contrôle / vise le roi / active /
+libère et un segment « Maia : coup choisi par N % … ; suite probable : … » (coup > 10,
+`played_p` non nul) ; nouveau champ `CriticalPosition.human_line_san` (coup joué en tête),
+rempli par `assign_human_lines` dans `chess_coach/analysis.py`, appelé APRÈS
+`assign_forcing_lines` (les positions critiques n'existent pas encore au moment de
+`assign_difficulty` : écart au kickoff) ; consigne « Pourquoi : » en « indices ». Tests
+`test_intent_line_broadened_intents_and_maia_trace`, `test_assign_human_lines_two_batched_passes`.
+Prochaine étape : run live 02 par Nico.
