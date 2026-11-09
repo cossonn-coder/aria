@@ -2,7 +2,7 @@
 
 **Sujet** : l'analyse d'une erreur de Nico dit à quoi il a pensé (intention du coup) et ce
 que cette idée a négligé, au lieu d'une simple comparaison moteur.
-**Phase** : B — conception figée (OK Nico 2026-11-09), prête pour `/sprint-auto sprint 54`.
+**Phase** : CLOS (run live 02 joué par Nico, 2026-11-09).
 **Branche** : `feat/sprint54-pensee-erreur`.
 
 ## Décisions arrêtées (Nico, 2026-11-09)
@@ -24,7 +24,8 @@ que cette idée a négligé, au lieu d'une simple comparaison moteur.
 |---|---|---|
 | 01 | `01_idee_et_oubli.md` — ligne « idée du coup joué » + consigne Pourquoi en 3 temps | ✅ (560 verts) |
 | 01b | `01b_intentions_maia.md` — intentions élargies, trace Maia, consigne « indices » | ✅ (562 verts) |
-| 02 | `02_run_live.md` — run live Nico (partie de référence avec pendule) | ⏳ |
+| 02 | `02_run_live.md` — run live Nico (partie de référence avec pendule) | ✅ (voir ci-dessous) |
+| 01c | roque repris comme intention (correctif après le live, sans kickoff, OK Nico) | ✅ (562 verts) |
 
 ## Questions ouvertes
 
@@ -32,7 +33,19 @@ que cette idée a négligé, au lieu d'une simple comparaison moteur.
 
 ## Dettes
 
-Aucune fermée ni ouverte à ce stade ; #115 adjacente, non touchée.
+Ouverte : #205 (coup cité hors données dans le « Pourquoi : »). #92, #187 inchangées ; #115 non touchée.
+
+## Run live 02 (2026-11-09)
+
+- Partie Ashiki321x321 avec pendule, réanalysée (`reason=clock`) : 9...Qd7 → « mettre Qd6 à
+  l'abri de Ba3 et déclouer Nc6 … négligé que Nc6 restait cloué sur Qd7 par Bb5, et Ne5 gagnait
+  du temps sur ta dame ». Critère atteint ; temps (14 s) non cité (facultatif).
+- Partie Cloclotop (sans pendule) : Maia cité après le coup 10 (« la moitié des joueurs »,
+  « 61 % ») ; 19...Rc2+ : oubli « le roi pouvait reculer en d1 » = suite probable Maia.
+- Défauts : 10...O-O-O sans aucun fait d'intention → LLM invente « le pion d3 restait prenable »
+  (corrigé tronçon 01c, non revu en live) ; 11...Nb4 cite 12.Ne5 absent des données (#205).
+- Journal : `chess_router OK` ×2, aucune ERROR, aucun `maia_human_lines FAILED` ; analyse sans
+  explosifs 9,4 s.
 
 ## §REPRISE
 
@@ -49,4 +62,4 @@ rempli par `assign_human_lines` dans `chess_coach/analysis.py`, appelé APRÈS
 `assign_forcing_lines` (les positions critiques n'existent pas encore au moment de
 `assign_difficulty` : écart au kickoff) ; consigne « Pourquoi : » en « indices ». Tests
 `test_intent_line_broadened_intents_and_maia_trace`, `test_assign_human_lines_two_batched_passes`.
-Prochaine étape : run live 02 par Nico.
+Sprint clos. Suite : `docs/sprint55/context_kickoff_sprint_55.md`, `/conception sprint 55`.
