@@ -13,6 +13,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from chess_coach.level import performance
 from chess_coach.player_model import game_opening_group, opening_stats
 from chess_coach.summary import _COLOR_FR, _OUTCOME_FR
 from config import config
@@ -145,16 +146,14 @@ def _game_day(game: dict) -> str:
 
 
 def parties_text(games: list[dict], today: str | None = None) -> str:
-    """Parties du jour : bilan, stats d'ouvertures, puis une ligne par partie, la plus récente d'abord."""
+    """Parties du jour : une ligne par partie, la plus ancienne d'abord, puis les stats
+    d'ouvertures, et le bilan du jour en dernier (Telegram affiche le bas du message)."""
     today = today or datetime.now().strftime("%Y-%m-%d")
     games = [game for game in games if _game_day(game) == today]
     if not games:
         return NO_PARTIES
-    lines = [f"Aujourd'hui : {_record(games)}", ""]
-    opening_lines = _opening_stat_lines(games)
-    if opening_lines:
-        lines += opening_lines + [""]
-    for game in reversed(games):
+    lines = []
+    for game in games:
         opponent = game.get("opponent") or "?"
         if game.get("elo_opponent"):
             opponent += f" ({game['elo_opponent']})"
@@ -164,6 +163,15 @@ def parties_text(games: list[dict], today: str | None = None) -> str:
             _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
             game.get("opening") or "ouverture inconnue",
         ]))
+    lines.append("")
+    opening_lines = _opening_stat_lines(games)
+    if opening_lines:
+        lines += opening_lines + [""]
+    day = f"Aujourd'hui : {_record(games)}"
+    perf = performance(games)
+    if perf:
+        day += f" · performance {perf[0]} [{perf[1]} partie{'s' if perf[1] > 1 else ''}]"
+    lines.append(day)
     return "\n".join(lines)
 
 
@@ -186,12 +194,14 @@ def _opening_stat_lines(games: list[dict]) -> list[str]:
 
 
 def openings_text(games: list[dict]) -> str:
-    """Stats d'ouvertures de toutes les fiches, puis les issues inconnues."""
+    """Stats d'ouvertures de toutes les fiches, de la moins jouée à la plus jouée,
+    puis les issues inconnues, et la performance globale en dernier."""
     if not games:
         return NO_OPENINGS
-    lines = _opening_stat_lines(games)
+    lines = _opening_stat_lines(games)[::-1]
     unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
     lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
+    lines += _performance_line(games)
     return "\n".join(lines)
 
 
@@ -249,10 +259,24 @@ def _game_date_key(game: dict) -> tuple[str, str]:
     return (game.get("date") or timestamp[:10]).replace(".", "-"), timestamp
 
 
+def _performance_line(games: list[dict]) -> list[str]:
+    """« Performance : 1420 [12 parties] · 5 dernières : 1510 » ; aucune ligne si pas de
+    performance, segment des 5 dernières (tri _game_date_key) seulement au-delà de 5 parties."""
+    perf = performance(games)
+    if not perf:
+        return []
+    line = f"Performance : {perf[0]} [{perf[1]} partie{'s' if perf[1] > 1 else ''}]"
+    recent = performance(sorted(games, key=_game_date_key)[-RECENT_GAMES:])
+    if len(games) > RECENT_GAMES and recent:
+        line += f" · {RECENT_GAMES} dernières : {recent[0]}"
+    return [line]
+
+
 def _color_section(group: str, color: str, games: list[dict]) -> str:
-    """Rapport d'une ouverture pour une couleur : une ligne absente si pas de donnée."""
+    """Rapport d'une ouverture pour une couleur : le détail d'abord, puis le bilan et la
+    performance en bas ; une ligne absente si pas de donnée."""
     count = len(games)
-    lines = [f"{group} ({_COLOR_FR[color]}) : {_record(games)} [{count} partie{'s' if count > 1 else ''}]"]
+    lines = []
     plies = [g["n_plies"] / 2 for g in games if g.get("n_plies")]
     if plies:
         lines.append(f"Coups par partie en moyenne : {_decimal(sum(plies) / len(plies))}")
@@ -264,11 +288,13 @@ def _color_section(group: str, color: str, games: list[dict]) -> str:
     if count > RECENT_GAMES:
         recent = sorted(games, key=_game_date_key)[-RECENT_GAMES:]
         lines.append(f"{RECENT_GAMES} dernières : {_record(recent)}")
+    lines.append(f"{group} ({_COLOR_FR[color]}) : {_record(games)} [{count} partie{'s' if count > 1 else ''}]")
+    lines += _performance_line(games)
     return "\n".join(lines)
 
 
 def opening_report_text(games: list[dict], query: str) -> str:
-    """Statistiques de l'ouverture désignée par query, une section par couleur, la plus jouée d'abord."""
+    """Statistiques de l'ouverture désignée par query, une section par couleur, la plus jouée en bas."""
     by_group: dict[str, list[dict]] = {}
     for game in games:
         if game.get("opening") and game.get("outcome") in _OUTCOME_LABELS:
@@ -284,7 +310,7 @@ def opening_report_text(games: list[dict], query: str) -> str:
     by_color: dict[str, list[dict]] = {}
     for game in by_group[matches[0]]:
         by_color.setdefault(game["nico_color"], []).append(game)
-    sections = sorted(by_color.items(), key=lambda item: -len(item[1]))
+    sections = sorted(by_color.items(), key=lambda item: len(item[1]))
     return "\n\n".join(_color_section(matches[0], color, g) for color, g in sections)
 
 

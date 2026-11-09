@@ -60,7 +60,9 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     # Deux fiches saison 1 : une ancienne, puis la partie courante (même doc_id).
     current = "chess_game_" + hashlib.sha256(b"a7a6a7a6").hexdigest()[:16]
     bridge = MagicMock()
-    bridge.load_chess_games.return_value = [_season_game("chess_game_old"), _season_game(current)]
+    # Sprint 52 : précisions des fiches (ancienne 50 %, courante 41 %) pour la ligne 🏅.
+    bridge.load_chess_games.return_value = [{**_season_game("chess_game_old"), "accuracy": 50.0},
+                                            {**_season_game(current), "accuracy": 41.0}]
 
     result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
         {"op_type": "chess_analysis", "content": "[White \"Ami\"] 1. e4", "metadata": {"chat_id": 42}}
@@ -70,12 +72,14 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     # Ligne déterministe (tronçon 08) entre le texte LLM et le bloc Progression.
     assert result["text"].startswith(
         "explication\n➖ Issue inconnue : creux 30 % au coup 19, pic 50 % au coup 17. "
-        "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 %\n"
+        "Tournants : coups 17...Ng4+ (−20 pts) et 19...a6 (−20 pts).\n\n🎯 Précision : toi 41 % (1307)\n"
         "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
         "Pire coup 17...Ng4+ (50 % → 30 %)\n"
         "🔵 meilleur 0 / 0 · ⚪ correct 0 / 0 · 🩷 imprécision 0 / 0 · 🔴 erreur 2 / 0 · ⚫ gaffe 0 / 0 · "
         "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 coup du moteur (toi / adversaire)\n\n"
         "🎮 Progression — saison 1, partie 2")
+    # Sprint 52 : le rang de la précision est la dernière ligne du message.
+    assert result["text"].endswith("\n\n🏅 Précision 41 % : ta 2e meilleure partie sur 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 3
@@ -888,3 +892,14 @@ def test_long_think_outside_critical_gets_image_and_caption(monkeypatch, tmp_pat
     assert captions[1].startswith("Position 2 — coup 18 (noirs) : joué 🔴 18...a6 en 54 s, meilleur 🟢 18...Nf6")
     assert captions[1].endswith("Pour jouer vite : jouer Nf6.")
     assert "⏱️ Temps : toi 32,0 s par coup. Réflexions de 20 s ou plus : 18...a6 54 s." in result["text"]
+
+
+def test_moves_line_shows_both_official_elo():
+    """Sprint 52 : Elo officiel de chaque camp entre parenthèses sur la ligne 🎯."""
+    summary = {"accuracy": 84.2, "accuracy_opponent": 79.0, "elo_nico": 1354, "elo_opponent": 1332,
+               "nico_best": 23, "opponent_best": 22, "nico_correct": 31, "opponent_correct": 32,
+               "nico_inaccuracy": 1, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 1,
+               "nico_blunder": 0, "opponent_blunder": 0, "nico_moves": 55, "opponent_moves": 55,
+               "brilliant_moves": None, "best_move": None, "worst_move": None}
+    line = chess_router_mod._moves_line(summary, _colors_analysis())
+    assert line.startswith("🎯 Précision : toi 84 % (1354) · adversaire 79 % (1332)\n")

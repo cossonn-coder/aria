@@ -7,7 +7,8 @@
 # enchaîne les passes ×1, ×2, ×4, ×8 sur la dernière position reçue ; une
 # nouvelle position abandonne la passe en cours. Le résultat de chaque position
 # est gardé : y revenir le rend aussitôt et reprend aux passes restantes (sprint 49).
-# Hors kernel : aucune écriture mémoire, aucun router, aucun LLM.
+# Hors kernel : aucune écriture mémoire, aucun router, aucun LLM. Sprint 52 : lecture
+# seule des fiches chess_game par une méthode du bridge injectée (historique /game).
 
 import json
 import threading
@@ -20,10 +21,14 @@ import chess
 import chess.engine
 
 from chess_coach import difficulty
-from chess_coach.analysis import ENGINE_OPTIONS, _win, analyze_game, parse_pgn
+from chess_coach.analysis import ENGINE_OPTIONS, _win, analyze_game, detect_color, parse_pgn
+from chess_coach.level import accuracy_rank, performance
 from chess_coach.live import FACTORS, EngineProxy, Superseded, analyse_pass
-from chess_coach.summary import _effective_loss, _game_accuracy, _move_accuracy
+from chess_coach.openings import detect_opening, opening_group
+from chess_coach.player_model import game_opening_group
+from chess_coach.summary import _COLOR_FR, _effective_loss, _game_accuracy, _move_accuracy
 from config import config
+from interfaces.meta_commands import RECENT_GAMES, _game_date_key
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -159,20 +164,55 @@ def _mate(cp: int):
     return None
 
 
-def game_wins(game) -> dict:
+def game_wins(plies: list) -> dict:
     """Courbe d'une partie : % de gain des blancs, mat forcé et meilleur coup par position.
 
-    N+1 valeurs par liste (sprint 38, étendu sprint 39). win_before / win_after
-    sont du point de vue du trait : on les ramène au point de vue des blancs ;
-    eval_before_cp / eval_after_cp le sont déjà.
+    plies : demi-coups d'analyze_game. N+1 valeurs par liste (sprint 38, étendu
+    sprint 39). win_before / win_after sont du point de vue du trait : on les
+    ramène au point de vue des blancs ; eval_before_cp / eval_after_cp le sont déjà.
     """
-    plies = analyze_game(game, "white", config.stockfish_path)
     wins = [p.win_before if p.color == "white" else 100 - p.win_before for p in plies]
     last = plies[-1]
     wins.append(last.win_after if last.color == "white" else 100 - last.win_after)
     mates = [_mate(p.eval_before_cp) for p in plies] + [_mate(last.eval_after_cp)]
     best = [p.best_san for p in plies] + [None]
     return {"wins": [round(w, 1) for w in wins], "mates": mates, "best": best}
+
+
+def game_history(game, plies: list, playing: str, games: list) -> list[str]:
+    """Lignes d'historique d'une partie chargée (sprint 52, tronçon 03).
+
+    Camp de Nico par les en-têtes (pseudos), sinon le champ « Je joue » de la page ;
+    camp inconnu → []. Ligne 1 : rang de sa précision parmi ses fiches. Ligne 2 :
+    performance Elo dans l'ouverture détectée et cette couleur (total + 5 dernières).
+    games : fiches chess_game (lecture seule, via le bridge).
+    """
+    color, source = detect_color(game.headers, "")
+    if source == "default":
+        color = playing
+    if color not in _COLOR_FR:
+        return []
+    lines = []
+    accuracy = _game_accuracy(plies, color)
+    if accuracy is not None:
+        rank, total = accuracy_rank(accuracy, games)
+        which = "ta meilleure partie" if rank == 1 else f"ta {rank}e meilleure partie"
+        lines.append(f"Précision {accuracy:.0f} % : {which} sur {total}")
+    # Même règle que le bilan Telegram : pas de détection depuis une position de départ libre.
+    detected = None if "FEN" in game.headers else detect_opening([m.uci() for m in game.mainline_moves()])
+    if detected:
+        group = opening_group(detected[1])
+        same = [g for g in games if g.get("opening") and g.get("nico_color") == color
+                and game_opening_group(g) == group]
+        perf = performance(same)
+        if perf:
+            line = (f"{group} ({_COLOR_FR[color]}) : performance {perf[0]} "
+                    f"[{perf[1]} partie{'s' if perf[1] > 1 else ''}]")
+            recent = performance(sorted(same, key=_game_date_key)[-RECENT_GAMES:])
+            if len(same) > RECENT_GAMES and recent:
+                line += f" · {RECENT_GAMES} dernières : {recent[0]}"
+            lines.append(line)
+    return lines
 
 
 def position_eval(fen: str) -> dict:
@@ -244,7 +284,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_to_aria(data["pgn"])
             return
         if self.path == "/game":
-            self._game(data["pgn"])
+            self._game(data["pgn"], data.get("playing", ""))
             return
         if self.path == "/accuracy":
             self._json(line_accuracy(data["wins"], data["best"], data["first"]))
@@ -258,17 +298,32 @@ class _Handler(BaseHTTPRequestHandler):
         position_id = self.server.worker.submit(data["fen"], int(data["elo_white"]), int(data["elo_black"]))
         self._json({"id": position_id})
 
-    def _game(self, pgn: str):
-        """Courbe d'évaluation d'une partie PGN ; requête synchrone dans son thread."""
+    def _game(self, pgn: str, playing: str):
+        """Courbe d'évaluation d'une partie PGN et historique de Nico ; requête synchrone dans son thread."""
         # parse_pgn exige une ligne d'en-tête : un PGN réduit aux coups en reçoit une minimale.
         game = parse_pgn(pgn) or parse_pgn('[Event "?"]\n' + pgn)
         if game is None:
             self._send(400, json.dumps({"error": "PGN illisible"}).encode(), "application/json")
             return
         start = time.monotonic()
-        curve = game_wins(game)
+        plies = analyze_game(game, "white", config.stockfish_path)
+        curve = game_wins(plies)
         log.info(f"board_game plies={len(curve['wins']) - 1} duration={time.monotonic() - start:.1f}s")
+        curve["history"] = self._history(game, plies, playing)
         self._json(curve)
+
+    def _history(self, game, plies: list, playing: str) -> list[str]:
+        """Historique de la partie ; [] sans lecteur de fiches ou si la lecture échoue
+        (la courbe part quand même)."""
+        load_games = self.server.load_games
+        if load_games is None:
+            return []
+        try:
+            games = load_games()
+        except Exception as exc:
+            log.warning(f"board_history load_games error={exc}")
+            return []
+        return game_history(game, plies, playing, games)
 
     def _send_to_aria(self, pgn: str):
         """Remet le PGN à ARIA comme un message de Nico (sprint 39) ; 503 si ARIA pas prêt."""
@@ -284,15 +339,18 @@ class _Handler(BaseHTTPRequestHandler):
         log.debug(format % args)
 
 
-def make_server(port: int, worker: BoardWorker, submit_text=None) -> ThreadingHTTPServer:
+def make_server(port: int, worker: BoardWorker, submit_text=None, load_games=None) -> ThreadingHTTPServer:
     """Serveur HTTP lié à 0.0.0.0:port, adossé à worker.
 
     submit_text(texte) -> bool : fonction d'envoi à ARIA (route /send), injectée
-    par bot.py ; l'échiquier ne voit ni le kernel ni la mémoire.
+    par bot.py ; l'échiquier ne voit pas le kernel.
+    load_games() -> list[dict] : lecture seule des fiches chess_game (sprint 52),
+    méthode du bridge injectée par bot.py ; aucune écriture mémoire.
     """
     server = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
     server.worker = worker
     server.submit_text = submit_text
+    server.load_games = load_games
     return server
 
 
@@ -302,10 +360,10 @@ def _open_engine():
     return engine
 
 
-def start_board_server(submit_text=None):
+def start_board_server(submit_text=None, load_games=None):
     """Lance le worker et le serveur de l'échiquier dans des threads daemon."""
     worker = BoardWorker(_open_engine, config.maia_models_dir)
-    server = make_server(config.board_port, worker, submit_text)
+    server = make_server(config.board_port, worker, submit_text, load_games)
     threading.Thread(target=worker.run, daemon=True, name="board-worker").start()
     threading.Thread(target=server.serve_forever, daemon=True, name="board-server").start()
     log.info(f"Échiquier ARIA à l'écoute sur le port {config.board_port}")

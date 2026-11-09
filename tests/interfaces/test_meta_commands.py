@@ -63,17 +63,17 @@ def test_parties_text_all_games_of_the_day_with_stats():
     games.append({**game, "date": "2026-11-04", "opponent": "adv6", "elo_opponent": 1500,
                   "nico_color": "black", "outcome": "loss", "opening": "Dutch Defense"})
     assert meta_commands.parties_text(games, today="2026-11-04").splitlines() == [
-        "Aujourd'hui : 5 V, 1 D — 83 %",
+        "blancs · contre adv1 · victoire · Italian Game",
+        "blancs · contre adv2 · victoire · Italian Game",
+        "blancs · contre adv3 · victoire · Italian Game",
+        "blancs · contre adv4 · victoire · Italian Game",
+        "blancs · contre sans_date · victoire · Italian Game",
+        "noirs · contre adv6 (1500) · défaite · Dutch Defense",
         "",
         "Italian Game (blancs) : 5 V, 0 N, 0 D — 100 % [5 parties]",
         "Dutch Defense (noirs) : 0 V, 0 N, 1 D — 0 % [1 partie]",
         "",
-        "noirs · contre adv6 (1500) · défaite · Dutch Defense",
-        "blancs · contre sans_date · victoire · Italian Game",
-        "blancs · contre adv4 · victoire · Italian Game",
-        "blancs · contre adv3 · victoire · Italian Game",
-        "blancs · contre adv2 · victoire · Italian Game",
-        "blancs · contre adv1 · victoire · Italian Game",
+        "Aujourd'hui : 5 V, 1 D — 83 % · performance 700 [1 partie]",
     ]
     assert meta_commands.parties_text(games, today="2026-11-05") == "Aucune partie aujourd'hui."
 
@@ -96,8 +96,8 @@ def test_openings_text_format_order_and_unknown_line():
               {**goring, "outcome": "unknown"}]
 
     assert meta_commands.openings_text(games).splitlines() == [
-        "Göring Gambit (blancs) : 5 V, 0 N, 3 D — 62 % [8 parties]",
         "Dutch Defense (noirs) : 0 V, 1 N, 0 D — 0 % [1 partie]",
+        "Göring Gambit (blancs) : 5 V, 0 N, 3 D — 62 % [8 parties]",
         "Issue inconnue, non comptée : 1 fiche(s)",
     ]
     assert meta_commands.openings_text([]) == meta_commands.NO_OPENINGS
@@ -127,11 +127,12 @@ def test_opening_report_full_text():
         _opening_game("unknown", n_plies=999, elo_opponent=9999),
     ]
     assert meta_commands.opening_report_text(games, "Göring Gambit").splitlines() == [
-        "Göring Gambit (blancs) : 2 V, 1 N, 1 D — 50 % [4 parties]",
         "Coups par partie en moyenne : 22,5",
         "Elo adverse moyen : victoires 1550, défaites 1400",
         "% de gain au coup 10 : victoires 65,0, nulles 50,0, défaites 40,0",
         "% de gain au coup 20 : victoires 85,2, défaites 30,0",
+        "Göring Gambit (blancs) : 2 V, 1 N, 1 D — 50 % [4 parties]",
+        "Performance : 1621 [3 parties]",
     ]
 
 
@@ -143,8 +144,8 @@ def test_opening_report_recent_games_only_above_five_sorted_by_date():
 
     games.append(_opening_game("win", timestamp="2026-10-06T10:00:00"))  # sans date : timestamp[:10]
     lines = meta_commands.opening_report_text(games, "goring").splitlines()
-    assert lines[0].endswith("[6 parties]")
-    assert lines[-1] == "5 dernières : 5 V — 100 %"
+    assert lines[-1].endswith("[6 parties]")
+    assert lines[-2] == "5 dernières : 5 V — 100 %"
 
 
 def test_opening_report_no_game_at_move_20_omits_line():
@@ -172,11 +173,20 @@ def test_opening_report_query_matching():
     )
 
 
-def test_opening_report_two_colors_two_sections_most_played_first():
+def test_opening_report_two_colors_two_sections_most_played_last():
     games = [_opening_game("win"), _opening_game("loss", color="black"), _opening_game("draw", color="black")]
     assert meta_commands.opening_report_text(games, "goring") == (
-        "Göring Gambit (noirs) : 1 N, 1 D — 0 % [2 parties]\n\nGöring Gambit (blancs) : 1 V — 100 % [1 partie]"
+        "Göring Gambit (blancs) : 1 V — 100 % [1 partie]\n\nGöring Gambit (noirs) : 1 N, 1 D — 0 % [2 parties]"
     )
+
+
+def test_performance_line_with_last_five():
+    # 6 parties à Elo adverse 1500 : la plus ancienne (date) est la seule défaite.
+    games = [_opening_game("win", elo_opponent=1500, date=f"2026.10.0{i}") for i in range(2, 7)]
+    games.append(_opening_game("loss", elo_opponent=1500, date="2026.10.01"))
+    lines = meta_commands.opening_report_text(games, "goring").splitlines()
+    assert lines[-1] == "Performance : 1780 [6 parties] · 5 dernières : 2300"
+    assert meta_commands.openings_text(games).splitlines()[-1] == lines[-1]
 
 
 def test_status_text():

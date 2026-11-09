@@ -39,6 +39,7 @@
   #pgn { width: 100%; box-sizing: border-box; height: 90px; }
   #nav { display: flex; gap: 6px; }
   #played { margin-top: 8px; font-size: 1.1em; }
+  #history { white-space: pre-line; }
   #graph { display: block; margin-top: 12px; cursor: pointer; }
   /* Liste des coups sous la courbe (tronçon 08), même largeur ; coup de la position affichée surligné. */
   #moves { width: 560px; margin-top: 8px; line-height: 1.6; }
@@ -73,7 +74,7 @@
               overflow: hidden; }
     #replies { width: auto; }
     #played { order: 3; margin-top: 0; }
-    #accuracy { order: 4; }
+    #accuracy, #history { order: 4; }
     #tabs { order: 5; display: flex; gap: 4px; }
     #tabs button { flex: 1; padding: 8px 0; }
     #tabs button.active { background: #6a4a1c; }
@@ -107,6 +108,7 @@
     </div>
     <div id="played"></div>
     <div id="accuracy"></div>
+    <div id="history"></div>
     <nav id="tabs">
       <button data-panel="moves">Coups</button><button data-panel="graph">Courbe</button>
       <button data-panel="saved-explosive"><span class="dot" style="background: #ff7f00"></span></button>
@@ -619,7 +621,12 @@ function refreshGame() {
   const acc = accuracy();
   const pct = (value) => (value === null ? "—" : `${Math.round(value)} %`);
   $("played").textContent = playedText() + (acc && acc.move !== null ? ` — précision ${pct(acc.move)}` : "");
-  $("accuracy").textContent = acc ? `Précision : blancs ${pct(acc.white)} · noirs ${pct(acc.black)}` : "";
+  // Elo des champs entre parenthèses (sprint 52) ; champ vide → rien.
+  const elo = (id) => ($(id).value ? ` (${$(id).value})` : "");
+  $("accuracy").textContent = acc
+    ? `Précision : blancs ${pct(acc.white)}${elo("elo-white")} · noirs ${pct(acc.black)}${elo("elo-black")}` : "";
+  // Historique de Nico sur la partie chargée (sprint 52) : une ligne par élément.
+  $("history").textContent = game && game.history ? game.history.join("\n") : "";
   drawGraph();
   renderMoves();
   drawEvalbar();
@@ -1015,12 +1022,13 @@ async function loadGame(cursor = 0) {
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   goTo(cursor);
   const loaded = game;
-  const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn }) });
+  const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn, playing: $("playing").value }) });
   if (loaded !== game) return;
   if (response.ok) {
-    const { wins, mates, best } = await response.json();
+    const { wins, mates, best, history } = await response.json();
     wins.forEach((win, i) => evals.set(game.fens[i], { win, mate: mates[i], best: best[i] }));
     game.wins = wins;
+    game.history = history;
   } else {
     game.message = "courbe indisponible";
   }
