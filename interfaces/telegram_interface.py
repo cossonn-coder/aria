@@ -445,19 +445,23 @@ class TelegramInterface(BaseInterface):
     async def _cmd_parties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=parties")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
-        if context.args:
-            text = meta_commands.parties_opening_text(games, " ".join(context.args))
+        query, period = meta_commands.parse_period_args(context.args or [])
+        period = period or "day"
+        if query:
+            text = meta_commands.parties_opening_text(games, query, period=period)
         else:
-            text = meta_commands.parties_text(games)
+            text = meta_commands.parties_text(games, period=period)
         await self._deliver(update.effective_chat.id, text)
 
     async def _cmd_ouvertures(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=ouvertures")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
-        if context.args:
-            text = meta_commands.opening_report_text(games, " ".join(context.args))
+        query, period = meta_commands.parse_period_args(context.args or [])
+        period = period or "all"
+        if query:
+            text = meta_commands.parties_opening_text(games, query, period=period)
         else:
-            text = meta_commands.openings_text(games)
+            text = meta_commands.openings_text(games, period=period)
         await self._deliver(update.effective_chat.id, text)
 
     async def _cmd_oublie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

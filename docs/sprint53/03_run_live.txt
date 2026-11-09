@@ -1,0 +1,19 @@
+PARTIE A — coller les PGN de 2 parties neuves, une par message.
+
+PARTIE B — une commande par message :
+
+/parties
+
+/parties week
+
+/parties month
+
+/parties semaine
+
+/ouvertures
+
+/ouvertures goring
+
+/ouvertures goring week
+
+/parties goring mois

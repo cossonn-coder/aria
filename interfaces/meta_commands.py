@@ -10,7 +10,7 @@
 import json
 import subprocess
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from chess_coach.level import performance
@@ -57,8 +57,8 @@ COMMANDS.update({
     "errors": "Avertissements et erreurs récents",
     "llm": "Derniers appels LLM",
     "intents": "Intents actifs",
-    "parties": "Parties d'échecs du jour et leur bilan (/parties ouverture)",
-    "ouvertures": "Statistiques par ouverture (/ouvertures nom)",
+    "parties": "Parties d'échecs du jour et leur bilan (/parties [ouverture] [week|month|year|all])",
+    "ouvertures": "Statistiques par ouverture (/ouvertures [nom] [day|week|month|year|all])",
 })
 
 # Racine du projet : cwd des appels git.
@@ -145,41 +145,113 @@ def _game_day(game: dict) -> str:
     return (game.get("date") or game.get("timestamp") or "")[:10].replace(".", "-")
 
 
-def parties_text(games: list[dict], today: str | None = None) -> str:
-    """Parties du jour : une ligne par partie, la plus ancienne d'abord, puis les stats
-    d'ouvertures, et le bilan du jour en dernier (Telegram affiche le bas du message)."""
+# Période (sprint 53) : mot accepté (sans accent ni casse) → clé canonique.
+_PERIOD_WORDS = {
+    "day": "day", "jour": "day", "week": "week", "semaine": "week", "month": "month",
+    "mois": "month", "year": "year", "annee": "year", "all": "all", "tout": "all",
+}
+# Fenêtre glissante finissant aujourd'hui, en jours (aujourd'hui compris) ; None = tout.
+_PERIOD_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365, "all": None}
+# Taille des listes 🏆 / 📉 du classement par précision.
+RANKED_GAMES = 5
+_PERIOD_LABELS = {"week": "7 derniers jours", "month": "30 derniers jours", "year": "365 derniers jours"}
+
+
+def parse_period_args(args: list[str]) -> tuple[str, str | None]:
+    """Arguments de /parties et /ouvertures → (requête d'ouverture, période ou None).
+    Le dernier mot est la période s'il en est une ; le reste est la requête."""
+    period = _PERIOD_WORDS.get(_plain(args[-1])) if args else None
+    words = args[:-1] if period else args
+    return " ".join(words), period
+
+
+def _in_period(games: list[dict], period: str, today: str | None) -> list[dict]:
+    """Fiches dont le jour (_game_day) tombe dans la fenêtre de la période."""
+    days = _PERIOD_DAYS[period]
+    if days is None:
+        return games
     today = today or datetime.now().strftime("%Y-%m-%d")
-    games = [game for game in games if _game_day(game) == today]
-    if not games:
+    start = (date.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
+    return [game for game in games if start <= _game_day(game) <= today]
+
+
+def _no_games_text(period: str) -> str:
+    """Message d'une période sans fiche ; NO_PARTIES pour le jour."""
+    if period == "day":
         return NO_PARTIES
+    if period == "all":
+        return "Aucune partie enregistrée."
+    return f"Aucune partie sur les {_PERIOD_LABELS[period]}."
+
+
+def _ranking_line(game: dict) -> str:
+    """« 92 % · Göring Gambit (blancs) · contre luismota32 (1340) · victoire · 2026-11-06 »."""
+    opponent = game.get("opponent") or "?"
+    if game.get("elo_opponent"):
+        opponent += f" ({game['elo_opponent']})"
+    group = game_opening_group(game) if game.get("opening") else "ouverture inconnue"
+    return " · ".join([
+        f"{game['accuracy']:.0f} %",
+        f"{group} ({_COLOR_FR.get(game.get('nico_color'), '?')})",
+        f"contre {opponent}",
+        _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
+        _game_day(game),
+    ])
+
+
+def _ranking_lines(games: list[dict]) -> list[str]:
+    """5 meilleures / 5 pires parties par précision (sans précision = non classée).
+    5 classées ou moins : une seule liste ; les pires ne reprennent pas les meilleures."""
+    ranked = sorted((g for g in games if g.get("accuracy")), key=lambda g: -g["accuracy"])
+    if not ranked:
+        return []
+    if len(ranked) <= RANKED_GAMES:
+        return ["Par précision :"] + [_ranking_line(g) for g in ranked]
+    worst = ranked[RANKED_GAMES:][::-1][:RANKED_GAMES]
+    return ([f"🏆 {RANKED_GAMES} meilleures :"] + [_ranking_line(g) for g in ranked[:RANKED_GAMES]]
+            + [f"📉 {RANKED_GAMES} pires :"] + [_ranking_line(g) for g in worst])
+
+
+def parties_text(games: list[dict], today: str | None = None, period: str = "day") -> str:
+    """Parties de la période : pour le jour, une ligne par partie, la plus ancienne d'abord ;
+    puis les stats d'ouvertures, le classement par précision, et le bilan de la période en
+    dernier (Telegram affiche le bas du message). Au-delà du jour, pas de ligne par partie."""
+    games = _in_period(games, period, today)
+    if not games:
+        return _no_games_text(period)
     lines = []
-    for game in games:
-        opponent = game.get("opponent") or "?"
-        if game.get("elo_opponent"):
-            opponent += f" ({game['elo_opponent']})"
-        lines.append(" · ".join([
-            _COLOR_FR.get(game.get("nico_color"), "?"),
-            f"contre {opponent}",
-            _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
-            game.get("opening") or "ouverture inconnue",
-        ]))
-    lines.append("")
+    if period == "day":
+        for game in games:
+            opponent = game.get("opponent") or "?"
+            if game.get("elo_opponent"):
+                opponent += f" ({game['elo_opponent']})"
+            lines.append(" · ".join([
+                _COLOR_FR.get(game.get("nico_color"), "?"),
+                f"contre {opponent}",
+                _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
+                game.get("opening") or "ouverture inconnue",
+            ]))
+        lines.append("")
     opening_lines = _opening_stat_lines(games)
     if opening_lines:
         lines += opening_lines + [""]
-    day = f"Aujourd'hui : {_record(games)}"
+    ranking = _ranking_lines(games)
+    if ranking:
+        lines += ranking + [""]
+    label = {"day": "Aujourd'hui", "all": "Toutes les parties"}.get(period) or _PERIOD_LABELS[period].capitalize()
+    bilan = f"{label} : {_record(games)}"
     perf = performance(games)
     if perf:
-        day += f" · performance {perf[0]} [{perf[1]} partie{'s' if perf[1] > 1 else ''}]"
-    lines.append(day)
+        bilan += f" · performance {perf[0]} [{perf[1]} partie{'s' if perf[1] > 1 else ''}]"
+    lines.append(bilan)
     return "\n".join(lines)
 
 
-def parties_opening_text(games: list[dict], query: str, today: str | None = None) -> str:
-    """/parties <ouverture> : rapport de /ouvertures <nom>, limité aux parties du jour (sprint 50)."""
-    today = today or datetime.now().strftime("%Y-%m-%d")
-    games = [game for game in games if _game_day(game) == today]
-    return opening_report_text(games, query) if games else NO_PARTIES
+def parties_opening_text(games: list[dict], query: str, today: str | None = None, period: str = "day") -> str:
+    """/parties <ouverture> [période] et /ouvertures <nom> <période> : rapport de
+    /ouvertures <nom>, limité aux parties de la période (sprint 50, période sprint 53)."""
+    games = _in_period(games, period, today)
+    return opening_report_text(games, query) if games else _no_games_text(period)
 
 
 # ── /ouvertures ──────────────────────────────────────────────────────────────
@@ -193,12 +265,16 @@ def _opening_stat_lines(games: list[dict]) -> list[str]:
     ]
 
 
-def openings_text(games: list[dict]) -> str:
-    """Stats d'ouvertures de toutes les fiches, de la moins jouée à la plus jouée,
-    puis les issues inconnues, et la performance globale en dernier."""
+def openings_text(games: list[dict], period: str = "all", today: str | None = None) -> str:
+    """Stats d'ouvertures des fiches de la période, de la moins jouée à la plus jouée,
+    puis le classement par précision, les issues inconnues, et la performance en dernier."""
+    games = _in_period(games, period, today)
     if not games:
-        return NO_OPENINGS
+        return NO_OPENINGS if period == "all" else _no_games_text(period)
     lines = _opening_stat_lines(games)[::-1]
+    ranking = _ranking_lines(games)
+    if ranking:
+        lines += [""] + ranking + [""]
     unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
     lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
     lines += _performance_line(games)
@@ -311,7 +387,10 @@ def opening_report_text(games: list[dict], query: str) -> str:
     for game in by_group[matches[0]]:
         by_color.setdefault(game["nico_color"], []).append(game)
     sections = sorted(by_color.items(), key=lambda item: len(item[1]))
-    return "\n\n".join(_color_section(matches[0], color, g) for color, g in sections)
+    # Classement au-dessus des sections : le bas du message reste la couleur la plus jouée.
+    blocks = ["\n".join(_ranking_lines(by_group[matches[0]]))]
+    blocks += [_color_section(matches[0], color, g) for color, g in sections]
+    return "\n\n".join(b for b in blocks if b)
 
 
 # ── /status ──────────────────────────────────────────────────────────────────
