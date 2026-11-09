@@ -1,6 +1,6 @@
 # Sprint 53 — état de conception
 
-**Phase** : B figée (2026-11-09) — prêt pour `/sprint-auto sprint 53`.
+**Phase** : CLOS (2026-11-09) — run live 03 joué par Nico, clôture sur son OK.
 **Branche** : `feat/sprint53-recits-periodes` (créée depuis `main` le 2026-11-09).
 
 ## Cible
@@ -15,7 +15,7 @@
 |---|---------|-------|------|
 | 01 | `01_faits_coups_cites.md` | Bloc enrichi : suite jouée sur chaque position, faits de l'erreur adverse (tournant), coups du déroulé, consigne étendue | ✅ |
 | 02 | `02_periodes_classement.md` | Périodes sur `/parties` et `/ouvertures`, 🏆 5 meilleures / 📉 5 pires par précision | ✅ |
-| 03 | `03_run_live.md` (+ `03_run_live.txt`) | Run live (Nico) : 2 parties neuves + commandes | ⏳ |
+| 03 | `03_run_live.md` (+ `03_run_live.txt`) | Run live (Nico) : 2 parties neuves + commandes | ✅ |
 
 ## Décisions arrêtées
 
@@ -54,8 +54,15 @@
 
 ## Dettes
 
-Visées par le sprint : #187 (à fermer si le run live le confirme), #92 (relevé au run live).
-Aucune nouvelle dette à ce stade.
+Visées par le sprint : #187, #92. **Les deux restent ouvertes** (run live 03, 2026-11-09) :
+- Prises et reprises bien racontées (le cas Qxf1+ ne se reproduit pas), mais partie Scotch contre
+  Bayern_24 : « 21.f3 garde le pion c6 » alors que la ligne de faits du meilleur coup montre
+  « 21...Nxc6 prend pion c6 » (pièce dite épargnée malgré la consigne) → #187 ouverte.
+- #92 : « 54...Nc5+ attaque le pion b5 » (un cavalier en c5 n'attaque pas b5 ; repris de
+  « 54...Kc5 attaque pion b5 » de la ligne moteur). Relevé : 2 entrées fautives sur 6 [n=1 partie],
+  non comparable au 3/21 d'avant le sprint 50.
+- Périodes et classement (tronçon 02) : validés par Nico.
+Aucune nouvelle dette.
 
 ## §REPRISE
 
@@ -70,4 +77,4 @@ période), `_in_period`, `_ranking_lines` ; paramètre `period` sur `parties_tex
 `_cmd_parties` / `_cmd_ouvertures` : requête + période (défauts jour / tout) ; `/ouvertures <nom>`
 passe désormais par `parties_opening_text` (période « all » = aucun filtre). Dans `openings_text`,
 le classement est placé au-dessus de « Issue inconnue » et de la performance. 559 tests verts.
-Prochaine étape : run live 03 par Nico.
+Run live 03 fait (2026-11-09) ; sprint clos, tag `sprint-53`. Suite : `docs/sprint54/context_kickoff_sprint_54.md`.
