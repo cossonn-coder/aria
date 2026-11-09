@@ -18,7 +18,7 @@ que cette idée a négligé, au lieu d'une simple comparaison moteur.
 
 | # | Kickoff | Statut |
 |---|---|---|
-| 01 | `01_idee_et_oubli.md` — ligne « idée du coup joué » + consigne Pourquoi en 3 temps | ⏳ |
+| 01 | `01_idee_et_oubli.md` — ligne « idée du coup joué » + consigne Pourquoi en 3 temps | ✅ (560 verts) |
 | 02 | `02_run_live.md` — run live Nico (partie de référence avec pendule) | ⏳ |
 
 ## Questions ouvertes
@@ -31,5 +31,8 @@ Aucune fermée ni ouverte à ce stade ; #115 adjacente, non touchée.
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_pensee_erreur.md`. Prochaine étape :
-`/sprint-auto sprint 54` (tronçon 01), puis run live 02 par Nico.
+Lire `CLAUDE.md`, ce fichier, `audit_pensee_erreur.md`. Tronçon 01 fait :
+`_intent_line` + `_relative_pins` dans `execution/routers/chess_router.py` (ligne « idée du coup
+joué » après « suite du coup joué » des sortes a/b, `times` passé à `_build_enriched`), consigne
+« Pourquoi : » en 3 temps ; test `test_intent_line_threat_idea_and_self_pin` (position de
+référence reconstruite, le PGN réel n'est pas dans le repo). Prochaine étape : run live 02 par Nico.

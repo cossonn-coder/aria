@@ -5,6 +5,7 @@
 
 import hashlib
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import chess
@@ -15,7 +16,7 @@ from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
 from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow)
-from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
+from execution.routers.chess_router import ChessExecutionRouter, _caption, _intent_line, _move_facts, _variant_line
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -486,6 +487,28 @@ def test_move_facts_names_unpinned_piece():
     fen = "4r3/3k2pp/1ppb1p1n/p7/P1B2PP1/2P4P/1P3K2/2BR4 b - - 0 24"
     assert _move_facts(fen, ["Kc7"], 24, "black") == "24...Kc7 (décloue Bd6)"
     assert "décloue" not in _move_facts(fen, ["g5"], 24, "black")
+
+
+def test_intent_line_threat_idea_and_self_pin():
+    # Partie de référence (sprint 54) : 9.Ba3 chasse Qd6, 9...Qd7 décloue Nc6 mais se met
+    # derrière lui sur la diagonale de Bb5 : Nc6 devient cloué sur la dame.
+    board = chess.Board()
+    plies = []
+    for i, san in enumerate("e4 d5 exd5 Qxd5 Nc3 Qd6 Nf3 Nf6 b3 Nc6 Bb5 Bg4 h3 Bh5 O-O e6 Ba3 Qd7".split()):
+        color = "white" if i % 2 == 0 else "black"
+        plies.append(SimpleNamespace(ply=i, move_number=i // 2 + 1, color=color, san=san, fen_before=board.fen()))
+        board.push_san(san)
+    p = plies[17]
+
+    line = _intent_line(plies, p)
+
+    assert "9.Ba3 (attaque Qd6)" in line
+    assert "met à l'abri Qd6" in line
+    assert "décloue Nc6" in line
+    assert "défend Nc6" not in line
+    assert "Nc6 cloué sur Qd7 (par Bb5)" in line
+    assert "temps" not in line
+    assert "temps : 3 s" in _intent_line(plies, p, 3.2)
 
 
 def test_move_facts_capture_and_numbering():
