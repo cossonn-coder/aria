@@ -14,7 +14,7 @@
 | # | Kickoff | Objet | État |
 |---|---------|-------|------|
 | 01 | `01_faits_coups_cites.md` | Bloc enrichi : suite jouée sur chaque position, faits de l'erreur adverse (tournant), coups du déroulé, consigne étendue | ✅ |
-| 02 | `02_periodes_classement.md` | Périodes sur `/parties` et `/ouvertures`, 🏆 5 meilleures / 📉 5 pires par précision | ⏳ |
+| 02 | `02_periodes_classement.md` | Périodes sur `/parties` et `/ouvertures`, 🏆 5 meilleures / 📉 5 pires par précision | ✅ |
 | 03 | `03_run_live.md` (+ `03_run_live.txt`) | Run live (Nico) : 2 parties neuves + commandes | ⏳ |
 
 ## Décisions arrêtées
@@ -64,4 +64,10 @@ Tronçon 01 fait (2026-11-09) : `story_plies` public dans `chess_coach/summary.p
 `story_line`), helper `_played_facts` dans `chess_router.py` ; 555 tests verts. Dans
 `tests/execution/test_chess_router.py`, une fixture autouse neutralise `_played_facts` (coups
 factices illégaux, ex. 17...Ng4+) ; le test du tronçon remet la vraie fonction.
-Prochaine étape : tronçon 02 (`02_periodes_classement.md`), puis run live 03 par Nico.
+Tronçon 02 fait (2026-11-09) : `interfaces/meta_commands.py` — `parse_period_args` (dernier mot =
+période), `_in_period`, `_ranking_lines` ; paramètre `period` sur `parties_text`,
+`parties_opening_text`, `openings_text` ; classement en tête de `opening_report_text`. Handlers
+`_cmd_parties` / `_cmd_ouvertures` : requête + période (défauts jour / tout) ; `/ouvertures <nom>`
+passe désormais par `parties_opening_text` (période « all » = aucun filtre). Dans `openings_text`,
+le classement est placé au-dessus de « Issue inconnue » et de la performance. 559 tests verts.
+Prochaine étape : run live 03 par Nico.

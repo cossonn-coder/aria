@@ -189,6 +189,64 @@ def test_performance_line_with_last_five():
     assert meta_commands.openings_text(games).splitlines()[-1] == lines[-1]
 
 
+# ── Sprint 53 : périodes et classement par précision ─────────────────────────
+
+def test_parse_period_args():
+    assert meta_commands.parse_period_args(["goring", "week"]) == ("goring", "week")
+    assert meta_commands.parse_period_args(["month"]) == ("", "month")
+    assert meta_commands.parse_period_args(["goring"]) == ("goring", None)
+    assert meta_commands.parse_period_args(["Année"]) == ("", "year")
+
+
+def test_parties_text_week_stats_only_and_period_bilan():
+    game = {"nico_color": "white", "outcome": "win", "opening": "Italian Game", "opponent": "adv"}
+    games = [{**game, "date": "2026.10.28"},  # hors fenêtre (8 jours avant)
+             {**game, "date": "2026.10.29"}, {**game, "date": "2026.11.04", "outcome": "loss"}]
+    assert meta_commands.parties_text(games, today="2026-11-04", period="week").splitlines() == [
+        "Italian Game (blancs) : 1 V, 0 N, 1 D — 50 % [2 parties]",
+        "",
+        "7 derniers jours : 1 V, 1 D — 50 %",
+    ]
+    assert meta_commands.parties_text(games, today="2026-12-31", period="week") == (
+        "Aucune partie sur les 7 derniers jours.")
+
+
+def test_ranking_seven_games_best_five_then_worst_two_above_bilan():
+    games = [_opening_game("win", accuracy=float(a), opponent=f"adv{a}", date="2026.11.04")
+             for a in (70, 95, 60, 80, 90, 85, 75)]
+    games.append(_opening_game("loss", opponent="sans_precision", date="2026.11.04"))
+    lines = meta_commands.parties_text(games, today="2026-11-04", period="week").splitlines()
+    start = lines.index("🏆 5 meilleures :")
+    assert lines[start:] == [
+        "🏆 5 meilleures :",
+        "95 % · Göring Gambit (blancs) · contre adv95 · victoire · 2026-11-04",
+        "90 % · Göring Gambit (blancs) · contre adv90 · victoire · 2026-11-04",
+        "85 % · Göring Gambit (blancs) · contre adv85 · victoire · 2026-11-04",
+        "80 % · Göring Gambit (blancs) · contre adv80 · victoire · 2026-11-04",
+        "75 % · Göring Gambit (blancs) · contre adv75 · victoire · 2026-11-04",
+        "📉 5 pires :",
+        "60 % · Göring Gambit (blancs) · contre adv60 · victoire · 2026-11-04",
+        "70 % · Göring Gambit (blancs) · contre adv70 · victoire · 2026-11-04",
+        "",
+        "7 derniers jours : 7 V, 1 D — 88 %",
+    ]
+
+
+def test_ranking_three_games_single_list_above_color_sections():
+    games = [_opening_game("win", accuracy=91.6, opponent="a", elo_opponent=1340, date="2026.11.06"),
+             _opening_game("loss", accuracy=55.0, opponent="b", date="2026.11.05"),
+             _opening_game("draw", color="black", accuracy=70.0, opponent="c", date="2026.11.05")]
+    blocks = meta_commands.opening_report_text(games, "goring").split("\n\n")
+    assert blocks[0].splitlines() == [
+        "Par précision :",
+        "92 % · Göring Gambit (blancs) · contre a (1340) · victoire · 2026-11-06",
+        "70 % · Göring Gambit (noirs) · contre c · nulle · 2026-11-05",
+        "55 % · Göring Gambit (blancs) · contre b · défaite · 2026-11-05",
+    ]
+    assert blocks[1].startswith("Göring Gambit (noirs)")
+    assert "Göring Gambit (blancs) : 1 V, 1 D" in blocks[-1]
+
+
 def test_status_text():
     status = {
         "started_at": datetime(2026, 10, 29, 8, 0),
