@@ -16,7 +16,7 @@ from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
 from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow)
-from execution.routers.chess_router import ChessExecutionRouter, _caption, _intent_line, _move_facts, _variant_line
+from execution.routers.chess_router import ChessExecutionRouter, _caption, _intent_line, _move_facts, _rank_line, _variant_line
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -87,10 +87,10 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
         "Meilleurs coups : toi 0/2 · adversaire 0/0\nErreurs : toi 2 erreurs · adversaire aucune\n"
         "Pire coup 17...Ng4+ (50 % → 30 %)\n"
         "🔵 meilleur 0 / 0 · ⚪ correct 0 / 0 · 🩷 imprécision 0 / 0 · 🔴 erreur 2 / 0 · ⚫ gaffe 0 / 0 · "
-        "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 coup du moteur (toi / adversaire)\n\n"
+        "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 meilleur coup du moteur\n\n"
         "🎮 Progression — saison 1, partie 2")
     # Sprint 52 : le rang de la précision est la dernière ligne du message.
-    assert result["text"].endswith("\n\n🏅 Précision 41 % : ta 2e meilleure partie sur 2")
+    assert result["text"].endswith("\n\n🏅 Précision 41 % : 2e sur 2")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 3
@@ -921,7 +921,7 @@ def test_marks_key_counts_both_sides():
                "nico_blunder": 0, "opponent_blunder": 0}
     assert chess_router_mod._marks_key(summary, _colors_analysis()) == (
         "🔵 meilleur 23 / 22 · ⚪ correct 31 / 32 · 🩷 imprécision 1 / 0 · 🔴 erreur 0 / 1 · "
-        "⚫ gaffe 0 / 0 · 🟠 explosif / brillant 1 · 🩵 piège 1 · 🟢 coup du moteur (toi / adversaire)")
+        "⚫ gaffe 0 / 0 · 🟠 explosif / brillant 1 · 🩵 piège 1 · 🟢 meilleur coup du moteur")
 
 
 def test_conversion_line_and_miniature_before_curve(monkeypatch, tmp_path):
@@ -1005,3 +1005,22 @@ def test_moves_line_shows_both_official_elo():
                "brilliant_moves": None, "best_move": None, "worst_move": None}
     line = chess_router_mod._moves_line(summary, _colors_analysis())
     assert line.startswith("🎯 Précision : toi 84 % (1354) · adversaire 79 % (1332)\n")
+
+
+def test_rank_line_gives_overall_day_and_opening_ranks():
+    """Sprint 55 : rang global, du jour et de l'ouverture (groupe + couleur) ; un segment
+    jour ou ouverture qui porte sur 1 partie est omis."""
+    caro = {"opening": "Caro-Kann Defense", "opening_group": "Caro-Kann Defense", "nico_color": "white"}
+    games = [
+        {**caro, "accuracy": 95.0, "date": "2026.11.08"},
+        {**caro, "accuracy": 80.0, "date": "2026.11.09"},
+        {**caro, "accuracy": 85.0, "timestamp": "2026-11-09T10:00:00"},
+        {**caro, "nico_color": "black", "accuracy": 99.0, "date": "2026.11.09"},
+        {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"},
+    ]
+    summary = {**caro, "accuracy": 85.0, "date": "2026.11.09"}
+    assert _rank_line(summary, games) == (
+        "🏅 Précision 85 % : 3e sur 5 · 2e sur 3 aujourd'hui · 2e sur 3 en Caro-Kann Defense (blancs)")
+    # Seule partie du jour et seule Scotch Game en blancs : les deux segments disparaissent.
+    scotch = {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"}
+    assert _rank_line(scotch, games) == "🏅 Précision 70 % : 5e sur 5"

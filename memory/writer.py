@@ -183,6 +183,15 @@ def update_chess_game_opening(doc_id: str, room: str, opening: str, opening_grou
     }])
 
 
+def update_chess_game_accuracy(doc_id: str, accuracy: float) -> None:
+    """
+    Pose la précision de Nico sur une fiche existante qui n'en a pas (rattrapage
+    sprint 55). ChromaDB fusionne les métadonnées : le reste de la fiche est intact.
+    """
+    col = get_collection(config.mempalace_path)
+    col.update(ids=[doc_id], metadatas=[{"accuracy": accuracy}])
+
+
 def delete_chess_games(doc_ids: list[str]) -> None:
     """Supprime des fiches de parties (migration sprint 46 : analysées du mauvais camp)."""
     col = get_collection(config.mempalace_path)
