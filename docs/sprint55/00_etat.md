@@ -23,12 +23,12 @@ de la pastille 🟢. Audit : `audit_rang_precision.md`.
 ## Tronçons
 | # | Kickoff | Statut |
 |---|---------|--------|
-| 01 | `01_rang_precision.md` : ligne 🏅 à 3 rangs, légende 🟢 | ⏳ |
+| 01 | `01_rang_precision.md` : ligne 🏅 à 3 rangs, légende 🟢 | ✅ |
 | 02 | `02_run_live.md` : run live (Nico) | ⏳ |
 
 ## Dettes
 Le sprint n'en ferme ni n'en ouvre. #175 (jour UTC) et #204 (couplage) restent ouvertes.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier et `audit_rang_precision.md`. Prochaine étape :
-`/sprint-auto sprint 55` (tronçon 01), puis run live 02 par Nico.
+Lire `CLAUDE.md`, ce fichier et `audit_rang_precision.md`. Tronçon 01 fait (`_rank_line(summary, games)`
++ `_day` recopié dans `chess_router.py`, légende 🟢). Prochaine étape : run live 02 par Nico.

@@ -21,6 +21,7 @@
 import hashlib
 import json
 import re
+from datetime import date
 from pathlib import Path
 from uuid import uuid4
 
@@ -539,7 +540,7 @@ def _marks_key(summary: dict, analysis) -> str:
                     and is_brilliant(p.fen_before, p.uci, p.win_before, p.loss))
     parts.append(f"{_MARK_EXPLOSIVE} explosif / brillant {len(analysis.explosive) - traps + brilliant}")
     parts.append(f"{_MARK_TRAP} piège {traps}")
-    parts.append(f"{_MARK_BEST} coup du moteur (toi / adversaire)")
+    parts.append(f"{_MARK_BEST} meilleur coup du moteur")
     return " · ".join(parts)
 
 
@@ -548,11 +549,33 @@ def _elo_suffix(elo: int | None) -> str:
     return f" ({elo})" if elo is not None else ""
 
 
-def _rank_line(accuracy: float, games: list) -> str:
-    """Dernière ligne du bilan (sprint 52) : rang de la précision dans les parties de Nico."""
-    rank, total = accuracy_rank(accuracy, games)
-    which = "ta meilleure partie" if rank == 1 else f"ta {rank}e meilleure partie"
-    return f"🏅 Précision {accuracy:.0f} % : {which} sur {total}"
+def _day(game: dict) -> str:
+    """Jour AAAA-MM-JJ d'une fiche : même règle que `_game_day` (interfaces/meta_commands.py),
+    recopiée ici pour ne pas faire dépendre le routeur du module Telegram (dette #204)."""
+    return (game.get("date") or game.get("timestamp") or "")[:10].replace(".", "-")
+
+
+def _rank_line(summary: dict, games: list) -> str:
+    """Dernière ligne du bilan (sprint 52, étendue sprint 55) : rang de la précision sur toutes
+    les fiches, sur celles du même jour et sur celles de la même ouverture (groupe + couleur).
+    Un segment jour ou ouverture qui ne porte que sur 1 partie est omis."""
+    accuracy = summary["accuracy"]
+
+    def segment(subset: list, label: str = "") -> str | None:
+        rank, total = accuracy_rank(accuracy, subset)
+        if label and total <= 1:
+            return None
+        return f"{'1re' if rank == 1 else f'{rank}e'} sur {total}{label}"
+
+    # Jour de la partie courante ; sans date PGN, la fiche vient d'être écrite aujourd'hui.
+    day = _day(summary) or date.today().isoformat()
+    segments = [segment(games), segment([g for g in games if _day(g) == day], " aujourd'hui")]
+    if summary["opening"]:
+        group, color = game_opening_group(summary), summary["nico_color"]
+        same = [g for g in games if g.get("opening") and g.get("nico_color") == color
+                and game_opening_group(g) == group]
+        segments.append(segment(same, f" en {group} ({_COLOR_FR[color]})"))
+    return f"🏅 Précision {accuracy:.0f} % : " + " · ".join(s for s in segments if s)
 
 
 def _moves_line(summary: dict, analysis) -> str:
@@ -1101,7 +1124,7 @@ class ChessExecutionRouter(BaseRouter):
             text += "\n\n" + block
         # Rang de la précision : toujours la dernière ligne (fiches déjà chargées, courante incluse).
         if summary["accuracy"] is not None and games is not None:
-            text += "\n\n" + _rank_line(summary["accuracy"], games)
+            text += "\n\n" + _rank_line(summary, games)
         return {"text": text, "images": images}
 
     def _build_enriched(self, analysis, message: str, anchor: str, summary: dict,
