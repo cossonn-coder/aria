@@ -1,6 +1,6 @@
 # Sprint 55 — État
 
-**Phase** : B figée (2026-11-09, OK de Nico). Branche `feat/sprint55-rang-precision`.
+**Phase** : CLOS (2026-11-09, run live validé par Nico). Branche `feat/sprint55-rang-precision`.
 **Sujet** : bilan d'une partie (Telegram). Rang de précision du jour et de l'ouverture, libellé
 de la pastille 🟢. Audit : `audit_rang_precision.md`.
 
@@ -24,11 +24,22 @@ de la pastille 🟢. Audit : `audit_rang_precision.md`.
 | # | Kickoff | Statut |
 |---|---------|--------|
 | 01 | `01_rang_precision.md` : ligne 🏅 à 3 rangs, légende 🟢 | ✅ |
-| 02 | `02_run_live.md` : run live (Nico) | ⏳ |
+| 02 | `02_run_live.md` : run live (Nico) | ✅ |
+
+## Run live (2026-11-09)
+- Ligne obtenue : `🏅 Précision 86 % : 98e sur 209 · 9e sur 24 aujourd'hui · 9e sur 10 en Portsmouth
+  Gambit (blancs)` ; légende `🟢 meilleur coup du moteur`. ✅
+- Écart : 10 parties classées contre 12 en 📖. Cause : 26 fiches importées du 19 au 22/10 sans
+  champ `accuracy` (`accuracy_rank` les ignore). Décision de Nico : supprimer les fiches « Test »
+  et poser la précision dans le palace.
+- Rattrapage (`scripts/backfill_chess_accuracy.py --apply`, service arrêté) : précision recalculée
+  depuis `plies_json` (contrôle : identique à ±0,1 sur les 210 fiches qui l'avaient), 24 posées,
+  2 « Test » supprimées, 234 fiches toutes avec précision ; Portsmouth blancs 12/12.
+  Sauvegarde `~/.mempalace/palace.pre-sprint55-20261109-153231`.
 
 ## Dettes
-Le sprint n'en ferme ni n'en ouvre. #175 (jour UTC) et #204 (couplage) restent ouvertes.
+#98 partiellement résolue (« Test » supprimées, « Ami » reste). #175 (jour UTC) et #204 (couplage)
+restent ouvertes.
 
 ## §REPRISE
-Lire `CLAUDE.md`, ce fichier et `audit_rang_precision.md`. Tronçon 01 fait (`_rank_line(summary, games)`
-+ `_day` recopié dans `chess_router.py`, légende 🟢). Prochaine étape : run live 02 par Nico.
+Sprint clos. Suite : `docs/sprint56/context_kickoff_sprint_56.md`, `/conception sprint 56`.
