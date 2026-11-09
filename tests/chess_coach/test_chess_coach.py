@@ -525,3 +525,19 @@ def test_is_brilliant_piece_left_to_a_pawn():
     assert not is_brilliant(fen, "f3d4", 50, 0)
     assert not is_brilliant(fen, "f3e5", 95, 0)
     assert not is_brilliant(fen, "f3e5", 50, 3)
+
+
+def test_assign_human_lines_two_batched_passes(monkeypatch):
+    # Tronçon 01b : Maia simulé, réponse adverse puis coup suivant de Nico, coup joué en tête.
+    from types import SimpleNamespace
+    from chess_coach import analysis, difficulty
+    answers = iter([[[("e7e5", 0.5)]], [[("g1f3", 0.4)]]])
+    monkeypatch.setattr(difficulty, "reply_distribution", lambda fens, elo, models_dir: next(answers))
+    ply = SimpleNamespace(move_number=14, fen_before=chess.STARTING_FEN, uci="e2e4")
+    error = CriticalPosition(kind="a", ply=ply, score=20.0, best_line_san=["d4"])
+    opening = CriticalPosition(kind="a", ply=SimpleNamespace(move_number=10), score=20.0, best_line_san=["d4"])
+
+    analysis.assign_human_lines([error, opening], 1300, "unused")
+
+    assert error.human_line_san == ["e4", "e5", "Nf3"]
+    assert opening.human_line_san == []

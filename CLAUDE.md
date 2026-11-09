@@ -152,10 +152,10 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 53 clos (tag `sprint-53`, faits des coups cités dans les récits d'échecs ; périodes et
-🏆/📉 par précision sur `/parties` et `/ouvertures` ; #187 et #92 restent ouvertes ; voir `docs/sprint53/00_etat.md`).
-Prochain : **sprint 54**, cible à choisir. Kickoff : `docs/sprint54/context_kickoff_sprint_54.md`.
-Prochaine étape : `/conception sprint 54`.
+Sprint 54 clos (tag `sprint-54`, idée du coup joué et ce qu'elle a négligé dans le « Pourquoi : »
+des erreurs, intentions calculées + trace Maia après le coup 10 ; #205 ouverte ; voir `docs/sprint54/00_etat.md`).
+Prochain : **sprint 55**, cible à choisir. Kickoff : `docs/sprint55/context_kickoff_sprint_55.md`.
+Prochaine étape : `/conception sprint 55`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

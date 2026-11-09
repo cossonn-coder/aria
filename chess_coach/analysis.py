@@ -122,6 +122,9 @@ class CriticalPosition:
     # Sortes a / b : suites forcées du meilleur coup et du coup joué (SAN, ce coup en tête).
     best_line_san: list = field(default_factory=list)
     played_line_san: list = field(default_factory=list)
+    # Sortes a / b après le coup 10 : suite humaine probable selon Maia (sprint 54, tronçon 01b),
+    # coup joué en tête puis réponse adverse et coup suivant de Nico les plus probables.
+    human_line_san: list = field(default_factory=list)
 
 
 @dataclass
@@ -631,6 +634,31 @@ def assign_forcing_lines(critical: list, plies: list, engine_path: str) -> None:
         c.best_line_san, c.played_line_san = lines[2 * i], lines[2 * i + 1]
 
 
+def assign_human_lines(critical: list, nico_elo: int, models_dir: str) -> None:
+    """Remplit human_line_san des erreurs de Nico après le coup 10 : depuis la position après
+    son coup, réponse adverse la plus probable selon Maia, puis son coup suivant le plus
+    probable. Deux passes batchées ; la suite s'arrête si la partie est finie."""
+    from chess_coach.difficulty import _OPENING_MOVES, reply_distribution
+    errors = [c for c in critical if c.best_line_san and c.ply.move_number > _OPENING_MOVES]
+    boards = []
+    for c in errors:
+        board = chess.Board(c.ply.fen_before)
+        c.human_line_san = [board.san(chess.Move.from_uci(c.ply.uci))]
+        board.push_uci(c.ply.uci)
+        boards.append(board)
+    # Passe 1 : réponses adverses ; passe 2 : coups suivants de Nico (lignes encore ouvertes).
+    for length in (1, 2):
+        pending = [(c, b) for c, b in zip(errors, boards)
+                   if len(c.human_line_san) == length and not b.is_game_over()]
+        if not pending:
+            return
+        for (c, board), replies in zip(pending, reply_distribution([b.fen() for _c, b in pending],
+                                                                   nico_elo, models_dir)):
+            move = chess.Move.from_uci(replies[0][0])
+            c.human_line_san.append(board.san(move))
+            board.push(move)
+
+
 def analyze(text: str, message: str, engine_path: str,
             maia_models_dir: str | None = None, past_games=()) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
@@ -669,6 +697,14 @@ def analyze(text: str, message: str, engine_path: str,
         explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir, first_move)
     critical = select_critical(plies, nico_color, explosive, first_move)
     assign_forcing_lines(critical, plies, engine_path)
+    if maia_models_dir is not None:
+        # Même tolérance que la difficulté : sans Maia, human_line_san reste vide.
+        try:
+            from chess_coach.difficulty import DEFAULT_ELO
+            elo = headers.get("WhiteElo" if nico_color == "white" else "BlackElo", "")
+            assign_human_lines(critical, int(elo) if elo.isdigit() else DEFAULT_ELO, maia_models_dir)
+        except Exception:
+            log.exception("maia_human_lines FAILED")
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s first_move=%d critical=%s duration=%.1fs",
         len(plies), nico_color, source, first_move,

@@ -5,6 +5,7 @@
 
 import hashlib
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import chess
@@ -15,7 +16,7 @@ from chess_coach.analysis import CriticalPosition, GameAnalysis, PlyAnalysis
 from chess_coach.explosive import ExplosiveMove
 from chess_coach.player_model import GameDelta, Profile, Rating, Trial
 from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUTRAL, PLAYED_ARROW, TRAP_ARROW, error_arrow)
-from execution.routers.chess_router import ChessExecutionRouter, _caption, _move_facts, _variant_line
+from execution.routers.chess_router import ChessExecutionRouter, _caption, _intent_line, _move_facts, _variant_line
 
 
 def _ply(ply, move_number, san, best_san, best_uci):
@@ -487,6 +488,49 @@ def test_move_facts_names_unpinned_piece():
     assert _move_facts(fen, ["Kc7"], 24, "black") == "24...Kc7 (décloue Bd6)"
     assert "décloue" not in _move_facts(fen, ["g5"], 24, "black")
 
+
+def test_intent_line_threat_idea_and_self_pin():
+    # Partie de référence (sprint 54) : 9.Ba3 chasse Qd6, 9...Qd7 décloue Nc6 mais se met
+    # derrière lui sur la diagonale de Bb5 : Nc6 devient cloué sur la dame.
+    board = chess.Board()
+    plies = []
+    for i, san in enumerate("e4 d5 exd5 Qxd5 Nc3 Qd6 Nf3 Nf6 b3 Nc6 Bb5 Bg4 h3 Bh5 O-O e6 Ba3 Qd7".split()):
+        color = "white" if i % 2 == 0 else "black"
+        plies.append(SimpleNamespace(ply=i, move_number=i // 2 + 1, color=color, san=san, fen_before=board.fen()))
+        board.push_san(san)
+    p = plies[17]
+
+    line = _intent_line(plies, p)
+
+    assert "9.Ba3 (attaque Qd6)" in line
+    assert "met à l'abri Qd6" in line
+    assert "décloue Nc6" in line
+    assert "défend Nc6" not in line
+    assert "Nc6 cloué sur Qd7 (par Bb5)" in line
+    assert "temps" not in line
+    assert "temps : 3 s" in _intent_line(plies, p, 3.2)
+
+
+
+def test_intent_line_broadened_intents_and_maia_trace():
+    # Tronçon 01b : intentions élargies sur des coups simples, puis trace Maia après le coup 10.
+    def ply(san, move_number=1, played_p=None):
+        return SimpleNamespace(ply=0, move_number=move_number, color="white", san=san,
+                               fen_before=chess.STARTING_FEN, played_p=played_p)
+
+    assert "développe Nf3" in _intent_line([ply("Nf3")], ply("Nf3"))
+    assert "libère Qd1, Bf1" in _intent_line([ply("e4")], ply("e4"))
+    # Tronçon 01c : le roque est une intention (run live : 10...O-O-O sans aucun fait).
+    castle = SimpleNamespace(ply=0, move_number=4, color="white", san="O-O", played_p=None,
+                             fen_before="r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+    assert "ton coup : roque" in _intent_line([castle], castle)
+
+    p = ply("e4", move_number=14, played_p=0.123)
+    line = _intent_line([p], p, human_line=["e4", "e5", "Nf3"])
+    assert "Maia : coup choisi par 12 % des joueurs de ton niveau" in line
+    assert "suite probable : 14...e5 15.Nf3 (attaque pion e5)" in line
+    early = ply("e4", move_number=10, played_p=0.123)
+    assert "Maia" not in _intent_line([early], early, human_line=["e4", "e5", "Nf3"])
 
 def test_move_facts_capture_and_numbering():
     text = _move_facts(chess.STARTING_FEN, ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"], 1, "white")
