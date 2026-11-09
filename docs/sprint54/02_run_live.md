@@ -14,4 +14,8 @@ Succès :
   déclouer Nc6, et que la dame s'est mise derrière Nc6 face à Bb5 (Nc6 cloué), d'où 10.Ne5 ;
   le temps passé sur 9...Qd7 peut être mentionné.
 - Aucun fait inventé dans cette entrée ; journal : `chess_router OK`, aucune `ERROR`.
+- Erreur après le coup 10 (même partie ou une autre) : la ligne de données contient
+  « Maia : coup choisi par N % » et une « suite probable » ; le « Pourquoi : » s'appuie sur un
+  indice présent (intention, Maia, temps) ou dit que l'idée n'est pas claire, sans en inventer.
+  Journal : pas de `maia_human_lines FAILED`.
 - Bonus : sur une partie neuve avec une erreur, l'entrée suit la même forme en 3 temps.
