@@ -520,6 +520,10 @@ def test_intent_line_broadened_intents_and_maia_trace():
 
     assert "développe Nf3" in _intent_line([ply("Nf3")], ply("Nf3"))
     assert "libère Qd1, Bf1" in _intent_line([ply("e4")], ply("e4"))
+    # Tronçon 01c : le roque est une intention (run live : 10...O-O-O sans aucun fait).
+    castle = SimpleNamespace(ply=0, move_number=4, color="white", san="O-O", played_p=None,
+                             fen_before="r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+    assert "ton coup : roque" in _intent_line([castle], castle)
 
     p = ply("e4", move_number=14, played_p=0.123)
     line = _intent_line([p], p, human_line=["e4", "e5", "Nf3"])

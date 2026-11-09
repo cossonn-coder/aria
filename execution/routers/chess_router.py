@@ -374,9 +374,9 @@ def _intent_line(plies: list, p, seconds: float | None = None, human_line: list 
                 and board.attackers(not mover, sq) and not board.attackers(mover, sq)
                 and after.piece_at(sq) == board.piece_at(sq) and after.attackers(mover, sq)):
             intent.append(f"défend {_square_label(board, sq)}")
-    # « décloue » et « attaque » : faits déjà calculés par _move_fact_items, repris tels quels.
+    # « roque », « décloue » et « attaque » : faits déjà calculés par _move_fact_items, repris tels quels.
     facts = _move_fact_items(p.fen_before, [p.san], p.move_number, p.color)[0][1]
-    intent += [f for f in facts if f.startswith("décloue")]
+    intent += [f for f in facts if f == "roque" or f.startswith("décloue")]
     # Intentions élargies (tronçon 01b), sur la pièce jouée X (libellée à sa case d'arrivée).
     piece = _square_label(after, move.to_square)
     if (board.piece_type_at(move.from_square) in (chess.KNIGHT, chess.BISHOP)
