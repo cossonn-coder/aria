@@ -13,12 +13,17 @@ que cette idée a négligé, au lieu d'une simple comparaison moteur.
 2. Entrée « Pourquoi : » en 3 temps, 3 phrases max : idée probable (au conditionnel) → ce
    qu'elle a négligé → ce que fait le meilleur coup.
 3. Temps passé sur le coup fautif donné au LLM si la pendule est fournie.
+4. (Retour Nico après tronçon 01) Intentions élargies (développe, attaque, contrôle, vise le
+   roi, active, libère), présentées au LLM comme indices et non liste fermée. Maia réintégré
+   (révise la décision 1) : % du coup à l'Elo de Nico + suite humaine probable (2 demi-coups) ;
+   seuil du coup 10 gardé.
 
 ## Tronçons
 
 | # | Kickoff | Statut |
 |---|---|---|
 | 01 | `01_idee_et_oubli.md` — ligne « idée du coup joué » + consigne Pourquoi en 3 temps | ✅ (560 verts) |
+| 01b | `01b_intentions_maia.md` — intentions élargies, trace Maia, consigne « indices » | ⏳ |
 | 02 | `02_run_live.md` — run live Nico (partie de référence avec pendule) | ⏳ |
 
 ## Questions ouvertes
