@@ -347,3 +347,8 @@ def test_update_chess_game_opening_passes_only_these_fields(fake_col):
 def test_delete_chess_games_deletes_ids(fake_col):
     w.delete_chess_games(["chess_game_a", "chess_game_b"])
     assert fake_col.calls == [{"ids": ["chess_game_a", "chess_game_b"]}]
+
+
+def test_update_chess_game_accuracy_passes_only_accuracy(fake_col):
+    w.update_chess_game_accuracy("chess_game_x", 92.7)
+    assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{"accuracy": 92.7}]}]
