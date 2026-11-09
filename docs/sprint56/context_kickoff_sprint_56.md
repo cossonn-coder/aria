@@ -91,7 +91,7 @@ ARIA — Kickoff sprint 56 (ouverture)
 | 95 | Inventaire / bilan complet sans PGN (« où j'en suis aux échecs ? ») | ouvert (sprint 28) |
 | 96 | `summary.unconverted` vrai sur les parties à résultat `*` (outcome unknown) | ouvert (sprint 28) |
 | 97 | Renvoyer une ancienne partie la replace en dernier dans la chronologie (timestamp d'analyse) | **résolue sprint 49** : un renvoi ne touche plus la fiche (« déjà envoyée ») ; résidu → #185 |
-| 98 | Fiches parasites « Test » ×2 / « Ami » dans le palace prod | partiellement résolue sprint 55 : les 2 « Test » supprimées ; « Ami » (7 demi-coups, 2026-10-19, 21,5 %) reste |
+| 98 | Fiches parasites « Test » ×2 / « Ami » dans le palace prod | **résolue sprint 55** : 2 « Test » et « Ami » supprimées (`scripts/backfill_chess_accuracy.py`) |
 | 99 | Arrêt d'`aria.service` > 90 s puis SIGKILL | **résolue sprint 29** : `os._exit(0)` après arrêt PTB (tronçon 10), arrêt dans la seconde aux runs 11-13 |
 | 100 | Thèmes du modèle joueur par motif tactique | **résolue sprint 29** : `chess_coach/motifs.py` (portage cook.py + 11 mats), un classement par motif + « Mats », Global = moyenne des thèmes à ≥ 1 épreuve |
 | 101 | Ligne fusionnée du bloc Progression (deux thèmes au même coup) non observée en live, couverte par les tests seuls | ouvert, à observer |

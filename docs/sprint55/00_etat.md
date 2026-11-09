@@ -38,7 +38,7 @@ de la pastille 🟢. Audit : `audit_rang_precision.md`.
   Sauvegarde `~/.mempalace/palace.pre-sprint55-20261109-153231`.
 
 ## Dettes
-#98 partiellement résolue (« Test » supprimées, « Ami » reste). #175 (jour UTC) et #204 (couplage)
+#98 résolue (« Test » ×2 puis « Ami » supprimées, sauvegarde `~/.mempalace/palace.pre-sprint55-20261109-160547`). #175 (jour UTC) et #204 (couplage)
 restent ouvertes.
 
 ## §REPRISE

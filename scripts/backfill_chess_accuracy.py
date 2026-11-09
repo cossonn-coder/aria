@@ -2,7 +2,7 @@
 # scripts/backfill_chess_accuracy.py
 #
 # Rattrapage sprint 55 des fiches `chess_game` :
-#   - supprime les fiches de test (adversaire « Test ») ;
+#   - supprime les fiches parasites (adversaire « Test » ou « Ami ») ;
 #   - pose la précision de Nico sur les fiches qui n'en ont pas, recalculée depuis
 #     plies_json avec la formule du bilan (_game_accuracy), sans relancer le moteur.
 #
@@ -34,7 +34,7 @@ log = get_logger(__name__)
 def build_plan(games: list) -> tuple[list, list]:
     """(fiches de test à supprimer, [(doc_id, précision)] à poser). Une fiche qui a déjà
     sa précision ne produit rien : le script est idempotent."""
-    deletions = [g for g in games if (g.get("opponent") or "") == "Test"]
+    deletions = [g for g in games if (g.get("opponent") or "") in ("Test", "Ami")]
     updates = []
     for g in games:
         if g in deletions or g.get("accuracy") is not None:
@@ -52,7 +52,7 @@ def main(argv: list | None = None) -> int:
     games = load_games()
     deletions, updates = build_plan(games)
     print(f"\n  Fiches lues : {len(games)}")
-    print(f"  À supprimer (Test) : {[g['id'] for g in deletions]}")
+    print(f"  À supprimer (Test, Ami) : {[g['id'] for g in deletions]}")
     print(f"  Précision à poser : {len(updates)}")
     for doc_id, accuracy in updates:
         print(f"    {doc_id}  {accuracy} %")
