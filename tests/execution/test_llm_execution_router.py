@@ -405,3 +405,80 @@ def test_skip_history_skips_load_but_writes_turn(mock_store, mock_conv):
     bridge.load_conversation_history.assert_not_called()
     assert captured["history"] == []
     assert mock_conv.call_count == 2
+
+
+# ── Règles d'honnêteté et consignes (sprint 56, tronçon 04) ──────────────────
+
+@patch("execution.routers.llm_router.write_interaction")
+def test_context_block_starts_with_rules_and_contains_consigne(mock_store):
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_consignes.return_value = [{"id": "consigne_a", "text": "réponds court", "timestamp": "t"}]
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["block"] = ctx.extra["context_block"]
+        return _fake_ctx(fake_intent)
+
+    router.controller.run = capture_ctx
+    router._run_pipeline("test", CognitiveOperation.MEMORY_QUERY, {})
+
+    assert captured["block"].startswith("[Règles d'Aria — fixées par le code]")
+    assert "[Consignes de Nico]\n1. réponds court" in captured["block"]
+
+
+# ── Parties fournies au LLM (sprint 56, tronçon 05) ──────────────────────────
+
+from execution.routers.llm_router import mentions_chess_games, requested_games_count
+
+
+@pytest.mark.parametrize("message, expected", [
+    ("mes 3 dernières parties", 3),
+    ("analyse les 47 dernières parties", 47),
+    ("toutes mes parties", None),
+    ("ma journée aux échecs", 20),
+])
+def test_requested_games_count(message, expected):
+    assert requested_games_count(message) == expected
+
+
+def test_mentions_chess_games():
+    assert mentions_chess_games("j'ai fait 3 défaites d'affilée", [])
+    assert mentions_chess_games("et contre amateurspoeler ?", ["Amateurspoeler"])
+    assert not mentions_chess_games("quel temps fait-il", ["Amateurspoeler"])
+
+
+def _games(n):
+    return [{"opponent": f"adv{i}", "nico_color": "white", "outcome": "win",
+             "date": f"2026.11.{i + 1:02d}", "timestamp": f"t{i:02d}"} for i in range(n)]
+
+
+@patch("execution.routers.llm_router.write_interaction")
+def test_context_block_contains_recent_games(mock_store):
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_consignes.return_value = []
+    bridge.load_chess_games.return_value = _games(5)
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["block"] = ctx.extra["context_block"]
+        return _fake_ctx(fake_intent)
+
+    router.controller.run = capture_ctx
+    router._run_pipeline("mes 3 dernières parties", CognitiveOperation.MEMORY_QUERY, {})
+
+    section = captured["block"].split("[Parties de Nico — 3 plus récentes sur 5, fiches du palace]\n")[1]
+    lines = section.split("\n\n")[0].split("\n")
+    assert len(lines) == 3
+    assert lines[0].startswith("2026-11-05 · blancs · contre adv4 · victoire")
+
+
+@patch("execution.routers.llm_router.write_interaction")
+def test_skip_history_skips_games(mock_store):
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_consignes.return_value = []
+    bridge.load_chess_games.return_value = _games(5)
+    router.controller.run = lambda ctx, lr: _fake_ctx(fake_intent)
+
+    router._run_pipeline("mes parties", CognitiveOperation.MEMORY_QUERY, {"skip_history": True})
+
+    bridge.load_chess_games.assert_not_called()

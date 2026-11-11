@@ -263,3 +263,39 @@ def test_status_text():
     assert "812 Mo" in text
     assert "aria_episodic : 120" in text
     assert "Quarantaine : 3 dossier(s)" in text
+
+
+# ── Sprint 56, tronçon 02 : /issue ───────────────────────────────────────────
+
+def test_issue_picks_latest_game_and_computes_result():
+    games = [
+        {"id": "a", "opponent": "Tailor4321", "date": "2026.11.10", "nico_color": "white"},
+        {"id": "b", "opponent": "tailor4321", "date": "2026.11.11", "nico_color": "black"},
+        {"id": "c", "opponent": "Autre", "date": "2026.11.12", "nico_color": "white"},
+    ]
+    opponent, outcome = meta_commands.parse_issue_args(["TAILOR4321", "Victoire"])
+    game = meta_commands.latest_game_against(games, opponent)
+    assert game["id"] == "b"
+    assert (outcome, meta_commands.result_for(outcome, game["nico_color"])) == ("win", "0-1")
+    assert meta_commands.parse_issue_args(["x", "Défaite"])[1] == "loss"
+    assert meta_commands.issue_text(game, outcome) == "✅ Issue corrigée : contre tailor4321 (2026-11-11) → victoire."
+
+
+def test_issue_no_game_and_bad_args():
+    assert meta_commands.latest_game_against([], "Inconnu") is None
+    assert meta_commands.no_game_against_text("Inconnu") == "Aucune partie contre Inconnu."
+    assert meta_commands.parse_issue_args(["Tailor4321"]) is None
+    assert meta_commands.parse_issue_args(["Tailor4321", "gain"]) is None
+
+
+# ── /consigne, /consignes (sprint 56, tronçon 04) ────────────────────────────
+
+def test_consigne_args_and_texts():
+    assert meta_commands.parse_consigne_args(["retire", "2"]) == ("remove", "2")
+    assert meta_commands.parse_consigne_args(["réponds", "court"]) == ("add", "réponds court")
+    assert meta_commands.parse_consigne_args([]) is None
+    assert meta_commands.consigne_added_text(3, "réponds court") == "📌 Consigne 3 enregistrée : réponds court"
+    assert meta_commands.consigne_removed_text(2, "x") == "🗑️ Consigne 2 retirée : x"
+    assert meta_commands.no_consigne_text("9") == "Pas de consigne 9. Liste : /consignes"
+    assert meta_commands.consignes_text([{"text": "a"}, {"text": "b"}]) == "1. a\n2. b"
+    assert meta_commands.consignes_text([]) == "Aucune consigne."

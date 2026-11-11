@@ -24,6 +24,7 @@
 #   10. Écriture MemPalace
 
 import re
+import unicodedata
 
 from execution.routers.execution_base import BaseRouter
 from config import config
@@ -42,6 +43,7 @@ from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOpe
 from cognition.memory_context import MemoryContext
 from cognition.cognitive_trace import CognitiveTrace
 from cognition.context_builder import build_context_block
+from chess_coach.summary import games_context_section
 
 log = get_logger(__name__)
 
@@ -51,6 +53,64 @@ log = get_logger(__name__)
 # « salut » (36 813 car. de payload). Même idiome que GROQ_MAX_PAYLOAD_CHARS.
 HISTORY_MESSAGE_MAX_CHARS = 1_500
 HISTORY_BUDGET_CHARS = 6_000
+
+# Règles fixes injectées en tête de chaque contexte LLM (sprint 56, constats 3
+# à 6 de l'audit) : le LLM prétendait avoir corrigé la base, promettait des
+# fonctions, notait des consignes qu'il ne pouvait pas garder, et calculait des
+# variantes sans moteur. Hors budget de tokens du context builder.
+ARIA_RULES = """[Règles d'Aria — fixées par le code]
+- Tu ne peux ni écrire, ni corriger, ni supprimer quoi que ce soit dans ta mémoire ou dans les fiches de parties. Ne dis jamais « c'est corrigé », « je corrige ma mémoire », « c'est enregistré ».
+- Pour corriger le résultat d'une partie, Nico tape : /issue <adversaire> victoire|nulle|défaite.
+- Pour qu'une consigne dure, Nico tape : /consigne <texte>. Ne réponds jamais « noté » ou « je le ferai désormais » sans le lui indiquer.
+- Une nouvelle fonction (ligne de bilan, alerte, calcul) demande du code : dis-le, ne promets pas de la faire.
+- Sans analyse moteur fournie dans le contexte, ne calcule pas de variante d'échecs et n'affirme pas qu'un coup gagne du matériel : dis que tu ne peux pas le vérifier et propose de renvoyer la partie.
+- Si une donnée manque dans le contexte, dis-le au lieu de l'inventer."""
+
+
+def _rules_block(consignes: list[dict]) -> str:
+    """Règles fixes, puis les consignes de Nico numérotées (section omise s'il n'y en a pas)."""
+    block = ARIA_RULES
+    if consignes:
+        lines = [f"{i}. {c['text']}" for i, c in enumerate(consignes, start=1)]
+        block += "\n\n[Consignes de Nico]\n" + "\n".join(lines)
+    return block
+
+
+# Parties fournies au LLM (sprint 56, tronçon 05) : 20 par défaut (décision Nico).
+DEFAULT_CHESS_GAMES = 20
+_CHESS_WORDS = re.compile(
+    r"\b(parties?|echecs|games?|defaites?|victoires?|nulles?|adversaires?)\b"
+)
+_GAMES_COUNT = re.compile(r"\b(\d+)\s+(dernieres?|derniers|parties|games)\b")
+_ALL_GAMES = re.compile(r"\b(toutes|totalite|all)\b|tout l['’]historique")
+
+
+def _plain(text: str) -> str:
+    """Texte sans accents ni casse (même règle que _plain de interfaces/meta_commands)."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def mentions_chess_games(message: str, opponents: list[str]) -> bool:
+    """Vrai si le message parle de parties d'échecs : mot-clé, ou pseudo d'un adversaire connu."""
+    plain = _plain(message)
+    if _CHESS_WORDS.search(plain):
+        return True
+    return any(
+        re.search(rf"(?<!\w){re.escape(_plain(name))}(?!\w)", plain)
+        for name in opponents if name
+    )
+
+
+def requested_games_count(message: str) -> int | None:
+    """Nombre de parties demandé : « 3 dernières » → 3, « toutes » → None (toutes), sinon 20."""
+    plain = _plain(message)
+    match = _GAMES_COUNT.search(plain)
+    if match:
+        return int(match.group(1))
+    if _ALL_GAMES.search(plain):
+        return None
+    return DEFAULT_CHESS_GAMES
 
 
 def _trim_history(history: list[dict]) -> list[dict]:
@@ -268,6 +328,20 @@ class LLMExecutionRouter(BaseRouter):
             global_memories=global_memories,
             document_hit=document_hit,
         )
+        # Règles d'honnêteté + consignes durables, en tête du contexte (sprint 56).
+        consignes = self.mempalace_bridge.load_consignes()
+        head = _rules_block(consignes)
+        # Vraies fiches de parties sur une question d'échecs (sprint 56, constat 3) :
+        # la recherche vectorielle n'en remontait que quelques-unes. Pas sur le
+        # bilan d'une partie analysée (skip_history) : il a déjà ses données.
+        if not metadata.get("skip_history"):
+            games = self.mempalace_bridge.load_chess_games()
+            if games and mentions_chess_games(message, [g.get("opponent") for g in games]):
+                n = requested_games_count(message)
+                head += "\n\n" + games_context_section(games, n)
+                log.info("chess_games_context n=%d total=%d",
+                         len(games) if n is None else min(n, len(games)), len(games))
+        context_block = head + "\n\n" + context_block
 
         # ── 5. Construction du contexte agent ───────────────────────────────
         trace = CognitiveTrace()

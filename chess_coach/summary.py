@@ -322,3 +322,31 @@ def summary_text(analysis: GameAnalysis, summary: dict) -> str:
         errors += f" ; 1re erreur au coup {summary['first_error_nico']}"
     sentences.append(errors + ".")
     return " ".join(sentences)
+
+
+def game_context_line(game: dict) -> str:
+    """Ligne d'une fiche pour le contexte LLM (sprint 56) :
+    « 2026-11-11 · blancs · contre X (1729) · victoire · French Defense · précision 88 % ».
+    Jour : même règle que _game_day de /parties (date du PGN, sinon jour d'analyse)."""
+    day = (game.get("date") or game.get("timestamp") or "")[:10].replace(".", "-")
+    opponent = game.get("opponent") or "?"
+    if game.get("elo_opponent"):
+        opponent += f" ({game['elo_opponent']})"
+    parts = [
+        day,
+        _COLOR_FR.get(game.get("nico_color"), "?"),
+        f"contre {opponent}",
+        _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
+        game.get("opening") or "ouverture inconnue",
+    ]
+    if game.get("accuracy") is not None:
+        parts.append(f"précision {game['accuracy']:.0f} %")
+    return " · ".join(parts)
+
+
+def games_context_section(games: list[dict], n: int | None) -> str:
+    """Section « Parties de Nico » : les n fiches les plus récentes (toutes si n est None),
+    du plus récent au plus ancien. games est trié par timestamp croissant (load_chess_games)."""
+    recent = games[::-1] if n is None else games[::-1][:n]
+    header = f"[Parties de Nico — {len(recent)} plus récentes sur {len(games)}, fiches du palace]"
+    return "\n".join([header] + [game_context_line(g) for g in recent])

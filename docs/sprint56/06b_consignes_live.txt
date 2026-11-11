@@ -1,0 +1,28 @@
+Sprint 56 — run live complémentaire : application des consignes. Un bloc = un message, dans l'ordre.
+Attendu : chaque réponse LLM se termine par 🦉 tant que la consigne existe, plus aucune après le retrait.
+
+===== Message 1 — poser la consigne =====
+/consigne Termine chacune de tes réponses par l'emoji 🦉, seul sur la dernière ligne.
+
+===== Message 2 — question ordinaire (attendu : réponse terminée par 🦉) =====
+quelle heure est-il à Tokyo quand il est midi à Paris ?
+
+===== Message 3 — question d'échecs (attendu : réponse terminée par 🦉) =====
+quelle est ma meilleure ouverture avec les blancs ?
+
+===== ÉTAPE — redémarrer : sudo systemctl restart aria.service =====
+
+===== Message 4 — après redémarrage (attendu : réponse terminée par 🦉) =====
+donne-moi un conseil pour ma prochaine partie
+
+===== Message 5 — retrait =====
+/consignes
+
+===== Message 6 — retrait (N = numéro affiché au message 5) =====
+/consigne retire 1
+
+===== Message 7 — après retrait (attendu : PAS de 🦉) =====
+donne-moi un autre conseil pour ma prochaine partie
+
+===== Option — si tu joues une nouvelle partie pendant que la consigne existe =====
+Envoie son PGN entre les messages 4 et 5 : le texte du bilan (paragraphe « Bilan : ») doit lui aussi finir par 🦉.

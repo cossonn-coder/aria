@@ -192,6 +192,15 @@ def update_chess_game_accuracy(doc_id: str, accuracy: float) -> None:
     col.update(ids=[doc_id], metadatas=[{"accuracy": accuracy}])
 
 
+def update_chess_game_result(doc_id: str, result: str, outcome: str) -> None:
+    """
+    Corrige l'issue d'une fiche existante (/issue, sprint 56). ChromaDB fusionne
+    les métadonnées : le reste de la fiche est intact, sans ré-embedding.
+    """
+    col = get_collection(config.mempalace_path)
+    col.update(ids=[doc_id], metadatas=[{"result": result, "outcome": outcome}])
+
+
 def delete_chess_games(doc_ids: list[str]) -> None:
     """Supprime des fiches de parties (migration sprint 46 : analysées du mauvais camp)."""
     col = get_collection(config.mempalace_path)
@@ -265,6 +274,36 @@ def write_semantic_fact(
     }
     _validate(meta)
     col.upsert(documents=[fact], ids=[doc_id], metadatas=[meta])
+
+
+# ── Consignes durables (sprint 56, /consigne) ────────────────────────────────
+
+def write_consigne(text: str) -> str:
+    """
+    Stocke une consigne de Nico dans aria_semantic, room consignes.
+
+    wing / room / type structurels, non overridables (invariant W4).
+    Retourne le doc_id (journalisé par le handler).
+    """
+    col = get_collection(config.mempalace_path)
+    doc_id = f"consigne_{uuid4().hex[:8]}"
+
+    meta = {
+        "timestamp": _now_iso(),
+        "source": "telegram",
+        "wing": "aria_semantic",
+        "room": "consignes",
+        "type": "consigne",
+    }
+    _validate(meta)
+    col.upsert(documents=[text], ids=[doc_id], metadatas=[meta])
+    return doc_id
+
+
+def delete_consigne(doc_id: str) -> None:
+    """Supprime une consigne (/consigne retire N)."""
+    col = get_collection(config.mempalace_path)
+    col.delete(ids=[doc_id])
 
 
 # ── Écriture conversationnelle (tours user/assistant) ────────────────────────

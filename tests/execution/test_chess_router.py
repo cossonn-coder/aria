@@ -712,6 +712,42 @@ def test_known_game_without_clock_reanalyzed_when_pgn_has_clock(monkeypatch, tmp
     analyze.assert_not_called()
 
 
+def test_same_game_prefix_and_opponent():
+    # Sprint 56 : début exact des coups + adversaire de la fiche parmi les joueurs.
+    fiche = {"opponent": "Amateurspoeler", "plies_json": json.dumps([{"uci": "e2e4"}, {"uci": "e7e5"}])}
+    assert chess_router_mod._same_game(fiche, ["e2e4", "e7e5", "g1f3"], {"amateurspoeler", "staroflexeur"})
+    assert not chess_router_mod._same_game(fiche, ["e2e4", "e7e5", "g1f3"], {"autre", "staroflexeur"})
+
+
+_LONG_FICHE = {"id": "chess_game_long", "opponent": "A", "timestamp": "2026-10-31T08:00:00+00:00",
+               "plies_json": json.dumps([{"uci": "e2e4"}, {"uci": "e7e5"}, {"uci": "g1f3"}])}
+
+
+def test_truncated_game_is_duplicate(monkeypatch, tmp_path):
+    # PGN coupé plus tôt qu'une fiche connue du même adversaire : doublon, pas d'analyse.
+    router, analyze, write_game, llm_exec = _duplicate_router(monkeypatch, tmp_path, [_LONG_FICHE])
+
+    result = router.execute({"content": _GAME_A, "metadata": {}})
+
+    assert result == {"text": "Cette partie contre A a déjà été envoyée le 2026-10-31."}
+    analyze.assert_not_called()
+    write_game.assert_not_called()
+
+
+def test_completed_game_replaces_truncated_fiche(monkeypatch, tmp_path):
+    # PGN plus long qu'une fiche connue : analyse, date d'origine gardée, ancienne fiche supprimée.
+    short = {**_LONG_FICHE, "id": "chess_game_short", "plies_json": json.dumps([{"uci": "e2e4"}])}
+    router, analyze, write_game, _ = _duplicate_router(monkeypatch, tmp_path, [short])
+    delete = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "delete_chess_games", delete)
+
+    router.execute({"content": _GAME_A, "metadata": {}})
+
+    analyze.assert_called_once()
+    assert write_game.call_args.kwargs["timestamp"] == "2026-10-31T08:00:00+00:00"
+    delete.assert_called_once_with(["chess_game_short"])
+
+
 def test_goring_consigne_gives_the_gambit_idea(monkeypatch, tmp_path):
     # Le plan d'un Göring vient de l'idée du gambit, pas de la reprise du pion (Scotch).
     plies = [_ply(1, 17, "Ng4+", "d6", "d7d6")]
@@ -1024,3 +1060,16 @@ def test_rank_line_gives_overall_day_and_opening_ranks():
     # Seule partie du jour et seule Scotch Game en blancs : les deux segments disparaissent.
     scotch = {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"}
     assert _rank_line(scotch, games) == "🏅 Précision 70 % : 5e sur 5"
+
+
+def test_moves_line_flags_suspect_opponent_accuracy():
+    """Sprint 56 : ligne ⚠️ si précision adverse ≥ 95 % sur ≥ 20 coups adverses, sinon rien."""
+    base = {"accuracy": 84.2, "accuracy_opponent": 99.0, "elo_nico": 1354, "elo_opponent": 1698,
+            "nico_best": 20, "opponent_best": 25, "nico_correct": 5, "opponent_correct": 2,
+            "nico_inaccuracy": 1, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 0,
+            "nico_blunder": 0, "opponent_blunder": 0, "nico_moves": 27, "opponent_moves": 27,
+            "brilliant_moves": None, "best_move": None, "worst_move": None}
+    line = chess_router_mod._moves_line(base, _colors_analysis())
+    assert line.split("\n")[1] == "⚠️ Précision adverse 99 % sur 27 coups (1698 Elo) : à surveiller"
+    for change in ({"opponent_moves": 15}, {"accuracy_opponent": 90.0}):
+        assert "⚠️" not in chess_router_mod._moves_line({**base, **change}, _colors_analysis())

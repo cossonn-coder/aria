@@ -444,3 +444,91 @@ def status_text(status: dict) -> str:
 COMMANDS["oublie"] = "Repartir d'une conversation vierge"
 
 FORGET_TEXT = "🧹 Conversation oubliée. Les souvenirs restent."
+
+
+# =========================================================
+# /issue (sprint 56, tronçon 02) — corrige l'issue d'une partie
+# =========================================================
+# Le handler lit les fiches via bridge.load_chess_games et écrit via
+# memory.writer.update_chess_game_result ; ce module ne fait que les
+# calculs et les textes, sans LLM.
+
+COMMANDS["issue"] = "Corrige l'issue d'une partie (/issue <adversaire> victoire|nulle|défaite)"
+
+ISSUE_USAGE = "Syntaxe : /issue <adversaire> victoire|nulle|défaite"
+
+# Mot accepté (sans accent ni casse, cf. _plain) → outcome de la fiche.
+_ISSUE_WORDS = {"victoire": "win", "nulle": "draw", "defaite": "loss"}
+
+
+def parse_issue_args(args: list[str]) -> tuple[str, str] | None:
+    """Arguments de /issue → (adversaire, outcome) ; None si la syntaxe est invalide."""
+    if len(args) != 2:
+        return None
+    outcome = _ISSUE_WORDS.get(_plain(args[1]))
+    return (args[0], outcome) if outcome else None
+
+
+def latest_game_against(games: list[dict], opponent: str) -> dict | None:
+    """Fiche la plus récente (tri _game_date_key) contre cet adversaire, sans casse."""
+    matching = [g for g in games if (g.get("opponent") or "").casefold() == opponent.casefold()]
+    return max(matching, key=_game_date_key) if matching else None
+
+
+def result_for(outcome: str, nico_color: str) -> str:
+    """Résultat PGN déduit de l'issue côté Nico (inverse de summary._outcome)."""
+    if outcome == "draw":
+        return "1/2-1/2"
+    white_won = (outcome == "win") == (nico_color == "white")
+    return "1-0" if white_won else "0-1"
+
+
+def issue_text(game: dict, outcome: str) -> str:
+    """« ✅ Issue corrigée : contre Tailor4321 (2026-11-11) → victoire. »"""
+    return f"✅ Issue corrigée : contre {game['opponent']} ({_game_day(game)}) → {_OUTCOME_FR[outcome]}."
+
+
+def no_game_against_text(opponent: str) -> str:
+    return f"Aucune partie contre {opponent}."
+
+
+# =========================================================
+# /consigne, /consignes (sprint 56, tronçon 04) — consignes durables
+# =========================================================
+# Le handler lit via bridge.load_consignes et écrit via memory.writer
+# (write_consigne / delete_consigne) ; ce module analyse les arguments et
+# bâtit les textes. Les consignes sont injectées dans chaque prompt par
+# llm_router.
+
+COMMANDS["consigne"] = "Enregistre une consigne durable (/consigne <texte>, /consigne retire N)"
+COMMANDS["consignes"] = "Liste des consignes durables"
+
+CONSIGNE_USAGE = "Syntaxe : /consigne <texte> · /consigne retire <N> · liste : /consignes"
+NO_CONSIGNES = "Aucune consigne."
+
+
+def parse_consigne_args(args: list[str]) -> tuple[str, str] | None:
+    """Arguments de /consigne → ("add", texte) ou ("remove", "N") ; None = rappel de syntaxe.
+    « retire » suivi d'autre chose qu'un seul nombre reste une consigne à enregistrer."""
+    if not args:
+        return None
+    if len(args) == 2 and _plain(args[0]) == "retire" and args[1].isdigit():
+        return "remove", args[1]
+    return "add", " ".join(args)
+
+
+def consigne_added_text(number: int, text: str) -> str:
+    return f"📌 Consigne {number} enregistrée : {text}"
+
+
+def consigne_removed_text(number: int, text: str) -> str:
+    return f"🗑️ Consigne {number} retirée : {text}"
+
+
+def no_consigne_text(number: str) -> str:
+    return f"Pas de consigne {number}. Liste : /consignes"
+
+
+def consignes_text(consignes: list[dict]) -> str:
+    """Liste numérotée dans l'ordre d'enregistrement."""
+    return "\n".join(f"{i}. {c['text']}" for i, c in enumerate(consignes, start=1)) or NO_CONSIGNES

@@ -34,7 +34,12 @@ import chess.pgn
 from config import config
 from interfaces import meta_commands
 from interfaces.base_interface import BaseInterface
-from memory.writer import write_conversation_reset
+from memory.writer import (
+    delete_consigne,
+    update_chess_game_result,
+    write_conversation_reset,
+    write_consigne,
+)
 from core.event import Event, EventType
 from files.extract import extract_text
 from logger import get_logger
@@ -475,6 +480,55 @@ class TelegramInterface(BaseInterface):
         await asyncio.to_thread(write_conversation_reset, key)
         log.info("meta_oublie key=%s", key)
         await self._deliver(chat_id, meta_commands.FORGET_TEXT)
+
+    async def _cmd_issue(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Corrige result / outcome de la fiche la plus récente contre l'adversaire nommé."""
+        log.info("meta_command name=issue")
+        chat_id = update.effective_chat.id
+        parsed = meta_commands.parse_issue_args(context.args or [])
+        if parsed is None:
+            await self._deliver(chat_id, meta_commands.ISSUE_USAGE)
+            return
+        opponent, outcome = parsed
+        games = await asyncio.to_thread(self.bridge.load_chess_games)
+        game = meta_commands.latest_game_against(games, opponent)
+        if game is None:
+            await self._deliver(chat_id, meta_commands.no_game_against_text(opponent))
+            return
+        result = meta_commands.result_for(outcome, game["nico_color"])
+        await asyncio.to_thread(update_chess_game_result, game["id"], result, outcome)
+        log.info("meta_issue doc_id=%s outcome=%s", game["id"], outcome)
+        await self._deliver(chat_id, meta_commands.issue_text(game, outcome))
+
+    async def _cmd_consigne(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Ajoute une consigne durable, ou retire la N-ième de /consignes."""
+        log.info("meta_command name=consigne")
+        chat_id = update.effective_chat.id
+        parsed = meta_commands.parse_consigne_args(context.args or [])
+        if parsed is None:
+            await self._deliver(chat_id, meta_commands.CONSIGNE_USAGE)
+            return
+        action, value = parsed
+        if action == "add":
+            doc_id = await asyncio.to_thread(write_consigne, value)
+            log.info("meta_consigne add id=%s", doc_id)
+            consignes = await asyncio.to_thread(self.bridge.load_consignes)
+            await self._deliver(chat_id, meta_commands.consigne_added_text(len(consignes), value))
+            return
+        consignes = await asyncio.to_thread(self.bridge.load_consignes)
+        number = int(value)
+        if not 1 <= number <= len(consignes):
+            await self._deliver(chat_id, meta_commands.no_consigne_text(value))
+            return
+        consigne = consignes[number - 1]
+        await asyncio.to_thread(delete_consigne, consigne["id"])
+        log.info("meta_consigne remove id=%s", consigne["id"])
+        await self._deliver(chat_id, meta_commands.consigne_removed_text(number, consigne["text"]))
+
+    async def _cmd_consignes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        log.info("meta_command name=consignes")
+        consignes = await asyncio.to_thread(self.bridge.load_consignes)
+        await self._deliver(update.effective_chat.id, meta_commands.consignes_text(consignes))
 
     # =========================================================
     # SIGNAL D'ATTENTE
