@@ -185,3 +185,22 @@ def test_load_history_cuts_at_latest_reset_then_applies_n():
     assert [t["content"] for t in bridge.load_conversation_history("42", n=2)] == [
         "après 2", "après 3",
     ]
+
+
+# ── load_consignes (sprint 56, tronçon 04) ───────────────────────────────────
+
+def test_load_consignes_filters_and_sorts():
+    fake_get, captured = _make_get({
+        "ids": ["consigne_b", "consigne_a"],
+        "documents": ["deuxième", "première"],
+        "metadatas": [
+            {"type": "consigne", "timestamp": "2026-11-11T12:00:00+00:00"},
+            {"type": "consigne", "timestamp": "2026-11-10T12:00:00+00:00"},
+        ],
+    })
+    bridge = MempalaceBridge(store=lambda **kw: {}, get_by_metadata=fake_get)
+
+    consignes = bridge.load_consignes()
+
+    assert captured[0]["where"] == {"$and": [{"wing": "aria_semantic"}, {"type": "consigne"}]}
+    assert [(c["id"], c["text"]) for c in consignes] == [("consigne_a", "première"), ("consigne_b", "deuxième")]

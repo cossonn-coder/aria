@@ -276,6 +276,36 @@ def write_semantic_fact(
     col.upsert(documents=[fact], ids=[doc_id], metadatas=[meta])
 
 
+# ── Consignes durables (sprint 56, /consigne) ────────────────────────────────
+
+def write_consigne(text: str) -> str:
+    """
+    Stocke une consigne de Nico dans aria_semantic, room consignes.
+
+    wing / room / type structurels, non overridables (invariant W4).
+    Retourne le doc_id (journalisé par le handler).
+    """
+    col = get_collection(config.mempalace_path)
+    doc_id = f"consigne_{uuid4().hex[:8]}"
+
+    meta = {
+        "timestamp": _now_iso(),
+        "source": "telegram",
+        "wing": "aria_semantic",
+        "room": "consignes",
+        "type": "consigne",
+    }
+    _validate(meta)
+    col.upsert(documents=[text], ids=[doc_id], metadatas=[meta])
+    return doc_id
+
+
+def delete_consigne(doc_id: str) -> None:
+    """Supprime une consigne (/consigne retire N)."""
+    col = get_collection(config.mempalace_path)
+    col.delete(ids=[doc_id])
+
+
 # ── Écriture conversationnelle (tours user/assistant) ────────────────────────
 
 _ALLOWED_CONVERSATION_ROLES = {"user", "assistant"}

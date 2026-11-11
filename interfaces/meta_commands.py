@@ -490,3 +490,45 @@ def issue_text(game: dict, outcome: str) -> str:
 
 def no_game_against_text(opponent: str) -> str:
     return f"Aucune partie contre {opponent}."
+
+
+# =========================================================
+# /consigne, /consignes (sprint 56, tronçon 04) — consignes durables
+# =========================================================
+# Le handler lit via bridge.load_consignes et écrit via memory.writer
+# (write_consigne / delete_consigne) ; ce module analyse les arguments et
+# bâtit les textes. Les consignes sont injectées dans chaque prompt par
+# llm_router.
+
+COMMANDS["consigne"] = "Enregistre une consigne durable (/consigne <texte>, /consigne retire N)"
+COMMANDS["consignes"] = "Liste des consignes durables"
+
+CONSIGNE_USAGE = "Syntaxe : /consigne <texte> · /consigne retire <N> · liste : /consignes"
+NO_CONSIGNES = "Aucune consigne."
+
+
+def parse_consigne_args(args: list[str]) -> tuple[str, str] | None:
+    """Arguments de /consigne → ("add", texte) ou ("remove", "N") ; None = rappel de syntaxe.
+    « retire » suivi d'autre chose qu'un seul nombre reste une consigne à enregistrer."""
+    if not args:
+        return None
+    if len(args) == 2 and _plain(args[0]) == "retire" and args[1].isdigit():
+        return "remove", args[1]
+    return "add", " ".join(args)
+
+
+def consigne_added_text(number: int, text: str) -> str:
+    return f"📌 Consigne {number} enregistrée : {text}"
+
+
+def consigne_removed_text(number: int, text: str) -> str:
+    return f"🗑️ Consigne {number} retirée : {text}"
+
+
+def no_consigne_text(number: str) -> str:
+    return f"Pas de consigne {number}. Liste : /consignes"
+
+
+def consignes_text(consignes: list[dict]) -> str:
+    """Liste numérotée dans l'ordre d'enregistrement."""
+    return "\n".join(f"{i}. {c['text']}" for i, c in enumerate(consignes, start=1)) or NO_CONSIGNES

@@ -52,6 +52,27 @@ log = get_logger(__name__)
 HISTORY_MESSAGE_MAX_CHARS = 1_500
 HISTORY_BUDGET_CHARS = 6_000
 
+# Règles fixes injectées en tête de chaque contexte LLM (sprint 56, constats 3
+# à 6 de l'audit) : le LLM prétendait avoir corrigé la base, promettait des
+# fonctions, notait des consignes qu'il ne pouvait pas garder, et calculait des
+# variantes sans moteur. Hors budget de tokens du context builder.
+ARIA_RULES = """[Règles d'Aria — fixées par le code]
+- Tu ne peux ni écrire, ni corriger, ni supprimer quoi que ce soit dans ta mémoire ou dans les fiches de parties. Ne dis jamais « c'est corrigé », « je corrige ma mémoire », « c'est enregistré ».
+- Pour corriger le résultat d'une partie, Nico tape : /issue <adversaire> victoire|nulle|défaite.
+- Pour qu'une consigne dure, Nico tape : /consigne <texte>. Ne réponds jamais « noté » ou « je le ferai désormais » sans le lui indiquer.
+- Une nouvelle fonction (ligne de bilan, alerte, calcul) demande du code : dis-le, ne promets pas de la faire.
+- Sans analyse moteur fournie dans le contexte, ne calcule pas de variante d'échecs et n'affirme pas qu'un coup gagne du matériel : dis que tu ne peux pas le vérifier et propose de renvoyer la partie.
+- Si une donnée manque dans le contexte, dis-le au lieu de l'inventer."""
+
+
+def _rules_block(consignes: list[dict]) -> str:
+    """Règles fixes, puis les consignes de Nico numérotées (section omise s'il n'y en a pas)."""
+    block = ARIA_RULES
+    if consignes:
+        lines = [f"{i}. {c['text']}" for i, c in enumerate(consignes, start=1)]
+        block += "\n\n[Consignes de Nico]\n" + "\n".join(lines)
+    return block
+
 
 def _trim_history(history: list[dict]) -> list[dict]:
     """
@@ -268,6 +289,9 @@ class LLMExecutionRouter(BaseRouter):
             global_memories=global_memories,
             document_hit=document_hit,
         )
+        # Règles d'honnêteté + consignes durables, en tête du contexte (sprint 56).
+        consignes = self.mempalace_bridge.load_consignes()
+        context_block = _rules_block(consignes) + "\n\n" + context_block
 
         # ── 5. Construction du contexte agent ───────────────────────────────
         trace = CognitiveTrace()

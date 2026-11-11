@@ -357,3 +357,16 @@ def test_update_chess_game_accuracy_passes_only_accuracy(fake_col):
 def test_update_chess_game_result_passes_only_result_and_outcome(fake_col):
     w.update_chess_game_result("chess_game_x", "0-1", "win")
     assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{"result": "0-1", "outcome": "win"}]}]
+
+
+# ── Consignes durables (sprint 56, tronçon 04) ───────────────────────────────
+
+def test_write_consigne_structural_fields_and_delete(fake_col):
+    doc_id = w.write_consigne("réponds court")
+    assert doc_id.startswith("consigne_") and fake_col.last_id == doc_id
+    assert fake_col.last_doc == "réponds court"
+    meta = fake_col.last_meta
+    assert (meta["wing"], meta["room"], meta["type"], meta["source"]) == (
+        "aria_semantic", "consignes", "consigne", "telegram")
+    w.delete_consigne(doc_id)
+    assert fake_col.calls[-1] == {"ids": [doc_id]}

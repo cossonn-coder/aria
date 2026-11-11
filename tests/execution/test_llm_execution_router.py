@@ -405,3 +405,22 @@ def test_skip_history_skips_load_but_writes_turn(mock_store, mock_conv):
     bridge.load_conversation_history.assert_not_called()
     assert captured["history"] == []
     assert mock_conv.call_count == 2
+
+
+# ── Règles d'honnêteté et consignes (sprint 56, tronçon 04) ──────────────────
+
+@patch("execution.routers.llm_router.write_interaction")
+def test_context_block_starts_with_rules_and_contains_consigne(mock_store):
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_consignes.return_value = [{"id": "consigne_a", "text": "réponds court", "timestamp": "t"}]
+    captured = {}
+
+    def capture_ctx(ctx, lr):
+        captured["block"] = ctx.extra["context_block"]
+        return _fake_ctx(fake_intent)
+
+    router.controller.run = capture_ctx
+    router._run_pipeline("test", CognitiveOperation.MEMORY_QUERY, {})
+
+    assert captured["block"].startswith("[Règles d'Aria — fixées par le code]")
+    assert "[Consignes de Nico]\n1. réponds court" in captured["block"]

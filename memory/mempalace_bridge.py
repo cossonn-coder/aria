@@ -354,6 +354,41 @@ class MempalaceBridge:
         games.sort(key=lambda g: g.get("timestamp", ""))
         return games
 
+    def load_consignes(self) -> list[dict]:
+        """
+        Consignes de Nico (sprint 56, /consigne), triées par timestamp
+        croissant : l'ordre d'enregistrement donne leur numéro.
+        Lecture non-vectorielle par filtre wing + type, comme load_chess_games.
+
+        Returns:
+            liste de {"id", "text", "timestamp"}.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata.
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for consignes; "
+                "inject at construction"
+            )
+
+        from config import config as _config
+
+        where = {"$and": [
+            {"wing": "aria_semantic"},
+            {"type": "consigne"},
+        ]}
+        result = self._get_by_metadata(_config.mempalace_path, where) or {}
+        ids = result.get("ids") or []
+        docs = result.get("documents") or []
+        metas = result.get("metadatas") or []
+
+        consignes = [
+            {"id": doc_id, "text": doc or "", "timestamp": (meta or {}).get("timestamp", "")}
+            for doc_id, doc, meta in zip(ids, docs, metas)
+        ]
+        consignes.sort(key=lambda c: c["timestamp"])
+        return consignes
     def load_document_text(self, source: str) -> dict | None:
         """
         Texte intégral d'un document lu (sprint 43), stocké en wing

@@ -286,3 +286,16 @@ def test_issue_no_game_and_bad_args():
     assert meta_commands.no_game_against_text("Inconnu") == "Aucune partie contre Inconnu."
     assert meta_commands.parse_issue_args(["Tailor4321"]) is None
     assert meta_commands.parse_issue_args(["Tailor4321", "gain"]) is None
+
+
+# ── /consigne, /consignes (sprint 56, tronçon 04) ────────────────────────────
+
+def test_consigne_args_and_texts():
+    assert meta_commands.parse_consigne_args(["retire", "2"]) == ("remove", "2")
+    assert meta_commands.parse_consigne_args(["réponds", "court"]) == ("add", "réponds court")
+    assert meta_commands.parse_consigne_args([]) is None
+    assert meta_commands.consigne_added_text(3, "réponds court") == "📌 Consigne 3 enregistrée : réponds court"
+    assert meta_commands.consigne_removed_text(2, "x") == "🗑️ Consigne 2 retirée : x"
+    assert meta_commands.no_consigne_text("9") == "Pas de consigne 9. Liste : /consignes"
+    assert meta_commands.consignes_text([{"text": "a"}, {"text": "b"}]) == "1. a\n2. b"
+    assert meta_commands.consignes_text([]) == "Aucune consigne."
