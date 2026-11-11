@@ -1,0 +1,56 @@
+Sprint 56 — run live : messages à envoyer à Aria, dans l'ordre, un bloc = un message.
+
+===== Message 1 — partie Amateurspoeler coupée au coup 24 (attendu : « déjà envoyée ») =====
+[Site "Chess.com"]
+[Date "2026-11-11"]
+[White "BaguetteChaussette"]
+[Black "Amateurspoeler"]
+[Result "*"]
+[WhiteElo "1656"]
+[BlackElo "1729"]
+[TimeControl "600"]
+1. e4 e6 2. d4 d5 3. Be3 f5 4. exf5 exf5 5. Nc3 c6 6. Bd3 Nf6 7. Bg5 Be7 8. Bxf6
+Bxf6 9. Qf3 g6 10. O-O-O O-O 11. Nge2 a5 12. h4 Bxh4 13. Qh3 Bg5+ 14. f4 h5 15.
+fxg5 Qxg5+ 16. Kb1 a4 17. Qg3 Qh6 18. Nf4 Rf6 19. Rde1 Kf7 20. Nfxd5 cxd5 21.
+Nxd5 Rc6 22. Re7+ Kf8 23. Rhe1 Bd7 24. Qe5 *
+
+===== Message 2 — partie Tailor4321 complète (attendu : analyse, remplace la fiche de 70 demi-coups) =====
+[Event "BaguetteChaussette vs Tailor4321"]
+[Site "Chess.com"]
+[Date "2026-11-11"]
+[White "Tailor4321"]
+[Black "BaguetteChaussette"]
+[Result "*"]
+[WhiteElo "1699"]
+[BlackElo "1646"]
+[TimeControl "600"]
+[Termination "BaguetteChaussette won because game was abandoned"]
+
+1. e4 d5 2. exd5 Nf6 3. c4 e6 4. dxe6 Bxe6 5. b3 Nc6 6. Bb2 Qe7 7. Be2 O-O-O 8. Nf3 Bg4 9. O-O Bxf3 10. Bxf3 Qd7 11. Bxf6 gxf6 12. Bxc6 Qxc6 13. Qg4+ Kb8 14. Re1 Bc5 15. Qf3 Qxf3 16. gxf3 Rhg8+ 17. Kf1 Bd4 18. Nc3 Be5 19. h3 Rxd2 20. Ne4 Rd3 21. Ke2 Rgd8 22. Rad1 Rxd1 23. Rxd1 Rxd1 24. Kxd1 b6 25. Ke2 c5 26. f4 Bd4 27. Ng3 Kc7 28. Nf5 Kd7 29. f3 Bb2 30. Kd3 a6 31. a4 a5 32. Nh6 Ke7 33. Ke4 Ke6 34. Nf5 Bc3 35. Ne3 Bd2 36. f5+ Kd7 37. Nd5 *
+
+===== Message 3 =====
+/issue Tailor4321 victoire
+
+===== Message 4 =====
+/parties
+
+===== Message 5 =====
+/consigne Pousse les lignes tactiques jusqu'au bout quand tu expliques une position.
+
+===== Message 6 =====
+/consignes
+
+===== Message 7 =====
+analyse mes 3 dernières parties, dis-moi ce qui est bien et ce qui mérite d'être amélioré
+
+===== Message 8 =====
+gain de BaguetteChaussette sur abandon de l'adversaire, corrige la base
+
+===== Message 9 =====
+à l'avenir préviens-moi dans les bilans quand l'adversaire joue avec une précision suspecte
+
+===== Message 10 =====
+/consigne retire 1
+
+===== Message 11 =====
+/consignes
