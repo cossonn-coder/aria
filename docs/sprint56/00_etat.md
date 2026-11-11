@@ -66,7 +66,7 @@ Hors sprint 56, à concevoir à la suite :
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_doublons.md` — même partie = préfixe + même adversaire ; script de nettoyage | ⏳ |
+| 01 | `01_doublons.md` — même partie = préfixe + même adversaire ; script de nettoyage | ✅ (568 verts ; script à blanc sur prod : 2 paires attendues, 301 fiches lues) |
 | 02 | `02_issue.md` — `/issue <adversaire> victoire\|nulle\|défaite` | ⏳ |
 | 03 | `03_alerte_adversaire.md` — ligne ⚠️ précision adverse ≥ 95 % sur ≥ 20 coups | ⏳ |
 | 04 | `04_consignes.md` — `/consigne`, `/consignes`, `/consigne retire N` + règles d'honnêteté | ⏳ |
@@ -85,4 +85,4 @@ Hors sprint 56, à concevoir à la suite :
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis l'audit. Prochaine étape : `/sprint-auto sprint 56` (tronçons 01 → 05), puis run live 06 par Nico.
+Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçon 01 fait (non commité à sa sortie). Prochaine étape : `/sprint-auto sprint 56` (tronçons 02 → 05), puis run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).

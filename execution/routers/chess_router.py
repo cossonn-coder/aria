@@ -43,7 +43,7 @@ from config import config
 from cognition.cognitive_context import CognitiveOperation
 from execution.routers.execution_base import BaseRouter
 from logger import get_logger
-from memory.writer import write_chess_game
+from memory.writer import delete_chess_games, write_chess_game
 
 log = get_logger(__name__)
 
@@ -880,6 +880,32 @@ def _pgn_hash(text: str) -> str | None:
     return _game_hash(m.uci() for m in game.mainline_moves()) if game else None
 
 
+def _same_game(fiche: dict, ucis: list, players: set) -> bool:
+    """Sprint 56 : la fiche et la partie reçue sont la même partie si les coups de
+    l'une sont le début exact des coups de l'autre et si l'adversaire de la fiche
+    est l'un des joueurs (`players` : noms en minuscules). Couvre le PGN coupé
+    plus tôt comme le PGN complété ; un hash identique est traité avant."""
+    known = [p["uci"] for p in json.loads(fiche.get("plies_json") or "[]")]
+    n = min(len(known), len(ucis))
+    opponent = (fiche.get("opponent") or "").lower()
+    return n > 0 and known[:n] == ucis[:n] and bool(opponent) and opponent in players
+
+
+def _prefix_fiche(known: dict, text: str) -> dict | None:
+    """Fiche connue qui est la même partie que le PGN reçu (préfixe), sinon None."""
+    game = parse_pgn(text)
+    if game is None:
+        return None
+    ucis = [m.uci() for m in game.mainline_moves()]
+    players = {game.headers.get(key, "").lower() for key in ("White", "Black")}
+    return next((f for f in known.values() if _same_game(f, ucis, players)), None)
+
+
+def _pgn_length(text: str) -> int:
+    """Nombre de demi-coups de la ligne principale du PGN."""
+    return sum(1 for _ in parse_pgn(text).mainline_moves())
+
+
 def _fiche_without_clock(fiche: dict) -> bool:
     """Fiche dont aucun demi-coup n'a d'horloge (PGN envoyé sans `%clk`).
     Fiche sans demi-coups (marqueur de doublon interne) → False : pas de réanalyse."""
@@ -931,14 +957,21 @@ class ChessExecutionRouter(BaseRouter):
             return self._execute_many(games, metadata)
 
         game_hash = _pgn_hash(message)
-        known = self._known_games().get(f"chess_game_{game_hash}")
-        timestamp = None
+        fiches = self._known_games()
+        known = fiches.get(f"chess_game_{game_hash}")
+        timestamp, replaces = None, None
         if known is not None:
             if not _reanalyze(known, message):
                 log.info("chess_router duplicate hash=%s", game_hash)
                 return {"text": _duplicate_text(known)}
             log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
             timestamp = known.get("timestamp")
+        elif (prefix := _prefix_fiche(fiches, message)) is not None:
+            # Sprint 56 : même partie coupée (doublon) ou complétée (remplace la fiche).
+            if _pgn_length(message) <= len(json.loads(prefix["plies_json"])):
+                log.info("chess_router duplicate hash=%s prefix_of=%s", game_hash, prefix["id"])
+                return {"text": _duplicate_text(prefix)}
+            timestamp, replaces = prefix.get("timestamp"), prefix["id"]
 
         analysis = analyze(message, message, config.stockfish_path, config.maia_models_dir,
                            self._past_games())
@@ -949,7 +982,7 @@ class ChessExecutionRouter(BaseRouter):
                 "content" : f"[PGN illisible : dis-le à Nico en une phrase.]\n\n{message}",
                 "metadata": metadata,
             })
-        return self._execute_game(analysis, message, metadata, timestamp=timestamp)
+        return self._execute_game(analysis, message, metadata, timestamp=timestamp, replaces=replaces)
 
     def _past_games(self) -> list:
         """(couleur de Nico, coups UCI) des fiches ; palace indisponible → aucune, l'analyse continue."""
@@ -980,7 +1013,7 @@ class ChessExecutionRouter(BaseRouter):
         for k, game in enumerate(games, 1):
             game_hash = _pgn_hash(game)
             fiche = known.get(f"chess_game_{game_hash}")
-            timestamp = None
+            timestamp, replaces = None, None
             if fiche is not None:
                 if not _reanalyze(fiche, game):
                     log.info("chess_router duplicate hash=%s game=%d", game_hash, k)
@@ -988,15 +1021,23 @@ class ChessExecutionRouter(BaseRouter):
                     continue
                 log.info("chess_router reanalyze hash=%s reason=clock", game_hash)
                 timestamp = fiche.get("timestamp")
+            elif (prefix := _prefix_fiche(known, game)) is not None:
+                # Sprint 56 : même partie coupée (doublon) ou complétée (remplace la fiche).
+                if _pgn_length(game) <= len(json.loads(prefix["plies_json"])):
+                    log.info("chess_router duplicate hash=%s prefix_of=%s game=%d", game_hash, prefix["id"], k)
+                    texts.append(f"Partie {k} — déjà envoyée")
+                    continue
+                timestamp, replaces = prefix.get("timestamp"), prefix["id"]
             analysis = analyze(game, game, config.stockfish_path, config.maia_models_dir,
                                self._past_games())
             if analysis is None:
                 log.warning("chess_router PGN unreadable game=%d", k)
                 texts.append(f"Partie {k} — PGN illisible")
                 continue
-            result = self._execute_game(analysis, game, metadata, timestamp=timestamp)
+            result = self._execute_game(analysis, game, metadata, timestamp=timestamp, replaces=replaces)
             # La même partie plus loin dans ce message est aussi un doublon.
             known[f"chess_game_{game_hash}"] = {}
+            known.pop(replaces, None)
             ok += 1
             h = analysis.headers
             title = f"Partie {k} — {h.get('White', '?')} – {h.get('Black', '?')} ({h.get('Result', '*')})"
@@ -1006,9 +1047,11 @@ class ChessExecutionRouter(BaseRouter):
         return {"text": "\n\n".join(texts), "images": images}
 
     def _execute_game(self, analysis, message: str, metadata: dict,
-                      timestamp: str | None = None) -> dict:
+                      timestamp: str | None = None, replaces: str | None = None) -> dict:
         """Pipeline d'une partie analysée : diagrammes, fiche, progression, LLM.
-        timestamp : date de la fiche réanalysée, conservée (None = nouvelle partie)."""
+        timestamp : date de la fiche réanalysée, conservée (None = nouvelle partie).
+        replaces  : doc_id de la fiche tronquée que cette partie complète (sprint 56),
+                    supprimée une fois la nouvelle fiche écrite."""
         # ── Diagrammes : un PNG par position critique ────────────────────────
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1059,6 +1102,11 @@ class ChessExecutionRouter(BaseRouter):
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
                              room=opening_room(summary["opening_group"]), timestamp=timestamp)
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
+            # Supprimée avant le calcul de la progression : sinon la partie compterait
+            # deux fois dans « avant ».
+            if replaces:
+                delete_chess_games([replaces])
+                log.info("chess_router extend old=%s new=%s", replaces, game_hash)
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
 
