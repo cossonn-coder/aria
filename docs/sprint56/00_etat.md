@@ -1,6 +1,6 @@
 # Sprint 56 — État vivant
 
-**Phase** : B figée (kickoffs écrits) → `/sprint-auto sprint 56`
+**Phase** : CLOS (2026-11-11, tag `sprint-56`)
 **Branche** : `feat/sprint56-verite-parties`
 **Audit** : `docs/sprint56/audit_session_2026-11-11.md` (constats 1 à 6)
 
@@ -71,9 +71,10 @@ Hors sprint 56, à concevoir à la suite :
 | 03 | `03_alerte_adversaire.md` — ligne ⚠️ précision adverse ≥ 95 % sur ≥ 20 coups | ✅ (572 verts ; `_moves_line`, constantes `_SUSPECT_MIN_*`) |
 | 04 | `04_consignes.md` — `/consigne`, `/consignes`, `/consigne retire N` + règles d'honnêteté | ✅ (576 verts ; `write_consigne`/`delete_consigne`, `load_consignes`, `ARIA_RULES` + `_rules_block` dans llm_router) |
 | 05 | `05_parties_au_llm.md` — liste des N parties dans le contexte LLM | ✅ (584 verts ; `mentions_chess_games`/`requested_games_count` dans llm_router, `games_context_section` dans `chess_coach/summary.py`) |
-| 06 | `06_run_live.md` + `06_run_live.txt` — run live (Nico) ; nettoyage palace au début | ⏳ |
+| 06 | `06_run_live.md` + `06_run_live.txt` — run live (Nico) ; nettoyage palace au début | ✅ (2026-11-11 14:05-14:09 ; palace 302 → 300 fiches ; critères 1-11 OK, écarts LLM msg 7 et 9 [n=1] → #210, #212) |
+| 06b | `06b_consignes_live.txt` — application des consignes (🦉) | ✅ (16:39-16:42 : appliquée sur question ordinaire, d'échecs, après redémarrage ; 🦉 encore après retrait via l'historique → #210) |
 
-## Dettes ouvertes par le sprint (à reporter au kickoff 57)
+## Dettes ouvertes par le sprint (reportées au kickoff 57 : #206-#216)
 
 - PGN sans en-tête `White`/`Black` (ex. 11/11 08:01, avec `Termination`) routé au LLM, qui écrit
   une analyse sans moteur.
@@ -85,4 +86,4 @@ Hors sprint 56, à concevoir à la suite :
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçons 01-05 faits (05 non commité à sa sortie). Prochaine étape : run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).
+Sprint clos. Suite : `docs/sprint57/context_kickoff_sprint_57.md`, puis `/conception sprint 57`.

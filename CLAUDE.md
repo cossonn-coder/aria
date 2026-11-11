@@ -119,7 +119,7 @@ voir `docs/architecture/memory_layers.md`) :
 
 - `aria_episodic` : interactions, images et fiches de parties d'échecs
   (`type=chess_game`, une room `chess_<ouverture>` par ouverture). Actif.
-- `aria_semantic` : faits stables utilisateur. Infra prête, 0 caller prod (dette #17).
+- `aria_semantic` : faits stables utilisateur. Seul caller prod : consignes `/consigne` (room `consignes`, sprint 56) ; reste de #17 ouvert.
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
 - `aria_documents` : texte intégral des documents lus, lu par source (relecture). Actif (sprint 43) ;
@@ -152,10 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 55 clos (tag `sprint-55`, ligne 🏅 à trois rangs : toutes parties, jour, ouverture ;
-précision rattrapée sur 24 fiches du palace ; voir `docs/sprint55/00_etat.md`).
-Prochain : **sprint 56**, cible à choisir. Kickoff : `docs/sprint56/context_kickoff_sprint_56.md`.
-Prochaine étape : `/conception sprint 56`.
+Sprint 56 clos (tag `sprint-56`, vérité des parties : doublons par préfixe, `/issue`,
+alerte précision adverse, `/consigne` + règles d'honnêteté, liste des parties au LLM ;
+voir `docs/sprint56/00_etat.md`).
+Prochain : **sprint 57**, évaluer et classer les parties (dette prioritaire #209).
+Kickoff : `docs/sprint57/context_kickoff_sprint_57.md`.
+Prochaine étape : `/conception sprint 57`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
