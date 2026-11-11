@@ -192,6 +192,15 @@ def update_chess_game_accuracy(doc_id: str, accuracy: float) -> None:
     col.update(ids=[doc_id], metadatas=[{"accuracy": accuracy}])
 
 
+def update_chess_game_result(doc_id: str, result: str, outcome: str) -> None:
+    """
+    Corrige l'issue d'une fiche existante (/issue, sprint 56). ChromaDB fusionne
+    les métadonnées : le reste de la fiche est intact, sans ré-embedding.
+    """
+    col = get_collection(config.mempalace_path)
+    col.update(ids=[doc_id], metadatas=[{"result": result, "outcome": outcome}])
+
+
 def delete_chess_games(doc_ids: list[str]) -> None:
     """Supprime des fiches de parties (migration sprint 46 : analysées du mauvais camp)."""
     col = get_collection(config.mempalace_path)

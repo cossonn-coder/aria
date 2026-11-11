@@ -444,3 +444,49 @@ def status_text(status: dict) -> str:
 COMMANDS["oublie"] = "Repartir d'une conversation vierge"
 
 FORGET_TEXT = "🧹 Conversation oubliée. Les souvenirs restent."
+
+
+# =========================================================
+# /issue (sprint 56, tronçon 02) — corrige l'issue d'une partie
+# =========================================================
+# Le handler lit les fiches via bridge.load_chess_games et écrit via
+# memory.writer.update_chess_game_result ; ce module ne fait que les
+# calculs et les textes, sans LLM.
+
+COMMANDS["issue"] = "Corrige l'issue d'une partie (/issue <adversaire> victoire|nulle|défaite)"
+
+ISSUE_USAGE = "Syntaxe : /issue <adversaire> victoire|nulle|défaite"
+
+# Mot accepté (sans accent ni casse, cf. _plain) → outcome de la fiche.
+_ISSUE_WORDS = {"victoire": "win", "nulle": "draw", "defaite": "loss"}
+
+
+def parse_issue_args(args: list[str]) -> tuple[str, str] | None:
+    """Arguments de /issue → (adversaire, outcome) ; None si la syntaxe est invalide."""
+    if len(args) != 2:
+        return None
+    outcome = _ISSUE_WORDS.get(_plain(args[1]))
+    return (args[0], outcome) if outcome else None
+
+
+def latest_game_against(games: list[dict], opponent: str) -> dict | None:
+    """Fiche la plus récente (tri _game_date_key) contre cet adversaire, sans casse."""
+    matching = [g for g in games if (g.get("opponent") or "").casefold() == opponent.casefold()]
+    return max(matching, key=_game_date_key) if matching else None
+
+
+def result_for(outcome: str, nico_color: str) -> str:
+    """Résultat PGN déduit de l'issue côté Nico (inverse de summary._outcome)."""
+    if outcome == "draw":
+        return "1/2-1/2"
+    white_won = (outcome == "win") == (nico_color == "white")
+    return "1-0" if white_won else "0-1"
+
+
+def issue_text(game: dict, outcome: str) -> str:
+    """« ✅ Issue corrigée : contre Tailor4321 (2026-11-11) → victoire. »"""
+    return f"✅ Issue corrigée : contre {game['opponent']} ({_game_day(game)}) → {_OUTCOME_FR[outcome]}."
+
+
+def no_game_against_text(opponent: str) -> str:
+    return f"Aucune partie contre {opponent}."
