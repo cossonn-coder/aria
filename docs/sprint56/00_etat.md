@@ -70,7 +70,7 @@ Hors sprint 56, à concevoir à la suite :
 | 02 | `02_issue.md` — `/issue <adversaire> victoire\|nulle\|défaite` | ✅ (571 verts ; `update_chess_game_result` + `_cmd_issue`) |
 | 03 | `03_alerte_adversaire.md` — ligne ⚠️ précision adverse ≥ 95 % sur ≥ 20 coups | ✅ (572 verts ; `_moves_line`, constantes `_SUSPECT_MIN_*`) |
 | 04 | `04_consignes.md` — `/consigne`, `/consignes`, `/consigne retire N` + règles d'honnêteté | ✅ (576 verts ; `write_consigne`/`delete_consigne`, `load_consignes`, `ARIA_RULES` + `_rules_block` dans llm_router) |
-| 05 | `05_parties_au_llm.md` — liste des N parties dans le contexte LLM | ⏳ |
+| 05 | `05_parties_au_llm.md` — liste des N parties dans le contexte LLM | ✅ (584 verts ; `mentions_chess_games`/`requested_games_count` dans llm_router, `games_context_section` dans `chess_coach/summary.py`) |
 | 06 | `06_run_live.md` + `06_run_live.txt` — run live (Nico) ; nettoyage palace au début | ⏳ |
 
 ## Dettes ouvertes par le sprint (à reporter au kickoff 57)
@@ -85,4 +85,4 @@ Hors sprint 56, à concevoir à la suite :
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçons 01-04 faits (04 non commité à sa sortie). Prochaine étape : `/sprint-auto sprint 56` (tronçon 05), puis run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).
+Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçons 01-05 faits (05 non commité à sa sortie). Prochaine étape : run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).

@@ -170,3 +170,12 @@ def test_story_line_draw_gives_trough_and_peak():
     assert story_line(plies, "white", "draw") == (
         "➖ Nulle : creux 28 % au coup 5, pic 70 % au coup 30. Tournant : coup 30.Kh1 (−20 pts)."
     )
+
+
+def test_game_context_line():
+    from chess_coach.summary import game_context_line
+    game = {"date": "2026.11.11", "nico_color": "white", "opponent": "Amateurspoeler",
+            "elo_opponent": 1729, "outcome": "win", "opening": "French Defense: Alapin Gambit",
+            "accuracy": 88.2}
+    assert game_context_line(game) == ("2026-11-11 · blancs · contre Amateurspoeler (1729) · "
+                                       "victoire · French Defense: Alapin Gambit · précision 88 %")
