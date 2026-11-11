@@ -1060,3 +1060,16 @@ def test_rank_line_gives_overall_day_and_opening_ranks():
     # Seule partie du jour et seule Scotch Game en blancs : les deux segments disparaissent.
     scotch = {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"}
     assert _rank_line(scotch, games) == "🏅 Précision 70 % : 5e sur 5"
+
+
+def test_moves_line_flags_suspect_opponent_accuracy():
+    """Sprint 56 : ligne ⚠️ si précision adverse ≥ 95 % sur ≥ 20 coups adverses, sinon rien."""
+    base = {"accuracy": 84.2, "accuracy_opponent": 99.0, "elo_nico": 1354, "elo_opponent": 1698,
+            "nico_best": 20, "opponent_best": 25, "nico_correct": 5, "opponent_correct": 2,
+            "nico_inaccuracy": 1, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 0,
+            "nico_blunder": 0, "opponent_blunder": 0, "nico_moves": 27, "opponent_moves": 27,
+            "brilliant_moves": None, "best_move": None, "worst_move": None}
+    line = chess_router_mod._moves_line(base, _colors_analysis())
+    assert line.split("\n")[1] == "⚠️ Précision adverse 99 % sur 27 coups (1698 Elo) : à surveiller"
+    for change in ({"opponent_moves": 15}, {"accuracy_opponent": 90.0}):
+        assert "⚠️" not in chess_router_mod._moves_line({**base, **change}, _colors_analysis())

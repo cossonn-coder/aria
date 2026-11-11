@@ -68,7 +68,7 @@ Hors sprint 56, à concevoir à la suite :
 |---|---|---|
 | 01 | `01_doublons.md` — même partie = préfixe + même adversaire ; script de nettoyage | ✅ (568 verts ; script à blanc sur prod : 2 paires attendues, 301 fiches lues) |
 | 02 | `02_issue.md` — `/issue <adversaire> victoire\|nulle\|défaite` | ✅ (571 verts ; `update_chess_game_result` + `_cmd_issue`) |
-| 03 | `03_alerte_adversaire.md` — ligne ⚠️ précision adverse ≥ 95 % sur ≥ 20 coups | ⏳ |
+| 03 | `03_alerte_adversaire.md` — ligne ⚠️ précision adverse ≥ 95 % sur ≥ 20 coups | ✅ (572 verts ; `_moves_line`, constantes `_SUSPECT_MIN_*`) |
 | 04 | `04_consignes.md` — `/consigne`, `/consignes`, `/consigne retire N` + règles d'honnêteté | ⏳ |
 | 05 | `05_parties_au_llm.md` — liste des N parties dans le contexte LLM | ⏳ |
 | 06 | `06_run_live.md` + `06_run_live.txt` — run live (Nico) ; nettoyage palace au début | ⏳ |
@@ -85,4 +85,4 @@ Hors sprint 56, à concevoir à la suite :
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçons 01-02 faits (02 non commité à sa sortie). Prochaine étape : `/sprint-auto sprint 56` (tronçons 03 → 05), puis run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).
+Lire `CLAUDE.md`, ce fichier, puis l'audit. Tronçons 01-03 faits (03 non commité à sa sortie). Prochaine étape : `/sprint-auto sprint 56` (tronçons 04 → 05), puis run live 06 par Nico (`scripts/sprint56_dedup_games.py --apply` au début, service arrêté, sauvegarde).

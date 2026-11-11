@@ -66,6 +66,11 @@ _KIND_FR = {
 # Perte à partir de laquelle un point de la courbe prend la couleur d'une erreur.
 _ERROR_POINT_MIN = 10
 
+# Alerte précision adverse suspecte (sprint 56, décision de Nico du 2026-11-11) : un seul
+# seuil de précision ; le nombre de coups affiché dit le poids de cette précision.
+_SUSPECT_MIN_MOVES = 20
+_SUSPECT_MIN_ACCURACY = 95
+
 # Sorte d piégeante : remplace « occasion explosive » dans les faits donnés au LLM.
 _TRAP_KIND_FR = "piège affiché"
 
@@ -588,6 +593,13 @@ def _moves_line(summary: dict, analysis) -> str:
         if summary["accuracy_opponent"] is not None:
             line += f" · adversaire {summary['accuracy_opponent']:.0f} %" + _elo_suffix(summary["elo_opponent"])
         lines.append(line)
+        # Sprint 56 : précision adverse anormalement haute sur une partie assez longue.
+        acc_opp = summary["accuracy_opponent"]
+        if (acc_opp is not None and summary["opponent_moves"] >= _SUSPECT_MIN_MOVES
+                and acc_opp >= _SUSPECT_MIN_ACCURACY):
+            elo = summary["elo_opponent"]
+            lines.append(f"⚠️ Précision adverse {acc_opp:.0f} % sur {summary['opponent_moves']} coups"
+                         + (f" ({elo} Elo)" if elo is not None else "") + " : à surveiller")
     lines.append(f"Meilleurs coups : toi {summary['nico_best']}/{summary['nico_moves']}"
                  f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
     lines.append(f"Erreurs : toi {_errors_by_gravity(summary, 'nico')}"
