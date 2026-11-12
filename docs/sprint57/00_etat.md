@@ -2,7 +2,7 @@
 
 **Sujet** : évaluer et classer les parties + dette prioritaire #209.
 **Branche** : `feat/sprint57-classer-parties` (depuis `main` `2f51b44`).
-**Phase** : B figée (OK de Nico le 2026-11-12) — prêt pour `/sprint-auto sprint 57`.
+**Phase** : CLOS (2026-11-12, sur décision de Nico).
 
 ## Audit
 
@@ -43,13 +43,13 @@
 | 02 | `02_occasions_manquees.md` — priorité b → d → a → e → c, saut explosif sur b seules, ligne 🔎 | ✅ |
 | 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ✅ |
 | 05 | `05_pire_erreur.md` — pire erreur toujours en miniature, paris explosifs hors 🔎 (retour run live) | ✅ |
-| 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ⏳ |
+| 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ✅ clos par Nico (partiel, voir §REPRISE) |
 
 ## Dettes
 
-- Fermée par le sprint (à confirmer au run live) : #209.
-- Touchée : #211 (contexte LLM grossit d'≈ 2 500 car.).
-- À ouvrir : l'échiquier web garde le rang de précision global (pas par catégorie).
+- Fermée par le sprint : #209 (code livré ; réponses LLM des messages 2-3 non revues par l'orchestrateur).
+- Touchée : #211 (contexte LLM grossit d'≈ 2 500 car. [estimé, non mesuré sur le palace]).
+- Ouvertes : #217 à #220 (voir `docs/sprint58/context_kickoff_sprint_58.md`).
 
 ## §REPRISE
 
@@ -63,4 +63,8 @@ Vérif VM (partie 14:09, past_games vide) : `critical=['d:10.O-O', 'd:18.Qxa7', 
 7 explosifs dont 6 paris, seul 10.a5 non-pari (60,9 / 54,5) ; ligne 🔎 = `explosif 10.a5!?`.
 03 (rappel) : `games_stats_section(games)` dans `chess_coach/summary.py`, appelée dans `llm_router.py`
 après `games_context_section` ; taille réelle de la section non mesurée : à voir au run live.
-Prochaine étape : run live 04 par Nico (`04_run_live.md`), + critère 05 sur une partie neuve.
+Run live (2026-11-12) : message 1 joué (partie 14:09) → 🏅 par catégorie OK (« 24e sur 69 en
+rapide, partie longue »), ligne 🔎 présente, mais 4 explosifs évinçaient la gaffe 41.Rc6 → tronçon 05.
+Durées [n=4 parties] : `chess_explosive` 23,7-40,6 s, `chess_analysis` 34,5-48,3 s.
+Non rapportés à l'orchestrateur avant clôture : messages 2-3 (#209) et critère 05 sur partie neuve.
+Sprint clos par Nico. Prochaine étape : `/conception sprint 58`.
