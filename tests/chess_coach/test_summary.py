@@ -179,3 +179,20 @@ def test_game_context_line():
             "accuracy": 88.2}
     assert game_context_line(game) == ("2026-11-11 · blancs · contre Amateurspoeler (1729) · "
                                        "victoire · French Defense: Alapin Gambit · précision 88 %")
+
+
+# ── Statistiques au LLM (sprint 57, #209) ────────────────────────────────────
+
+def test_games_stats_section_keeps_openings_with_three_games():
+    from chess_coach.summary import games_stats_section
+    games = (
+        [{"opening": "Italian Game", "opening_group": "Italian Game", "nico_color": "white",
+          "outcome": o, "elo_opponent": 1500} for o in ("win", "win", "loss")]
+        + [{"opening": "French Defense", "opening_group": "French Defense", "nico_color": "black",
+            "outcome": "draw", "elo_opponent": 1500}] * 2
+    )
+    text = games_stats_section(games)
+    assert text.startswith("[Statistiques d'échecs — calculées par le code sur 5 fiches]")
+    assert "Performance Elo : " in text and "(5 parties à issue et Elo adverse connus)" in text
+    assert "Italian Game (blancs) : 2 V, 0 N, 1 D — 67 % [3 parties]" in text
+    assert "French Defense" not in text

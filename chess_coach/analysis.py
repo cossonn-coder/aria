@@ -67,6 +67,9 @@ NICO_NAME = "Nico"
 # Budget de miniatures d'une partie, et premier coup montré (sprint 46).
 _CRITICAL_BUDGET = 4
 _CRITICAL_FIRST_MOVE = 4
+# Gain minimal (pts) d'espérance humaine d'un coup explosif sur le meilleur coup ;
+# en deçà, l'explosif est un « pari » (is_gamble).
+_GAIN_MIN = 5
 # Göring joué par Nico : ses 6 premiers coups sont le concept du gambit, pas une décision.
 _GORING_FIRST_MOVE = 7
 # Un coup est une habitude de répertoire dès 2 parties précédentes avec les mêmes coups.
@@ -508,6 +511,12 @@ def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start
     return max(floor, first_move)
 
 
+def is_gamble(explosive) -> bool:
+    """Vrai si le coup explosif (ExplosiveMove) n'a été admis que comme sacrifice ou
+    piège : face à un humain, son espérance n'est pas meilleure que le meilleur coup."""
+    return explosive.expected - explosive.best_expected < _GAIN_MIN
+
+
 def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
     """Erreurs de Nico (sortes a et b) à partir de first_move, voir select_critical."""
     errors = []
@@ -522,6 +531,13 @@ def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
     return errors
 
 
+def _explosive_skipped(plies: list, nico_color: str, first_move: int) -> bool:
+    """Vrai si les erreurs b remplissent à elles seules le budget : passant avant les
+    occasions explosives (select_critical), elles n'en laisseraient retenir aucune."""
+    missed = sum(1 for c in _critical_errors(plies, nico_color, first_move) if c.kind == "b")
+    return missed >= _CRITICAL_BUDGET
+
+
 def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = _CRITICAL_FIRST_MOVE) -> list:
     """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir de first_move, ordre chronologique.
 
@@ -532,8 +548,10 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     écart au 2e ≥ 15). Les c et e ne sont retenues que si la PV du meilleur coup
     rend l'avantage clair (clear_advantage) ; un ply à la fois e et c reste e.
     (d) occasion explosive, fournie par chess_coach.explosive (perte du coup joué
-    < 10, donc jamais a/b). Budget unique de 4 : a/b, puis d, puis e, puis c, chaque
-    sorte par score décroissant ; une position déjà prise est sautée. Une position
+    < 10, donc jamais a/b). Budget unique de 4 (sprint 57) : la pire erreur de Nico
+    (a ou b, plus forte perte) d'abord, puis les occasions manquées b et d hors pari,
+    puis a, puis d pari (is_gamble), puis e, puis c, chaque groupe par score décroissant ;
+    une position déjà prise est sautée. Une position
     d'avant first_move n'est jamais retenue, quelle que soit sa sorte.
     Aucune position retenue → liste vide.
     """
@@ -565,7 +583,12 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     # Les occasions fournies peuvent précéder first_move : le filtre vaut pour toutes.
     explosives = [d for d in explosive if d.ply.move_number >= first_move]
     selected, taken = [], set()
-    for group in (errors, explosives, turns, uniques):
+    worst = sorted(errors, key=lambda c: c.score, reverse=True)[:1]
+    missed = [c for c in errors if c.kind == "b"]
+    plain = [c for c in errors if c.kind == "a"]
+    gambles = [d for d in explosives if is_gamble(d.explosive)]
+    sure = [d for d in explosives if not is_gamble(d.explosive)]
+    for group in (worst, missed, sure, plain, gambles, turns, uniques):
         for candidate in sorted(group, key=lambda c: c.score, reverse=True):
             if candidate.ply.ply not in taken and len(selected) < _CRITICAL_BUDGET:
                 selected.append(candidate)
@@ -688,10 +711,8 @@ def analyze(text: str, message: str, engine_path: str,
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
     opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
     first_move = first_shown_move(plies, nico_color, past_games, "FEN" not in headers)
-    # Les erreurs passent d'abord : si elles remplissent le budget, aucune occasion ne serait retenue.
-    errors = len(_critical_errors(plies, nico_color, first_move))
-    if errors >= _CRITICAL_BUDGET:
-        log.info("chess_explosive skipped: %d errors fill the budget", errors)
+    if _explosive_skipped(plies, nico_color, first_move):
+        log.info("chess_explosive skipped: b errors fill the budget")
         explosive = []
     else:
         explosive = find_explosive(plies, nico_color, engine_path, opponent_elo, maia_models_dir, first_move)

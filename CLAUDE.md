@@ -152,12 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 56 clos (tag `sprint-56`, vérité des parties : doublons par préfixe, `/issue`,
-alerte précision adverse, `/consigne` + règles d'honnêteté, liste des parties au LLM ;
-voir `docs/sprint56/00_etat.md`).
-Prochain : **sprint 57**, évaluer et classer les parties (dette prioritaire #209).
-Kickoff : `docs/sprint57/context_kickoff_sprint_57.md`.
-Prochaine étape : `/conception sprint 57`.
+Sprint 57 clos (tag `sprint-57`, classer les parties : 🏅 par catégorie cadence × longueur,
+occasions manquées et pire erreur dans les miniatures, ligne 🔎, statistiques d'ouvertures au LLM #209 ;
+voir `docs/sprint57/00_etat.md`).
+Prochain : **sprint 58**, cible à arbitrer.
+Kickoff : `docs/sprint58/context_kickoff_sprint_58.md`.
+Prochaine étape : `/conception sprint 58`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

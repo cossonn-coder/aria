@@ -27,11 +27,11 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
+from chess_coach.analysis import analyze, is_gamble, new_targets, parse_pgn, split_pgn
 from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
 from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
-from chess_coach.explosive import _GAIN_MIN, is_brilliant
-from chess_coach.level import accuracy_rank
+from chess_coach.explosive import is_brilliant
+from chess_coach.level import accuracy_rank, category
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
@@ -561,26 +561,56 @@ def _day(game: dict) -> str:
 
 
 def _rank_line(summary: dict, games: list) -> str:
-    """Dernière ligne du bilan (sprint 52, étendue sprint 55) : rang de la précision sur toutes
-    les fiches, sur celles du même jour et sur celles de la même ouverture (groupe + couleur).
+    """Dernière ligne du bilan (sprint 52, étendue sprint 55) : rang de la précision parmi les
+    fiches de même catégorie (cadence × longueur, sprint 57), parmi celles du même jour et parmi
+    celles de la même ouverture (groupe + couleur).
     Un segment jour ou ouverture qui ne porte que sur 1 partie est omis."""
     accuracy = summary["accuracy"]
 
-    def segment(subset: list, label: str = "") -> str | None:
+    def segment(subset: list, label: str, always: bool = False) -> str | None:
         rank, total = accuracy_rank(accuracy, subset)
-        if label and total <= 1:
+        if not always and total <= 1:
             return None
         return f"{'1re' if rank == 1 else f'{rank}e'} sur {total}{label}"
 
     # Jour de la partie courante ; sans date PGN, la fiche vient d'être écrite aujourd'hui.
     day = _day(summary) or date.today().isoformat()
-    segments = [segment(games), segment([g for g in games if _day(g) == day], " aujourd'hui")]
+    cadence, length = cat = category(summary)
+    segments = [segment([g for g in games if category(g) == cat], f" en {cadence}, {length}", always=True),
+                segment([g for g in games if _day(g) == day], " aujourd'hui")]
     if summary["opening"]:
         group, color = game_opening_group(summary), summary["nico_color"]
         same = [g for g in games if g.get("opening") and g.get("nico_color") == color
                 and game_opening_group(g) == group]
         segments.append(segment(same, f" en {group} ({_COLOR_FR[color]})"))
     return f"🏅 Précision {accuracy:.0f} % : " + " · ".join(s for s in segments if s)
+
+
+def _missed_line(analysis) -> str | None:
+    """Ligne 🔎 (sprint 57) : erreurs adverses non punies (perte ≥ 20, réponse de Nico à
+    perte ≥ 10, même règle que summarize), toutes, puis les 3 occasions explosives de plus
+    fort score hors paris (is_gamble) ; chaque groupe en ordre chronologique. None si aucune
+    occasion."""
+    plies = analysis.plies
+    segments = []
+    for p in plies:
+        if p.color == analysis.nico_color or p.loss < 20 or p.ply + 1 >= len(plies):
+            continue
+        reply = plies[p.ply + 1]
+        if reply.loss >= 10:
+            segments.append(
+                f"erreur adverse non punie {_move_label(p.move_number, p.color, p.san)}? "
+                f"(joué {_move_label(reply.move_number, reply.color, reply.san)}, "
+                f"meilleur {_move_label(reply.move_number, reply.color, reply.best_san)})")
+    sure = [c for c in analysis.explosive if not is_gamble(c.explosive)]
+    strongest = sorted(sure, key=lambda c: c.score, reverse=True)[:3]
+    for c in sorted(strongest, key=lambda c: c.ply.ply):
+        p = c.ply
+        segments.append(f"explosif {_move_label(p.move_number, p.color, c.explosive.san)}!? "
+                        f"(joué {_move_label(p.move_number, p.color, p.san)})")
+    if not segments:
+        return None
+    return "🔎 Occasions manquées : " + " · ".join(segments)
 
 
 def _moves_line(summary: dict, analysis) -> str:
@@ -604,6 +634,9 @@ def _moves_line(summary: dict, analysis) -> str:
                  f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
     lines.append(f"Erreurs : toi {_errors_by_gravity(summary, 'nico')}"
                  f" · adversaire {_errors_by_gravity(summary, 'opponent')}")
+    missed = _missed_line(analysis)
+    if missed:
+        lines.append(missed)
     if summary["brilliant_moves"]:
         lines.append(f"💥 Coups brillants : {summary['brilliant_moves']}")
     parts = []
@@ -740,7 +773,7 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     lines.append(f"  espérance face à un humain : Nico {e.expected:.0f} % "
                  f"(meilleur coup : {e.best_expected:.0f} %)")
     # Admis par la seule règle sprint 28 (sacrifice / piège) : c'est un pari.
-    if e.expected - e.best_expected < _GAIN_MIN:
+    if is_gamble(e):
         lines.append("  pari : face à un humain l'espérance n'est pas meilleure que le meilleur coup")
     number, color = _reply_start(p)
     # Admis sans avantage clair (sacrifice accepté avec échec) : pas de variante.

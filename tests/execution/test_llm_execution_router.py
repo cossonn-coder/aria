@@ -445,6 +445,8 @@ def test_mentions_chess_games():
     assert mentions_chess_games("j'ai fait 3 défaites d'affilée", [])
     assert mentions_chess_games("et contre amateurspoeler ?", ["Amateurspoeler"])
     assert not mentions_chess_games("quel temps fait-il", ["Amateurspoeler"])
+    # Sprint 57 (#209) : la question sur les ouvertures injecte la liste et les stats.
+    assert mentions_chess_games("quelle est ma meilleure ouverture avec les blancs ?", [])
 
 
 def _games(n):

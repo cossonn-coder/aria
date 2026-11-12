@@ -7,6 +7,7 @@
 # - la performance Elo (formule classique : Elo moyen des adversaires
 #   + 400·log10(p / (1 − p)), terme borné à ±800) ;
 # - le rang de la précision d'une partie parmi toutes les parties de Nico.
+# Sprint 57 : catégorie d'une partie (cadence × longueur) pour classer à armes égales.
 # Module pur : aucun import mémoire / LLM / moteur.
 
 import math
@@ -39,3 +40,32 @@ def accuracy_rank(accuracy: float, games: list) -> tuple[int, int]:
     Rang = 1 + nombre de fiches à précision strictement supérieure (ex æquo à égalité)."""
     accuracies = [g["accuracy"] for g in games if g.get("accuracy") is not None]
     return 1 + sum(1 for a in accuracies if a > accuracy), len(accuracies)
+
+
+# Seuils de cadence sur la durée estimée base + 40 × incrément (règle Lichess), en secondes.
+_CADENCES = ((180, "bullet"), (480, "blitz"), (1500, "rapide"))
+
+
+def _cadence(time_control: str | None) -> str:
+    """Cadence depuis l'en-tête TimeControl (« 600 », « 300+3 ») ; « cadence inconnue »
+    si vide ou illisible (« - », « ? », format inattendu)."""
+    base, _, inc = (time_control or "").partition("+")
+    if not base.isdigit() or (inc and not inc.isdigit()):
+        return "cadence inconnue"
+    duration = int(base) + 40 * int(inc or 0)
+    return next((name for limit, name in _CADENCES if duration < limit), "classique")
+
+
+def _length(n_plies: int) -> str:
+    """Libellé de longueur, en coups = (demi-coups + 1) // 2."""
+    moves = (n_plies + 1) // 2
+    if moves <= 25:
+        return "partie courte (≤ 25 coups)"
+    if moves <= 40:
+        return "partie moyenne (26-40 coups)"
+    return "partie longue (> 40 coups)"
+
+
+def category(game: dict) -> tuple[str, str]:
+    """(cadence, libellé de longueur) d'une fiche ou d'un résumé de partie."""
+    return _cadence(game.get("time_control")), _length(game["n_plies"])

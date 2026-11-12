@@ -1,0 +1,10 @@
+Sprint 57 — run live : messages à envoyer à Aria, dans l'ordre, un bloc = un message.
+
+===== Message 1 — colle le PGN d'une partie neuve (jamais envoyée) =====
+(ta prochaine partie Chess.com, PGN complet avec en-têtes)
+
+===== Message 2 — statistiques blancs =====
+quelle est ma meilleure ouverture avec les blancs ?
+
+===== Message 3 — statistiques noirs =====
+et avec les noirs, quelle ouverture me réussit le mieux aux échecs ?

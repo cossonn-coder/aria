@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import chess
 import chess.engine
 
-from chess_coach.analysis import _CLEAR_MAX, _MATE_SCORE, CriticalPosition, _win, clear_advantage, run_on_engines
+from chess_coach.analysis import _CLEAR_MAX, _GAIN_MIN, _MATE_SCORE, CriticalPosition, _win, clear_advantage, run_on_engines
 from chess_coach.difficulty import DEFAULT_ELO, _load, reply_distribution
 from logger import get_logger
 
@@ -36,12 +36,11 @@ _MULTIPV = 5
 # Positions éligibles : coups de Nico non décidés, joués sans erreur nette.
 _WIN_MIN, _WIN_MAX = 35, 85
 # Fenêtre de perte sur jeu parfait (pts de % de gain) : 5 en général, 15 pour
-# un piège ou un gain d'espérance humaine. Piège minimal (pts) et gain minimal
-# d'espérance humaine sur le meilleur coup.
+# un piège ou un gain d'espérance humaine. Piège minimal (pts) ; le gain minimal
+# d'espérance humaine sur le meilleur coup (_GAIN_MIN) vit dans analysis.py (sprint 57).
 _WINDOW = 5
 _TRAP_WINDOW = 15
 _TRAP_MIN = 10
-_GAIN_MIN = 5
 # Voie « sacrifice accepté » (sprint 36) : perte maximale (pts) d'un candidat
 # dont l'offre est prise par l'adversaire.
 _SACRIFICE_WINDOW = 10

@@ -19,7 +19,9 @@ from chess_coach.analysis import GameAnalysis
 from chess_coach.clock import long_thinks, long_thinks_text, move_times
 from chess_coach.conversion import ideas_text, repeated_ideas, winning_period
 from chess_coach.explosive import is_brilliant
+from chess_coach.level import performance
 from chess_coach.openings import detect_opening, opening_group
+from chess_coach.player_model import opening_stats
 
 _OPENING_PLIES = 12
 _ERROR_QUALITIES = ("mistake", "blunder")
@@ -350,3 +352,26 @@ def games_context_section(games: list[dict], n: int | None) -> str:
     recent = games[::-1] if n is None else games[::-1][:n]
     header = f"[Parties de Nico — {len(recent)} plus récentes sur {len(games)}, fiches du palace]"
     return "\n".join([header] + [game_context_line(g) for g in recent])
+
+
+# Seuil d'affichage des ouvertures dans le contexte LLM (sprint 57, #209).
+_STATS_MIN_GAMES = 3
+
+
+def games_stats_section(games: list[dict]) -> str:
+    """Section « Statistiques d'échecs » (sprint 57, #209) sur toutes les fiches :
+    performance Elo (omise si incalculable) puis V/N/D des ouvertures jouées au moins
+    3 fois, de la plus jouée à la moins jouée. Même ligne que /ouvertures, réécrite ici
+    pour ne pas importer interfaces/ (#204)."""
+    lines = [f"[Statistiques d'échecs — calculées par le code sur {len(games)} fiches]"]
+    perf = performance(games)
+    if perf:
+        lines.append(f"Performance Elo : {perf[0]} ({perf[1]} parties à issue et Elo adverse connus)")
+    lines.append("Ouvertures jouées au moins 3 fois (groupe, couleur : V / N / D — % de victoires [parties]) :")
+    lines += [
+        f"{group} ({_COLOR_FR[color]}) : {s.wins} V, {s.draws} N, {s.losses} D — "
+        f"{s.win_rate * 100:.0f} % [{s.games} parties]"
+        for (group, color), s in sorted(opening_stats(games).items(), key=lambda item: -item[1].games)
+        if s.games >= _STATS_MIN_GAMES
+    ]
+    return "\n".join(lines)
