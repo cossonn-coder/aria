@@ -42,7 +42,7 @@
 | 01 | `01_classement.md` — 🏅 rang par catégorie cadence × longueur | ✅ |
 | 02 | `02_occasions_manquees.md` — priorité b → d → a → e → c, saut explosif sur b seules, ligne 🔎 | ✅ |
 | 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ✅ |
-| 05 | `05_pire_erreur.md` — pire erreur toujours en miniature, paris explosifs hors 🔎 (retour run live) | ⏳ |
+| 05 | `05_pire_erreur.md` — pire erreur toujours en miniature, paris explosifs hors 🔎 (retour run live) | ✅ |
 | 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -53,10 +53,14 @@
 
 ## §REPRISE
 
-Tronçons 01, 02 et 03 faits. 03 : fonction sœur `games_stats_section(games)` dans
-`chess_coach/summary.py` (performance Elo + V/N/D des ouvertures ≥ 3 parties, toutes les
-fiches), appelée dans `llm_router.py` juste après `games_context_section` ; `ouvertures?`
-ajouté à `_CHESS_WORDS`. Tests : `test_games_stats_section_keeps_openings_with_three_games`
-(test_summary.py), phrase #209 dans `test_mentions_chess_games`. pytest 588 verts.
-Taille réelle de la section (≈ 2 500 car. visés) non mesurée sur le palace : à voir au run live.
-Prochaine étape : run live 04 par Nico (`04_run_live.md`).
+Tronçons 01, 02, 03 et 05 faits. 05 : prédicat unique `is_gamble(explosive)` + `_GAIN_MIN`
+déplacés dans `chess_coach/analysis.py` (explosive.py l'importe, pas de cycle) ; utilisé par
+`select_critical` (ordre pire erreur → b → d non-pari → a → d pari → e → c) et par
+`chess_router.py` (mention « pari » et filtre de la ligne 🔎). Tests : `test_select_critical_keeps_worst_error`,
+`test_select_critical_gamble_after_errors`, cas pari dans `test_missed_line_lists_unpunished_errors_and_explosives` ;
+fixtures d des tests select_critical munies d'un `explosive` (gain). pytest 590 verts.
+Vérif VM (partie 14:09, past_games vide) : `critical=['d:10.O-O', 'd:18.Qxa7', 'd:40.Rcb6', 'a:41.Rc6']` ;
+7 explosifs dont 6 paris, seul 10.a5 non-pari (60,9 / 54,5) ; ligne 🔎 = `explosif 10.a5!?`.
+03 (rappel) : `games_stats_section(games)` dans `chess_coach/summary.py`, appelée dans `llm_router.py`
+après `games_context_section` ; taille réelle de la section non mesurée : à voir au run live.
+Prochaine étape : run live 04 par Nico (`04_run_live.md`), + critère 05 sur une partie neuve.

@@ -27,10 +27,10 @@ from uuid import uuid4
 
 import chess
 
-from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
+from chess_coach.analysis import analyze, is_gamble, new_targets, parse_pgn, split_pgn
 from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
 from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
-from chess_coach.explosive import _GAIN_MIN, is_brilliant
+from chess_coach.explosive import is_brilliant
 from chess_coach.level import accuracy_rank, category
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
@@ -589,7 +589,8 @@ def _rank_line(summary: dict, games: list) -> str:
 def _missed_line(analysis) -> str | None:
     """Ligne 🔎 (sprint 57) : erreurs adverses non punies (perte ≥ 20, réponse de Nico à
     perte ≥ 10, même règle que summarize), toutes, puis les 3 occasions explosives de plus
-    fort score ; chaque groupe en ordre chronologique. None si aucune occasion."""
+    fort score hors paris (is_gamble) ; chaque groupe en ordre chronologique. None si aucune
+    occasion."""
     plies = analysis.plies
     segments = []
     for p in plies:
@@ -601,7 +602,8 @@ def _missed_line(analysis) -> str | None:
                 f"erreur adverse non punie {_move_label(p.move_number, p.color, p.san)}? "
                 f"(joué {_move_label(reply.move_number, reply.color, reply.san)}, "
                 f"meilleur {_move_label(reply.move_number, reply.color, reply.best_san)})")
-    strongest = sorted(analysis.explosive, key=lambda c: c.score, reverse=True)[:3]
+    sure = [c for c in analysis.explosive if not is_gamble(c.explosive)]
+    strongest = sorted(sure, key=lambda c: c.score, reverse=True)[:3]
     for c in sorted(strongest, key=lambda c: c.ply.ply):
         p = c.ply
         segments.append(f"explosif {_move_label(p.move_number, p.color, c.explosive.san)}!? "
@@ -771,7 +773,7 @@ def _explosive_lines(p, e, nico_color: str) -> list:
     lines.append(f"  espérance face à un humain : Nico {e.expected:.0f} % "
                  f"(meilleur coup : {e.best_expected:.0f} %)")
     # Admis par la seule règle sprint 28 (sacrifice / piège) : c'est un pari.
-    if e.expected - e.best_expected < _GAIN_MIN:
+    if is_gamble(e):
         lines.append("  pari : face à un humain l'espérance n'est pas meilleure que le meilleur coup")
     number, color = _reply_start(p)
     # Admis sans avantage clair (sacrifice accepté avec échec) : pas de variante.

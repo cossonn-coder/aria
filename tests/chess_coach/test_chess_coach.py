@@ -4,6 +4,7 @@
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import chess
 import pytest
@@ -157,6 +158,12 @@ def test_parse_pgn_indented_headers():
     assert game.headers["Black"] == "staroflexeur"
 
 
+def _explosive_d(ply, score: float, gain: float = 10.0) -> CriticalPosition:
+    # Occasion explosive (sorte d) ; gain = espérance − meilleur coup, < 5 → pari (sprint 57).
+    return CriticalPosition(kind="d", ply=ply, score=score,
+                            explosive=SimpleNamespace(expected=50.0 + gain, best_expected=50.0))
+
+
 def test_select_critical_errors_fill_budget():
     # 5 erreurs a + 1 explosif + 1 coup unique : l'explosif passe avant les erreurs a (sprint 57),
     # puis les 3 plus grosses pertes, en ordre chronologique.
@@ -165,7 +172,7 @@ def test_select_critical_errors_fill_budget():
         plies[i] = _ply(i, loss)
     plies[32] = _ply(32, 2)
     plies[34] = _ply(34, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
-    explosive = [CriticalPosition(kind="d", ply=plies[32], score=50.0)]
+    explosive = [_explosive_d(plies[32], 50.0)]
     selected = select_critical(plies, "white", explosive)
     assert [(c.kind, c.ply.ply) for c in selected] == [("a", 24), ("a", 28), ("a", 30), ("d", 32)]
 
@@ -177,7 +184,7 @@ def test_select_critical_missed_chances_first():
     for i, loss in ((24, 40), (26, 30), (28, 35)):
         plies[i] = _ply(i, loss)
     plies[32] = _ply(32, 2)
-    explosive = [CriticalPosition(kind="d", ply=plies[32], score=5.0)]
+    explosive = [_explosive_d(plies[32], 5.0)]
     selected = select_critical(plies, "white", explosive)
     assert [(c.kind, c.ply.ply) for c in selected] == [("b", 22), ("a", 24), ("a", 28), ("d", 32)]
 
@@ -190,17 +197,36 @@ def test_select_critical_completes_with_other_kinds():
     plies[26] = _ply(26, 3, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
     plies[30] = _ply(30, 15)
     plies[32] = _ply(32, 2)
-    explosive = [CriticalPosition(kind="d", ply=plies[32], score=12.0)]
+    explosive = [_explosive_d(plies[32], 12.0)]
     selected = select_critical(plies, "white", explosive)
     assert [(c.kind, c.ply.ply) for c in selected] == [("c", 22), ("e", 26), ("a", 30), ("d", 32)]
 
 
 def test_select_critical_skips_taken_position():
-    # Une position déjà retenue (ici comme explosif, prioritaire sur a) n'occupe pas une 2e place.
+    # Une position déjà retenue (ici comme pire erreur, prioritaire sur d) n'occupe pas une 2e place.
     plies = [_ply(i, 0) for i in range(41)]
     plies[22] = _ply(22, 15)
-    explosive = [CriticalPosition(kind="d", ply=plies[22], score=12.0)]
-    assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white", explosive)] == [("d", 22)]
+    explosive = [_explosive_d(plies[22], 12.0)]
+    assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white", explosive)] == [("a", 22)]
+
+
+def test_select_critical_keeps_worst_error():
+    # Sprint 57, tronçon 05 : 4 explosifs non-paris n'évincent pas la pire erreur de Nico.
+    plies = [_ply(i, 0) for i in range(41)]
+    plies[30] = _ply(30, 40)
+    explosive = [_explosive_d(plies[i], 20.0) for i in (22, 24, 26, 28)]
+    selected = select_critical(plies, "white", explosive)
+    assert [(c.kind, c.ply.ply) for c in selected] == [("d", 22), ("d", 24), ("d", 26), ("a", 30)]
+
+
+def test_select_critical_gamble_after_errors():
+    # Sprint 57, tronçon 05 : un explosif pari (gain < 5) passe après les erreurs a.
+    plies = [_ply(i, 0) for i in range(41)]
+    for i, loss in ((22, 12), (24, 30), (26, 15), (28, 25)):
+        plies[i] = _ply(i, loss)
+    explosive = [_explosive_d(plies[32], 50.0, gain=2.0)]
+    selected = select_critical(plies, "white", explosive)
+    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 22), ("a", 24), ("a", 26), ("a", 28)]
 
 
 def test_select_critical_starts_at_move_4():
@@ -208,7 +234,7 @@ def test_select_critical_starts_at_move_4():
     plies = [_ply(i, 0) for i in range(9)]
     plies[4], plies[6] = _ply(4, 30), _ply(6, 30)
     plies[2] = _ply(2, 2, move_number=3)
-    explosive = [CriticalPosition(kind="d", ply=plies[2], score=20.0)]
+    explosive = [_explosive_d(plies[2], 20.0)]
     selected = select_critical(plies, "white", explosive)
     assert [(c.kind, c.ply.move_number) for c in selected] == [("a", 4)]
 

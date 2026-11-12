@@ -1056,9 +1056,14 @@ def test_missed_line_lists_unpunished_errors_and_explosives():
     plies[3].move_number, plies[3].san, plies[3].best_san, plies[3].loss = 13, "a6", "Qb6", 12.0
     plies[1].move_number, plies[1].san = 12, "Nc6"
     analysis.explosive = analysis.explosive[:1]
+    analysis.explosive[0].explosive.expected = 10.0  # gain 10 ≥ 5 : pas un pari
     assert chess_router_mod._missed_line(analysis) == (
         "🔎 Occasions manquées : erreur adverse non punie 13.Bg4? (joué 13...a6, meilleur 13...Qb6)"
         " · explosif 12...Bd8!? (joué 12...Nc6)")
+    # Tronçon 05 : un explosif pari (gain < 5) est exclu de la ligne.
+    analysis.explosive[0].explosive.expected = 2.0
+    assert chess_router_mod._missed_line(analysis) == (
+        "🔎 Occasions manquées : erreur adverse non punie 13.Bg4? (joué 13...a6, meilleur 13...Qb6)")
     plies[3].loss = 5.0
     analysis.explosive = []
     assert chess_router_mod._missed_line(analysis) is None
