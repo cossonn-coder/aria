@@ -586,6 +586,31 @@ def _rank_line(summary: dict, games: list) -> str:
     return f"🏅 Précision {accuracy:.0f} % : " + " · ".join(s for s in segments if s)
 
 
+def _missed_line(analysis) -> str | None:
+    """Ligne 🔎 (sprint 57) : erreurs adverses non punies (perte ≥ 20, réponse de Nico à
+    perte ≥ 10, même règle que summarize), toutes, puis les 3 occasions explosives de plus
+    fort score ; chaque groupe en ordre chronologique. None si aucune occasion."""
+    plies = analysis.plies
+    segments = []
+    for p in plies:
+        if p.color == analysis.nico_color or p.loss < 20 or p.ply + 1 >= len(plies):
+            continue
+        reply = plies[p.ply + 1]
+        if reply.loss >= 10:
+            segments.append(
+                f"erreur adverse non punie {_move_label(p.move_number, p.color, p.san)}? "
+                f"(joué {_move_label(reply.move_number, reply.color, reply.san)}, "
+                f"meilleur {_move_label(reply.move_number, reply.color, reply.best_san)})")
+    strongest = sorted(analysis.explosive, key=lambda c: c.score, reverse=True)[:3]
+    for c in sorted(strongest, key=lambda c: c.ply.ply):
+        p = c.ply
+        segments.append(f"explosif {_move_label(p.move_number, p.color, c.explosive.san)}!? "
+                        f"(joué {_move_label(p.move_number, p.color, p.san)})")
+    if not segments:
+        return None
+    return "🔎 Occasions manquées : " + " · ".join(segments)
+
+
 def _moves_line(summary: dict, analysis) -> str:
     """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
     coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
@@ -607,6 +632,9 @@ def _moves_line(summary: dict, analysis) -> str:
                  f" · adversaire {summary['opponent_best']}/{summary['opponent_moves']}")
     lines.append(f"Erreurs : toi {_errors_by_gravity(summary, 'nico')}"
                  f" · adversaire {_errors_by_gravity(summary, 'opponent')}")
+    missed = _missed_line(analysis)
+    if missed:
+        lines.append(missed)
     if summary["brilliant_moves"]:
         lines.append(f"💥 Coups brillants : {summary['brilliant_moves']}")
     parts = []

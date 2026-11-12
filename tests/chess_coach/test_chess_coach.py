@@ -158,7 +158,8 @@ def test_parse_pgn_indented_headers():
 
 
 def test_select_critical_errors_fill_budget():
-    # 5 erreurs + 1 explosif + 1 coup unique : les 4 plus grosses pertes, en ordre chronologique.
+    # 5 erreurs a + 1 explosif + 1 coup unique : l'explosif passe avant les erreurs a (sprint 57),
+    # puis les 3 plus grosses pertes, en ordre chronologique.
     plies = [_ply(i, 0) for i in range(41)]
     for i, loss in ((22, 12), (24, 30), (26, 15), (28, 25), (30, 20)):
         plies[i] = _ply(i, loss)
@@ -166,7 +167,19 @@ def test_select_critical_errors_fill_budget():
     plies[34] = _ply(34, 0, second_gap=40, fen_before=HANGING_FEN, pv_uci=HANGING_PV)
     explosive = [CriticalPosition(kind="d", ply=plies[32], score=50.0)]
     selected = select_critical(plies, "white", explosive)
-    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 24), ("a", 26), ("a", 28), ("a", 30)]
+    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 24), ("a", 28), ("a", 30), ("d", 32)]
+
+
+def test_select_critical_missed_chances_first():
+    # Sprint 57 : erreur adverse non punie (b) et explosif (d) retenus malgré des pertes a plus fortes.
+    plies = [_ply(i, 0) for i in range(41)]
+    plies[21], plies[22] = _ply(21, 25), _ply(22, 12)
+    for i, loss in ((24, 40), (26, 30), (28, 35)):
+        plies[i] = _ply(i, loss)
+    plies[32] = _ply(32, 2)
+    explosive = [CriticalPosition(kind="d", ply=plies[32], score=5.0)]
+    selected = select_critical(plies, "white", explosive)
+    assert [(c.kind, c.ply.ply) for c in selected] == [("b", 22), ("a", 24), ("a", 28), ("d", 32)]
 
 
 def test_select_critical_completes_with_other_kinds():
@@ -183,11 +196,11 @@ def test_select_critical_completes_with_other_kinds():
 
 
 def test_select_critical_skips_taken_position():
-    # Une position explosive déjà retenue comme erreur n'occupe pas une 2e place.
+    # Une position déjà retenue (ici comme explosif, prioritaire sur a) n'occupe pas une 2e place.
     plies = [_ply(i, 0) for i in range(41)]
     plies[22] = _ply(22, 15)
     explosive = [CriticalPosition(kind="d", ply=plies[22], score=12.0)]
-    assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white", explosive)] == [("a", 22)]
+    assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white", explosive)] == [("d", 22)]
 
 
 def test_select_critical_starts_at_move_4():
@@ -445,9 +458,13 @@ def test_fixed_nodes_engine_converts_time_and_keeps_cap():
     assert recorder.kwargs["multipv"] == 5 and "game" in recorder.kwargs
 
 
-def _analyze_with_errors(monkeypatch, error_count):
-    """analyze sur une partie simulée à error_count erreurs ; rend les first_move passés à find_explosive."""
+def _analyze_with_errors(monkeypatch, error_count, missed=True):
+    """analyze sur une partie simulée à error_count erreurs de Nico (noirs), de sorte b si missed
+    (erreur adverse ≥ 20 juste avant), sinon a ; rend les first_move passés à find_explosive."""
     plies = [_ply(i, 15 if i % 2 == 1 and 23 <= i < 23 + 2 * error_count else 0) for i in range(41)]
+    if missed:
+        for i in range(22, 22 + 2 * error_count, 2):
+            plies[i] = _ply(i, 25)
     calls = []
 
     def fake_find(plies, color, path, elo, models_dir, first_move):
@@ -462,8 +479,10 @@ def _analyze_with_errors(monkeypatch, error_count):
 
 
 def test_analyze_skips_explosive_when_errors_fill_budget(monkeypatch):
+    # Sprint 57 : seules les erreurs b (passant avant les explosifs) font sauter la recherche.
     assert _analyze_with_errors(monkeypatch, 4) == []
     assert len(_analyze_with_errors(monkeypatch, 3)) == 1
+    assert len(_analyze_with_errors(monkeypatch, 4, missed=False)) == 1
 
 
 def test_find_explosive_starts_at_first_move(monkeypatch):

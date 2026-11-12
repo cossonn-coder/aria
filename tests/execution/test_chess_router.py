@@ -1045,6 +1045,25 @@ def test_moves_line_shows_both_official_elo():
     assert line.startswith("🎯 Précision : toi 84 % (1354) · adversaire 79 % (1332)\n")
 
 
+def test_missed_line_lists_unpunished_errors_and_explosives():
+    """Sprint 57 : ligne 🔎 = erreurs adverses non punies puis explosifs ; absente sans occasion."""
+    analysis = _colors_analysis()
+    plies = analysis.plies
+    for p in plies:
+        p.loss = 0.0
+    # Erreur adverse (blancs) au demi-coup 2, réponse de Nico à perte ≥ 10 : non punie.
+    plies[2].color, plies[2].move_number, plies[2].san, plies[2].loss = "white", 13, "Bg4", 25.0
+    plies[3].move_number, plies[3].san, plies[3].best_san, plies[3].loss = 13, "a6", "Qb6", 12.0
+    plies[1].move_number, plies[1].san = 12, "Nc6"
+    analysis.explosive = analysis.explosive[:1]
+    assert chess_router_mod._missed_line(analysis) == (
+        "🔎 Occasions manquées : erreur adverse non punie 13.Bg4? (joué 13...a6, meilleur 13...Qb6)"
+        " · explosif 12...Bd8!? (joué 12...Nc6)")
+    plies[3].loss = 5.0
+    analysis.explosive = []
+    assert chess_router_mod._missed_line(analysis) is None
+
+
 def test_rank_line_gives_category_day_and_opening_ranks():
     """Sprint 55 / 57 : rang dans la catégorie (cadence × longueur), du jour et de l'ouverture
     (groupe + couleur) ; un segment jour ou ouverture qui porte sur 1 partie est omis."""
