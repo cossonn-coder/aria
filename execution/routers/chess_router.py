@@ -31,7 +31,7 @@ from chess_coach.analysis import analyze, new_targets, parse_pgn, split_pgn
 from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
 from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
 from chess_coach.explosive import _GAIN_MIN, is_brilliant
-from chess_coach.level import accuracy_rank
+from chess_coach.level import accuracy_rank, category
 from chess_coach.live import trapping_replies
 from chess_coach.openings import opening_room
 from chess_coach.player_model import LABELS, MATE_LABELS, build_profile, game_opening_group
@@ -561,20 +561,23 @@ def _day(game: dict) -> str:
 
 
 def _rank_line(summary: dict, games: list) -> str:
-    """Dernière ligne du bilan (sprint 52, étendue sprint 55) : rang de la précision sur toutes
-    les fiches, sur celles du même jour et sur celles de la même ouverture (groupe + couleur).
+    """Dernière ligne du bilan (sprint 52, étendue sprint 55) : rang de la précision parmi les
+    fiches de même catégorie (cadence × longueur, sprint 57), parmi celles du même jour et parmi
+    celles de la même ouverture (groupe + couleur).
     Un segment jour ou ouverture qui ne porte que sur 1 partie est omis."""
     accuracy = summary["accuracy"]
 
-    def segment(subset: list, label: str = "") -> str | None:
+    def segment(subset: list, label: str, always: bool = False) -> str | None:
         rank, total = accuracy_rank(accuracy, subset)
-        if label and total <= 1:
+        if not always and total <= 1:
             return None
         return f"{'1re' if rank == 1 else f'{rank}e'} sur {total}{label}"
 
     # Jour de la partie courante ; sans date PGN, la fiche vient d'être écrite aujourd'hui.
     day = _day(summary) or date.today().isoformat()
-    segments = [segment(games), segment([g for g in games if _day(g) == day], " aujourd'hui")]
+    cadence, length = cat = category(summary)
+    segments = [segment([g for g in games if category(g) == cat], f" en {cadence}, {length}", always=True),
+                segment([g for g in games if _day(g) == day], " aujourd'hui")]
     if summary["opening"]:
         group, color = game_opening_group(summary), summary["nico_color"]
         same = [g for g in games if g.get("opening") and g.get("nico_color") == color

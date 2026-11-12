@@ -90,7 +90,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
         "🟠 explosif / brillant 0 · 🩵 piège 0 · 🟢 meilleur coup du moteur\n\n"
         "🎮 Progression — saison 1, partie 2")
     # Sprint 52 : le rang de la précision est la dernière ligne du message.
-    assert result["text"].endswith("\n\n🏅 Précision 41 % : 2e sur 2")
+    assert result["text"].endswith(
+        "\n\n🏅 Précision 41 % : 2e sur 2 en cadence inconnue, partie courte (≤ 25 coups)")
     assert "précision Nico : 41 %" in delegated["content"]
     assert "Historique (données) : 2 parties saison 1, classement global" in delegated["content"]
     assert len(result["images"]) == 3
@@ -639,7 +640,8 @@ def _duplicate_router(monkeypatch, tmp_path, games):
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "explication"}
     bridge = MagicMock()
-    bridge.load_chess_games.return_value = games
+    # Sprint 57 : toute fiche réelle porte `n_plies` (catégorie de la ligne 🏅).
+    bridge.load_chess_games.return_value = [{"n_plies": 1, **g} for g in games]
     router = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge)
     return router, analyze, write_game, llm_exec
 
@@ -1043,23 +1045,27 @@ def test_moves_line_shows_both_official_elo():
     assert line.startswith("🎯 Précision : toi 84 % (1354) · adversaire 79 % (1332)\n")
 
 
-def test_rank_line_gives_overall_day_and_opening_ranks():
-    """Sprint 55 : rang global, du jour et de l'ouverture (groupe + couleur) ; un segment
-    jour ou ouverture qui porte sur 1 partie est omis."""
-    caro = {"opening": "Caro-Kann Defense", "opening_group": "Caro-Kann Defense", "nico_color": "white"}
+def test_rank_line_gives_category_day_and_opening_ranks():
+    """Sprint 55 / 57 : rang dans la catégorie (cadence × longueur), du jour et de l'ouverture
+    (groupe + couleur) ; un segment jour ou ouverture qui porte sur 1 partie est omis."""
+    caro = {"opening": "Caro-Kann Defense", "opening_group": "Caro-Kann Defense", "nico_color": "white",
+            "time_control": "600", "n_plies": 60}
     games = [
         {**caro, "accuracy": 95.0, "date": "2026.11.08"},
         {**caro, "accuracy": 80.0, "date": "2026.11.09"},
         {**caro, "accuracy": 85.0, "timestamp": "2026-11-09T10:00:00"},
-        {**caro, "nico_color": "black", "accuracy": 99.0, "date": "2026.11.09"},
-        {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"},
+        {**caro, "nico_color": "black", "accuracy": 99.0, "date": "2026.11.09", "n_plies": 90},
+        {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07",
+         "time_control": "180+2", "n_plies": 30},
     ]
     summary = {**caro, "accuracy": 85.0, "date": "2026.11.09"}
+    # La partie longue (99 %) et la Scotch en blitz sont hors catégorie : 2e sur 3, pas 3e sur 5.
     assert _rank_line(summary, games) == (
-        "🏅 Précision 85 % : 3e sur 5 · 2e sur 3 aujourd'hui · 2e sur 3 en Caro-Kann Defense (blancs)")
-    # Seule partie du jour et seule Scotch Game en blancs : les deux segments disparaissent.
-    scotch = {"opening": "Scotch Game", "nico_color": "white", "accuracy": 70.0, "date": "2026.11.07"}
-    assert _rank_line(scotch, games) == "🏅 Précision 70 % : 5e sur 5"
+        "🏅 Précision 85 % : 2e sur 3 en rapide, partie moyenne (26-40 coups) · 2e sur 3 aujourd'hui"
+        " · 2e sur 3 en Caro-Kann Defense (blancs)")
+    # Seule de sa catégorie, du jour et des Scotch Game en blancs : le segment catégorie reste.
+    scotch = games[-1]
+    assert _rank_line(scotch, games) == "🏅 Précision 70 % : 1re sur 1 en blitz, partie courte (≤ 25 coups)"
 
 
 def test_moves_line_flags_suspect_opponent_accuracy():

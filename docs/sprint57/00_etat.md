@@ -35,7 +35,7 @@
 
 | # | Kickoff | État |
 |---|---|---|
-| 01 | `01_classement.md` — 🏅 rang par catégorie cadence × longueur | ⏳ |
+| 01 | `01_classement.md` — 🏅 rang par catégorie cadence × longueur | ✅ |
 | 02 | `02_occasions_manquees.md` — priorité b → d → a → e → c, saut explosif sur b seules, ligne 🔎 | ⏳ |
 | 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ⏳ |
 | 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ⏳ |
@@ -48,4 +48,7 @@
 
 ## §REPRISE
 
-Conception figée. Prochaine étape : `/sprint-auto sprint 57` (tronçons 01 → 03), puis run live 04 par Nico.
+Tronçon 01 fait (`category` dans `chess_coach/level.py`, 1er segment de `_rank_line` ;
+pytest 585 verts). Fixtures de test `_duplicate_router` complétées d'un `n_plies` par défaut
+(les fiches réelles l'ont toutes). Prochaine étape : tronçon 02 (`02_occasions_manquees.md`),
+puis 03, puis run live 04 par Nico.
