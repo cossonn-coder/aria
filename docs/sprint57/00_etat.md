@@ -31,6 +31,10 @@
 - 2026-11-12 (figeage) : `ouvertures?` ajouté aux mots-clés d'échecs du llm_router, sinon la
   question de #209 n'injecte rien (constat au code, tronçon 03).
 
+- 2026-11-12 (run live, partie 14:09) : 4 explosifs ont évincé la gaffe 41.Rc6. Nico :
+  la pire erreur garde toujours une miniature ; les explosifs « pari » (espérance < meilleur + 5)
+  ne sont plus des occasions manquées (hors 🔎, priorité après a). → tronçon 05.
+
 ## Carte des tronçons
 
 | # | Kickoff | État |
@@ -38,6 +42,7 @@
 | 01 | `01_classement.md` — 🏅 rang par catégorie cadence × longueur | ✅ |
 | 02 | `02_occasions_manquees.md` — priorité b → d → a → e → c, saut explosif sur b seules, ligne 🔎 | ✅ |
 | 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ✅ |
+| 05 | `05_pire_erreur.md` — pire erreur toujours en miniature, paris explosifs hors 🔎 (retour run live) | ⏳ |
 | 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ⏳ |
 
 ## Dettes
