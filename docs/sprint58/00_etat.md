@@ -1,6 +1,6 @@
 # Sprint 58 — état du sprint
 
-**Phase** : conception figée, prêt pour `/sprint-auto sprint 58`.
+**Phase** : tronçon 01 implémenté (non commité), run live à faire par Nico.
 **Branche** : `feat/sprint58-detection-echecs` (depuis `main` @ `1ce1e94`).
 **Sujet** : #211, contexte échecs trop lourd → resserrer la détection des questions d'échecs.
 Audit : `docs/sprint58/audit_contexte_echecs.md`.
@@ -9,7 +9,7 @@ Audit : `docs/sprint58/audit_contexte_echecs.md`.
 
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
-| 01 | Détection resserrée des questions d'échecs | `01_detection_echecs.md` | ⏳ |
+| 01 | Détection resserrée des questions d'échecs | `01_detection_echecs.md` | ✅ (598 tests verts) |
 | 02 | Run live (Nico) | `02_run_live.txt` | ⏳ |
 
 ## Décisions arrêtées
@@ -39,4 +39,7 @@ messages 2 et 3 → aucune ligne `chess_games_context`, et la réponse ne parle 
 ## §REPRISE
 
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
-Prochaine étape : `/sprint-auto sprint 58` (tronçon 01), puis run live par Nico.
+Tronçon 01 fait : `_CHESS_WORDS` resserré + pseudos `config.chess_usernames` dans
+`mentions_chess_games` (`execution/routers/llm_router.py`), parametrize 8 cas dans
+`tests/execution/test_llm_execution_router.py`, ligne #211 du kickoff mise à jour.
+Prochaine étape : run live par Nico (tronçon 02, `02_run_live.txt`).

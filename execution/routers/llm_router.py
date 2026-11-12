@@ -78,8 +78,14 @@ def _rules_block(consignes: list[dict]) -> str:
 
 # Parties fournies au LLM (sprint 56, tronçon 05) : 20 par défaut (décision Nico).
 DEFAULT_CHESS_GAMES = 20
+# Détection resserrée (sprint 58, #211) : « partie », « victoire »… ne comptent qu'après
+# ma/mes/cette/ces (≤ 2 mots entre) ou un nombre (≤ 1 mot entre), pour écarter
+# « une partie de foot » ou « les victoires de Napoléon ».
+_CHESS_NOUN = r"(parties?|victoires?|defaites?|nulles?)"
 _CHESS_WORDS = re.compile(
-    r"\b(parties?|echecs|games?|defaites?|victoires?|nulles?|adversaires?|ouvertures?)\b"
+    r"\b(echecs|ouvertures?)\b"
+    rf"|\b(ma|mes|cette|ces)\s+(\S+\s+){{0,2}}?{_CHESS_NOUN}\b"
+    rf"|\b\d+\s+(\S+\s+)?{_CHESS_NOUN}\b"
 )
 _GAMES_COUNT = re.compile(r"\b(\d+)\s+(dernieres?|derniers|parties|games)\b")
 _ALL_GAMES = re.compile(r"\b(toutes|totalite|all)\b|tout l['’]historique")
@@ -92,13 +98,13 @@ def _plain(text: str) -> str:
 
 
 def mentions_chess_games(message: str, opponents: list[str]) -> bool:
-    """Vrai si le message parle de parties d'échecs : mot-clé, ou pseudo d'un adversaire connu."""
+    """Vrai si le message parle de parties d'échecs : mot-clé, pseudo d'un adversaire connu ou de Nico."""
     plain = _plain(message)
     if _CHESS_WORDS.search(plain):
         return True
     return any(
         re.search(rf"(?<!\w){re.escape(_plain(name))}(?!\w)", plain)
-        for name in opponents if name
+        for name in (*opponents, *config.chess_usernames) if name
     )
 
 
