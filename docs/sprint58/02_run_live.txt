@@ -1,0 +1,12 @@
+Sprint 58 — run live : messages à envoyer à Aria, dans l'ordre, un bloc = un message.
+Avant : sudo systemctl restart aria.service
+Pendant : sudo journalctl -u aria -f -o cat | grep -E "chess_games_context|skipped \(payload|a répondu"
+
+===== Message 1 — question d'échecs (attendu : ligne chess_games_context au journal) =====
+donne-moi un conseil pour ma prochaine partie
+
+===== Message 2 — hors échecs (attendu : AUCUNE ligne chess_games_context) =====
+une partie de foot ce soir, ça te dit ?
+
+===== Message 3 — hors échecs (attendu : AUCUNE ligne chess_games_context) =====
+raconte-moi les victoires de Napoléon en deux phrases
