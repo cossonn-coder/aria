@@ -43,7 +43,7 @@ from cognition.cognitive_context import MEMORY_TOP_K, LLM_ROLE_MAP, CognitiveOpe
 from cognition.memory_context import MemoryContext
 from cognition.cognitive_trace import CognitiveTrace
 from cognition.context_builder import build_context_block
-from chess_coach.summary import games_context_section
+from chess_coach.summary import games_context_section, games_stats_section
 
 log = get_logger(__name__)
 
@@ -79,7 +79,7 @@ def _rules_block(consignes: list[dict]) -> str:
 # Parties fournies au LLM (sprint 56, tronçon 05) : 20 par défaut (décision Nico).
 DEFAULT_CHESS_GAMES = 20
 _CHESS_WORDS = re.compile(
-    r"\b(parties?|echecs|games?|defaites?|victoires?|nulles?|adversaires?)\b"
+    r"\b(parties?|echecs|games?|defaites?|victoires?|nulles?|adversaires?|ouvertures?)\b"
 )
 _GAMES_COUNT = re.compile(r"\b(\d+)\s+(dernieres?|derniers|parties|games)\b")
 _ALL_GAMES = re.compile(r"\b(toutes|totalite|all)\b|tout l['’]historique")
@@ -339,6 +339,8 @@ class LLMExecutionRouter(BaseRouter):
             if games and mentions_chess_games(message, [g.get("opponent") for g in games]):
                 n = requested_games_count(message)
                 head += "\n\n" + games_context_section(games, n)
+                # Statistiques sur toutes les fiches (sprint 57, #209).
+                head += "\n\n" + games_stats_section(games)
                 log.info("chess_games_context n=%d total=%d",
                          len(games) if n is None else min(n, len(games)), len(games))
         context_block = head + "\n\n" + context_block

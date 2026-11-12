@@ -37,7 +37,7 @@
 |---|---|---|
 | 01 | `01_classement.md` — 🏅 rang par catégorie cadence × longueur | ✅ |
 | 02 | `02_occasions_manquees.md` — priorité b → d → a → e → c, saut explosif sur b seules, ligne 🔎 | ✅ |
-| 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ⏳ |
+| 03 | `03_stats_au_llm.md` — V/N/D ouvertures ≥ 3 parties + performance au LLM, mot-clé `ouvertures?` (#209) | ✅ |
 | 04 | `04_run_live.md` + `04_run_live.txt` — run live (Nico) | ⏳ |
 
 ## Dettes
@@ -48,10 +48,10 @@
 
 ## §REPRISE
 
-Tronçons 01 et 02 faits. 02 : `select_critical` en groupes (b, d, a, e, c) ; saut de la
-recherche explosive via `_explosive_skipped` (erreurs b seules ≥ budget) dans
-`chess_coach/analysis.py` ; ligne 🔎 par `_missed_line` dans `chess_router.py`, insérée
-après `Erreurs : …`. Tests adaptés : `errors_fill_budget` (le d passe avant les a),
-`skips_taken_position` (d au lieu de a, cas théorique), harnais `_analyze_with_errors`
-(erreurs b par défaut). pytest 587 verts. Prochaine étape : tronçon 03 (`03_stats_au_llm.md`),
-puis run live 04 par Nico.
+Tronçons 01, 02 et 03 faits. 03 : fonction sœur `games_stats_section(games)` dans
+`chess_coach/summary.py` (performance Elo + V/N/D des ouvertures ≥ 3 parties, toutes les
+fiches), appelée dans `llm_router.py` juste après `games_context_section` ; `ouvertures?`
+ajouté à `_CHESS_WORDS`. Tests : `test_games_stats_section_keeps_openings_with_three_games`
+(test_summary.py), phrase #209 dans `test_mentions_chess_games`. pytest 588 verts.
+Taille réelle de la section (≈ 2 500 car. visés) non mesurée sur le palace : à voir au run live.
+Prochaine étape : run live 04 par Nico (`04_run_live.md`).
