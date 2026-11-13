@@ -112,7 +112,7 @@ def _draw_badge(draw: ImageDraw.ImageDraw, font: ImageFont.FreeTypeFont, number:
     draw.text((cx, cy), str(number), font=font, fill=(255, 255, 255), anchor="mm")
 
 
-def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
+def render_position(fen: str, orientation: str, best_uci: str | None, out_path: str,
                     alt_uci: str | None = None, played_uci: str | None = None,
                     best_line_uci: list | None = None, played_color: tuple = PLAYED_ARROW,
                     alt_color: tuple = ALT_ARROW) -> str:
@@ -148,7 +148,8 @@ def render_position(fen: str, orientation: str, best_uci: str, out_path: str,
 
     # Flèche sous les pièces, en surimpression semi-transparente.
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    if played_uci != best_uci:
+    # best_uci None : diagramme sans solution (position lue impossible, sprint 59).
+    if best_uci and played_uci != best_uci:
         _draw_arrow(overlay, chess.Move.from_uci(best_uci), flipped)
     line = [chess.Move.from_uci(uci) for uci in best_line_uci or []]
     for move in line[1:]:

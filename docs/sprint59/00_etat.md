@@ -13,7 +13,7 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 |---|---|---|---|
 | 01 | Lecture Gemini → grille → FEN | `01_lecture_gemini.md` | ✅ |
 | 02 | Lecteur local (repérage du plateau + cases de référence) | `02_lecteur_local.md` | ✅ |
-| 03 | Branchement router image : détection, Stockfish, réponse + diagramme | `03_branchement.md` | ⏳ |
+| 03 | Branchement router image : détection, Stockfish, réponse + diagramme | `03_branchement.md` | ✅ |
 | 04 | Run live (Nico) | `04_run_live.txt` | ⏳ |
 
 ## Décisions arrêtées
@@ -42,11 +42,12 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 
 ## §REPRISE
 
-Tronçon 01 livré et commité (6c0f101). Tronçon 02 livré (non commité) :
-`chess_coach/board_local.py` (`read_board(path)`, même sortie que `ImageRouter.read_board`),
-références dans `chess_coach/data/board_refs/` (couple `<nom>.jpg|png` + `<nom>.txt`),
-`tests/chess_coach/test_board_local.py`. Tests : 606 verts.
-Repérage : 7 lignes intérieures également espacées dans les profils de bords (colonnes et
-rangées), affinées par droite ajustée, puis contrôle d'alternance des coins de cases.
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (03).
-Prochaine étape : `/sprint-auto sprint 59` (reprise au tronçon 03).
+Tronçons 01 (6c0f101) et 02 (914cf95) commités. Tronçon 03 livré (non commité) :
+`is_chess_image` (`cognition/cognitive_classifier.py`), `solve` (`chess_coach/board_reading.py`,
+Stockfish 3 s), branche `_handle_chess_board` dans `execution/routers/image_router.py`
+(avant le mode enrichi), flèche facultative dans `render_position` (`best_uci=None`),
+`tests/images/test_chess_image.py`. Tests : 610 verts.
+Historique conversation écrit seulement quand la position est résolue (pas pour une
+grille illisible ni une position impossible).
+Lire `CLAUDE.md`, ce fichier, puis `04_run_live.txt`.
+Prochaine étape : run live par Nico (tronçon 04).

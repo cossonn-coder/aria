@@ -26,6 +26,7 @@
 #   detect_web_research_intent()      — heuristique recherche autonome (sprint 45)
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
+#   is_chess_image()                  — image d'échiquier à résoudre (sprint 59)
 
 import json
 import re
@@ -118,6 +119,28 @@ def is_interrogative_caption(caption: str | None) -> bool:
         return False
     lower = caption.lower().strip()
     return any(marker in lower for marker in _INTERROGATIVE_MARKERS)
+
+
+# Sprint 59 : image d'échiquier. La description vision suffit le plus souvent ;
+# la légende rattrape une description muette (mots entiers : « mat » ≠ « matin »).
+_CHESS_DESCRIPTION_MARKERS = ("échiquier", "échecs", "chess")
+_CHESS_CAPTION_RE = re.compile(
+    r"\b(échecs|échiquier|mat|trait|résous|résoudre|meilleur coup|position)\b",
+    re.IGNORECASE,
+)
+
+
+def is_chess_image(description: str | None, caption: str | None) -> bool:
+    """
+    Retourne True si l'image reçue montre une position d'échecs à résoudre.
+
+    Vrai si la description vision parle d'échiquier, ou si la légende contient
+    un mot d'échecs. Insensible à la casse.
+    """
+    lower = (description or "").lower()
+    if any(marker in lower for marker in _CHESS_DESCRIPTION_MARKERS):
+        return True
+    return bool(caption and _CHESS_CAPTION_RE.search(caption))
 
 
 # =========================================================

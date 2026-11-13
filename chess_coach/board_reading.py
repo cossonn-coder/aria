@@ -4,11 +4,16 @@
 #
 # La grille arrive telle qu'affichée (rangée du haut d'abord, chaque rangée de
 # gauche à droite). On en déduit le camp affiché en bas, le trait et les roques.
-# Module pur : aucun import mémoire, LLM ou réseau.
+# Module pur : aucun import mémoire, LLM ou réseau. solve() (tronçon 03) lance
+# Stockfish localement.
 
 import re
 
 import chess
+import chess.engine
+
+from chess_coach.analysis import ENGINE_OPTIONS, ENGINE_TIMEOUT
+from config import config
 
 _WHITE_RE = re.compile(r"\bblancs?\b", re.IGNORECASE)
 _BLACK_RE = re.compile(r"\bnoirs?\b", re.IGNORECASE)
@@ -121,3 +126,18 @@ def position_problem(fen: str) -> str | None:
         if status & flag:
             return reason
     return "position impossible"
+
+
+def solve(fen: str) -> tuple[chess.engine.Score, list[chess.Move]]:
+    """
+    Résout une position légale avec Stockfish (3 s, une ligne).
+
+    Returns:
+        (score, pv) : score vu du camp au trait, pv = ligne principale.
+    """
+    board = chess.Board(fen)
+    with chess.engine.SimpleEngine.popen_uci(config.stockfish_path,
+                                             timeout=ENGINE_TIMEOUT) as engine:
+        engine.configure(ENGINE_OPTIONS)
+        info = engine.analyse(board, chess.engine.Limit(time=3))
+    return info["score"].relative, info.get("pv", [])
