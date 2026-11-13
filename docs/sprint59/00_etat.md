@@ -35,7 +35,8 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
   d'origine ; pas de prise en passant.
 - Lecture illégale → raison + diagramme lu, pas de résolution. Grille illisible → le dire.
 - Historique : deux tours conversation (FEN + réponse) pour les relances.
-- Photo physique : mesurée au run live par Nico (cas 5).
+- Photo physique : mesurée au run live par Nico (cas 5). Mesure 2026-11-13 (Gemini 3.5-flash,
+  Stafford après 6.Bg5) : 63/64 [n=1 photo], fou noir c5 lu comme cavalier.
 
 ## Dettes
 
