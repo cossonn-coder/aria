@@ -12,7 +12,7 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
 | 01 | Lecture Gemini → grille → FEN | `01_lecture_gemini.md` | ✅ |
-| 02 | Lecteur local (repérage du plateau + cases de référence) | `02_lecteur_local.md` | ⏳ |
+| 02 | Lecteur local (repérage du plateau + cases de référence) | `02_lecteur_local.md` | ✅ |
 | 03 | Branchement router image : détection, Stockfish, réponse + diagramme | `03_branchement.md` | ⏳ |
 | 04 | Run live (Nico) | `04_run_live.txt` | ⏳ |
 
@@ -42,8 +42,11 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 
 ## §REPRISE
 
-Tronçon 01 livré (non commité) : `llm/vision/gemini_vision.py`, `BOARD_ROUTING_TABLE` +
-`ImageRouter.read_board` (paramètre `board_table` injectable), `chess_coach/board_reading.py`
-(`side_from_caption`, `grid_to_fen`, `position_problem`). Tests : 603 verts.
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (02).
-Prochaine étape : `/sprint-auto sprint 59` (reprise au tronçon 02).
+Tronçon 01 livré et commité (6c0f101). Tronçon 02 livré (non commité) :
+`chess_coach/board_local.py` (`read_board(path)`, même sortie que `ImageRouter.read_board`),
+références dans `chess_coach/data/board_refs/` (couple `<nom>.jpg|png` + `<nom>.txt`),
+`tests/chess_coach/test_board_local.py`. Tests : 606 verts.
+Repérage : 7 lignes intérieures également espacées dans les profils de bords (colonnes et
+rangées), affinées par droite ajustée, puis contrôle d'alternance des coins de cases.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (03).
+Prochaine étape : `/sprint-auto sprint 59` (reprise au tronçon 03).
