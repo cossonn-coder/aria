@@ -22,6 +22,7 @@ class CognitiveOperation(Enum):
     FILE_READ = "file_read"    # document reçu sur Telegram, lu comme une URL (sprint 42)
     DOC_REREAD = "doc_reread"  # relecture d'un document en mémoire (sprint 43)
     WEB_RESEARCH = "web_research"  # recherche autonome (sprint 45)
+    CHESS_BOARD_MOVE = "chess_board_move"  # relance « et si X ? » sur position lue en image (sprint 59)
 
 
 # Préfixe du marqueur de lecture partielle posé par web_router dans le
@@ -32,6 +33,11 @@ URL_PARTIAL_MARKER = "[Lecture partielle :"
 # fiche est remontée en mémoire (consigne posée par context_builder) ; le
 # classifier du tronçon 02 du sprint 43 la reconnaît dans le dernier tour.
 REREAD_PROPOSAL = "Veux-tu que je relise « "
+
+# Marqueur de position d'échecs posé par image_router dans le tour `user` de
+# l'historique (« [Position d'échecs lue sur image : <FEN>] ») ; une relance
+# « et si X ? » le relit (sprint 59, tronçon 06).
+CHESS_POSITION_MARKER = "[Position d'échecs lue sur image :"
 
 
 # TOP_K mémoire par opération

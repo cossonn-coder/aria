@@ -7,6 +7,7 @@
 # Pipeline de classification (ordre de priorité décroissant) :
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
 #   1b. PGN collé (en-tête White/Black + coups)      → CHESS_ANALYSIS
+#   1c. Coup SAN après une position lue en image     → CHESS_BOARD_MOVE
 #   2. URL http(s):// dans le message                → URL_READ
 #   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
 #   2c. « relis… » ou « oui » après proposition de relecture → DOC_REREAD
@@ -27,10 +28,13 @@
 #   detect_image_generation_intent()  — heuristique génération image (texte pur)
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
 #   is_chess_image()                  — image d'échiquier à résoudre (sprint 59)
+#   detect_san_move()                 — premier coup SAN du message (sprint 59)
 
 import json
 import re
-from cognition.cognitive_context import CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER
+from cognition.cognitive_context import (
+    CHESS_POSITION_MARKER, CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER,
+)
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
 from logger import get_logger
@@ -215,6 +219,36 @@ def detect_url_resume(message: str, metadata: dict, bridge) -> bool:
     return bool(user_turns) and URL_PARTIAL_MARKER in user_turns[-1]
 
 
+# Coup en notation anglaise (SAN) : roque, pièce, ou pion avec prise/promotion.
+# Le numéro éventuel (« 1...Qe7+ », « 12.Nf3 ») précède le coup sans le coller
+# à une lettre, d'où les bornes « pas de caractère de mot » de part et d'autre.
+_SAN_MOVE_RE = re.compile(
+    r"(?<!\w)(O-O(?:-O)?|[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h](?:x[a-h])?[1-8](?:=[QRBN])?)[+#]?(?!\w)"
+)
+
+
+def detect_san_move(message: str) -> str | None:
+    """Retourne le premier coup SAN du message (« Qe7 », « O-O »…), ou None."""
+    match = _SAN_MOVE_RE.search(message)
+    return match.group(1) if match else None
+
+
+def detect_chess_board_move(message: str, metadata: dict, bridge) -> bool:
+    """
+    Retourne True si le message propose un coup sur la position lue en image.
+
+    L'historique n'est lu (via le bridge) que si le message contient un coup
+    SAN : le dernier tour `user` doit porter CHESS_POSITION_MARKER, posé par
+    ImageExecutionRouter quand la position a été résolue (sprint 59).
+    """
+    if detect_san_move(message) is None or bridge is None:
+        return False
+    conversation_key = str(metadata.get("chat_id", "default"))
+    history = bridge.load_conversation_history(conversation_key, n=2)
+    user_turns = [t["content"] for t in history if t.get("role") == "user"]
+    return bool(user_turns) and CHESS_POSITION_MARKER in user_turns[-1]
+
+
 # Verbes de relecture explicite d'un document en mémoire (sprint 43).
 _DOC_REREAD_WORDS = ["relis", "relire", "rouvre"]
 
@@ -374,6 +408,10 @@ def classify_operation(
     # Avant la règle URL : l'export Chess.com contient `[Link "https://…"]`.
     if detect_pgn(message):
         return CognitiveOperation.CHESS_ANALYSIS
+
+    # ── 1c. Relance « et si X ? » sur une position lue en image (sprint 59) ──
+    if detect_chess_board_move(message, metadata, bridge):
+        return CognitiveOperation.CHESS_BOARD_MOVE
 
     # ── 2. URL collée → lecture de la page ──────────────────────────────────
     # Prioritaire sur la recherche web (URL + « cherche en ligne » = lecture)

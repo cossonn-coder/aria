@@ -1,7 +1,7 @@
 # Sprint 59 — état du sprint
 
-**Phase** : conception des suites du run live figée (OK de Nico, 2026-11-13), prêt pour
-`/sprint-auto sprint 59` (tronçons 05 et 06).
+**Phase** : conception des suites du run live figée (OK de Nico, 2026-11-13), tronçons 05 et 06
+faits, run live 07 en attente (Nico).
 **Sujet** : résoudre une position d'échecs envoyée en image (capture d'écran ou photo
 d'échiquier physique) : lire la position, puis donner la ligne principale Stockfish.
 **Branche** : `feat/sprint59-position-image`, partie de `feat/sprint58-detection-echecs`
@@ -17,7 +17,7 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 | 03 | Branchement router image : détection, Stockfish, réponse + diagramme | `03_branchement.md` | ✅ |
 | 04 | Run live (Nico) | `04_run_live.txt` | ✅ (fait ; suites → 05-07) |
 | 05 | Cas 4 : déclenchement « blancs »/« noirs » + lecteur local robuste (plein écran, surlignage, coordonnées) | `05_cas4_pleinecran.md` | ✅ |
-| 06 | Relance « et si X ? » : coup joué, Stockfish, réponse + diagramme | `06_relance_coup.md` | ⏳ |
+| 06 | Relance « et si X ? » : coup joué, Stockfish, réponse + diagramme | `06_relance_coup.md` | ✅ |
 | 07 | Run live complémentaire (Nico) | `07_run_live.txt` | ⏳ |
 
 ## Décisions arrêtées
@@ -75,5 +75,11 @@ dans `_CHESS_CAPTION_RE` ; lecteur local : fenêtres décalées d'une case essay
 mis à zéro. Capture du cas 4 lue 64/64 ; marge de reconnaissance mince (2e/1er voisin ≥ 1,11
 [n=2 captures, seuils calés dessus]). Fixture : `tests/chess_coach/data/chesscom_pleinecran.*`. Capture du cas 4 et sa grille :
 `docs/sprint59/ref/chesscom_pleinecran.{jpg,txt}`.
+Tronçon 06 fait : opération `CHESS_BOARD_MOVE` → `image_router` ; règle 1c du classifieur
+(`detect_chess_board_move` : coup SAN + `CHESS_POSITION_MARKER` dans le dernier tour `user`) ;
+`ImageExecutionRouter._handle_board_move` : FEN du marqueur, coup SAN joué, Stockfish avant/après,
+« Après … », ligne, éval, comparaison au meilleur coup de départ, diagramme (camp qui a joué en
+bas), marqueur réécrit avec la nouvelle FEN. Partie commune factorisée (`_solve_line`,
+`_write_position_history`), chemin image inchangé. Tests : `tests/images/test_chess_image.py`.
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du tronçon.
-Prochaine étape : tronçon 06, puis run live 07 par Nico.
+Prochaine étape : run live 07 par Nico.
