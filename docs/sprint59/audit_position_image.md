@@ -81,3 +81,69 @@ Solution : 1…dxc4, qui gagne la pièce c4.
   « noirs » dans la légende.
 - Une lecture illégale (`chess.Board.is_valid()` faux) doit être dite telle quelle, avec le
   diagramme lu, au lieu d'être « résolue ».
+
+---
+
+## Audit 2 — suites du run live (2026-11-13)
+
+### A. Déclenchement (cas 4 non déclenché)
+
+`cognition/cognitive_classifier.py:126-143` : `is_chess_image` est vrai si la description
+vision contient `échiquier|échecs|chess`, ou si la légende matche
+`_CHESS_CAPTION_RE = \b(échecs|échiquier|mat|trait|résous|résoudre|meilleur coup|position)\b`.
+La légende « les blancs jouent, que faire ? » ne contient aucun de ces mots, et la
+description vision n'a pas parlé d'échiquier. Correctif : ajouter `blancs?|noirs?` à la
+regex (décision de Nico : ni « jouent », ni « plateau », ni « pièces »).
+
+### B. Lecteur local sur la capture du cas 4
+
+Capture : `received_images/AgACAgQAAxkBAAIRfWr3K1os…eQADPQQ.jpg` (858×931, chess.com
+plein écran, thème vert, vue côté noirs, coordonnées dessinées dans les cases, dernier coup
+surligné en jaune sur e8 et e7). `board_local.read_board` → `None`. Trois causes,
+mesurées une à une :
+
+1. **Repérage décalé d'une case** (`_find_lines`). Profils : x → (18, 103, 824), y → (52, 103, 824).
+   La 1re « ligne intérieure » trouvée (x=18, y=52) est le **bord extérieur** du plateau :
+   contre le fond sombre, il fait un bord net sur toute la longueur. Sur 9 lignes (2 bords
+   + 7 intérieures), deux fenêtres de 7 ont le même score ; `argmax` prend la première.
+   Le test « plein écran simulé » du tronçon 02 passait, mais sa capture de référence a
+   peu de contraste avec son fond. Bonnes bornes : xs = 19…843, ys = 53…877.
+2. **Alternance refusée** (`_alternates`), même avec les bonnes bornes : les cases
+   surlignées (jaune) et les chiffres de coordonnées (coin haut-gauche des cases de la
+   colonne de gauche, là où l'échantillon est pris à 1/8 de la case) font sauter le critère
+   `spread < contrast / 2`, qui prend le maximum sur les 64 cases.
+3. **Reconnaissance** : avec les bonnes bornes et sans le test d'alternance, la lecture fait
+   **63 cases justes sur 64**. Seule erreur : le roi noir sur la case e7 surlignée, lu `b`.
+   Le fond jaune n'existe dans aucune case de référence, et la distance euclidienne sur les
+   pixels bruts y est sensible.
+
+Grille réelle de la capture (rangée du haut d'abord, telle qu'affichée) :
+```
+.......R
+.....PPP
+...qNKQ.
+...b....
+..p.ppB.
+.p.p..p.
+...k....
+......nr
+```
+
+### C. Relance « et si X ? »
+
+- Aujourd'hui, « et si 1...Qe7+ ? » passe dans `classify_operation`
+  (`cognitive_classifier.py:348`). Aucune règle déterministe ne s'applique, donc le message
+  part au cache puis au classifieur LLM, et la réponse vient du LLM. Celui-ci voit
+  l'historique (FEN + réponse, écrit par `image_router.py:299-309`), mais ne joue pas le
+  coup et n'appelle pas Stockfish.
+- Précédent pour une règle qui lit l'historique : `detect_url_resume` / `detect_doc_reread`
+  (`cognitive_classifier.py:198-241`), via `bridge.load_conversation_history(key, n=2)`,
+  avec un marqueur posé dans le tour `user`. Ici, le marqueur existe déjà :
+  `[Position d'échecs lue sur image : <FEN>]`.
+- Les routers lisent l'historique par le bridge (précédent : `web_router.py:189`).
+  `ImageExecutionRouter` reçoit déjà `mempalace_bridge`, qui n'est plus utilisé depuis le
+  sprint 24 (`image_router.py:73-88`).
+- La résolution complète (Stockfish 3 s, texte, diagramme avec flèches, écriture de
+  l'historique) est dans `image_router._handle_chess_board` (`image_router.py:258-311`),
+  à partir de la FEN. Elle est réutilisable telle quelle à partir d'une FEN.
+- Table opération → router : `core/kernel.py:56-70`.

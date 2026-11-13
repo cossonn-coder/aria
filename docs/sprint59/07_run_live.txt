@@ -1,0 +1,25 @@
+Sprint 59 — run live complémentaire (Nico), après les tronçons 05 et 06
+
+Avant : sudo systemctl restart aria.service
+Journal : sudo journalctl -u aria -f -o cat | grep -E "BOARD|VISION|telegram_update|operation"
+
+1. Envoyer la capture plein écran du cas 4 (docs/sprint59/ref/chesscom_pleinecran.jpg) avec la légende :
+les blancs jouent, que faire ?
+   Succès : ligne [BOARD] au journal ; « Trait aux blancs » ; diagramme = position de l'écran.
+
+2. Puis écrire :
+et si Qxd5 ?
+   Succès : réponse « Après Qxd5 : trait aux noirs », ligne Stockfish, évaluation comparée au
+   meilleur coup, diagramme de la position après le coup. Pas de réponse en prose du LLM.
+
+3. Puis écrire (relance enchaînée, depuis la position après Qxd5) :
+et si exd5 ?
+   Succès : « Après exd5 : trait aux blancs » ; le diagramme montre un pion noir en d5, plus de dame blanche.
+
+4. Puis écrire (coup illégal : les blancs n'ont plus de dame) :
+et si Qh8 ?
+   Succès : « Le coup Qh8 n'est pas jouable… », sans diagramme.
+
+5. Écrire un message sans rapport :
+quel temps fait-il demain ?
+   Succès : réponse habituelle, sans ligne [BOARD].
