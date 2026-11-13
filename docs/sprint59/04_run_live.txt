@@ -1,0 +1,28 @@
+Sprint 59 — run live (Nico)
+
+Avant : sudo systemctl restart aria.service
+Journal : sudo journalctl -u aria -f -o cat | grep -E "BOARD|VISION|telegram_update"
+
+1. Envoyer la capture du 13.11 (docs/sprint59/ref/chesscom_vert.jpg) avec la légende :
+trait aux noirs, quelle est la meilleure ligne ?
+   Succès : journal [BOARD] gemini (ou local) ; réponse « Trait aux noirs », ligne qui commence par 1...dxc4,
+   diagramme retourné (noirs en bas) avec flèche d4→c4.
+
+2. Renvoyer la même capture SANS légende.
+   Succès : même réponse (noirs en bas → trait aux noirs).
+
+3. Puis écrire :
+et si 1...Qe7+ ?
+   Succès : la réponse parle de la position de la capture (historique), pas d'une autre.
+
+4. Capture plein écran d'une position (appli chess.com ou lichess, menus visibles) avec la légende :
+les blancs jouent, que faire ?
+   Succès : « Trait aux blancs », position du diagramme = celle de l'écran.
+
+5. Photo de ton échiquier physique (position de ton choix) avec la légende :
+résous cette position
+   Succès : position du diagramme = celle de la photo. Sinon, noter les cases fausses (mesure pour la dette).
+
+6. Photo sans échecs (plante, objet) avec la légende :
+c'est quoi ?
+   Succès : aucune ligne [BOARD] au journal ; réponse habituelle.
