@@ -16,7 +16,7 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 | 02 | Lecteur local (repérage du plateau + cases de référence) | `02_lecteur_local.md` | ✅ |
 | 03 | Branchement router image : détection, Stockfish, réponse + diagramme | `03_branchement.md` | ✅ |
 | 04 | Run live (Nico) | `04_run_live.txt` | ✅ (fait ; suites → 05-07) |
-| 05 | Cas 4 : déclenchement « blancs »/« noirs » + lecteur local robuste (plein écran, surlignage, coordonnées) | `05_cas4_pleinecran.md` | ⏳ |
+| 05 | Cas 4 : déclenchement « blancs »/« noirs » + lecteur local robuste (plein écran, surlignage, coordonnées) | `05_cas4_pleinecran.md` | ✅ |
 | 06 | Relance « et si X ? » : coup joué, Stockfish, réponse + diagramme | `06_relance_coup.md` | ⏳ |
 | 07 | Run live complémentaire (Nico) | `07_run_live.txt` | ⏳ |
 
@@ -69,7 +69,11 @@ Audit : `audit_position_image.md` §Audit 2. Découpage figé (OK de Nico) :
 ## §REPRISE
 
 Tronçons 01-03 commités (6c0f101, 914cf95, d790bb3). Run live 04 fait ; ses suites sont
-figées en 05 (cas 4) et 06 (relance « et si X ? »). Capture du cas 4 et sa grille :
+figées en 05 (cas 4) et 06 (relance « et si X ? »). Tronçon 05 fait : « blancs »/« noirs »
+dans `_CHESS_CAPTION_RE` ; lecteur local : fenêtres décalées d'une case essayées, alternance
+à ≤ 4 cases aberrantes (coin haut-droit, médiane), cases rognées de 3 px et fond (< 90 RGB)
+mis à zéro. Capture du cas 4 lue 64/64 ; marge de reconnaissance mince (2e/1er voisin ≥ 1,11
+[n=2 captures, seuils calés dessus]). Fixture : `tests/chess_coach/data/chesscom_pleinecran.*`. Capture du cas 4 et sa grille :
 `docs/sprint59/ref/chesscom_pleinecran.{jpg,txt}`.
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du tronçon.
-Prochaine étape : `/sprint-auto sprint 59` (05 puis 06), puis run live 07 par Nico.
+Prochaine étape : tronçon 06, puis run live 07 par Nico.

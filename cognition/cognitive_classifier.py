@@ -125,7 +125,7 @@ def is_interrogative_caption(caption: str | None) -> bool:
 # la légende rattrape une description muette (mots entiers : « mat » ≠ « matin »).
 _CHESS_DESCRIPTION_MARKERS = ("échiquier", "échecs", "chess")
 _CHESS_CAPTION_RE = re.compile(
-    r"\b(échecs|échiquier|mat|trait|résous|résoudre|meilleur coup|position)\b",
+    r"\b(échecs|échiquier|mat|trait|résous|résoudre|meilleur coup|position|blancs?|noirs?)\b",
     re.IGNORECASE,
 )
 

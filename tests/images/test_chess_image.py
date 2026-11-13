@@ -79,3 +79,4 @@ def test_is_chess_image():
     assert is_chess_image("Capture d'un échiquier en ligne", None)
     assert is_chess_image("Une image sombre", "Résous la position")
     assert not is_chess_image("Un jardin le matin", "c'est quoi ?")
+    assert is_chess_image("Une capture d'écran sombre", "les blancs jouent, que faire ?")

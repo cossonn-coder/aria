@@ -35,3 +35,11 @@ def test_no_board_returns_none(tmp_path):
     path = tmp_path / "ramp.png"
     Image.fromarray(ramp).save(path)
     assert read_board(path) is None
+
+
+def test_reads_full_screen_chesscom_capture():
+    # Sprint 59, tronçon 05 : capture réelle du run live (cas 4) — bord extérieur
+    # contrasté, coordonnées dessinées dans les cases, dernier coup surligné.
+    data = Path(__file__).parent / "data"
+    grid = (data / "chesscom_pleinecran.txt").read_text().split()
+    assert read_board(data / "chesscom_pleinecran.jpg") == grid

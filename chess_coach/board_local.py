@@ -7,9 +7,10 @@
 #   1. repérage du plateau : les 7 lignes intérieures de la grille 8×8 sont des
 #      bords nets, également espacés, aussi longs que le plateau ; on les cherche
 #      dans les profils de bords par colonne et par rangée, puis on vérifie que
-#      les cases alternent bien clair/foncé ;
-#   2. reconnaissance : chaque case, ramenée en 32×32, est classée par plus
-#      proche voisin parmi les cases des captures de référence (data/board_refs/).
+#      les cases alternent bien clair/foncé (quelques cases surlignées tolérées) ;
+#   2. reconnaissance : chaque case, ramenée en 32×32, rognée et privée de son
+#      fond, est classée par plus proche voisin parmi les cases des captures de
+#      référence (data/board_refs/).
 # Même sortie que ImageRouter.read_board : 8 chaînes de 8 caractères, telles
 # qu'affichées. Module pur : aucun import mémoire, LLM ou réseau.
 
@@ -27,6 +28,9 @@ _REFS_DIR = Path(__file__).parent / "data" / "board_refs"
 _CELL = 32            # côté d'une case normalisée, en pixels
 _EDGE_THRESHOLD = 40  # écart RGB cumulé entre deux pixels voisins pour compter un bord
 _MIN_SQUARE = 8       # plus petite case cherchée, en pixels
+_MAX_ODD_SQUARES = 4  # cases tolérées hors alternance (dernier coup surligné : 2 cases)
+_MARGIN = 3           # marge rognée autour d'une case normalisée (coordonnées dessinées)
+_BACKGROUND_DIST = 90  # écart RGB cumulé sous lequel un pixel compte comme fond de case (mesuré)
 
 
 def _line_profiles(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -73,11 +77,16 @@ def _find_lines(profile: np.ndarray) -> tuple[float, float, float]:
     return float(first), float(spacing), score
 
 
-def _square_edges(first: float, spacing: float, size: int) -> np.ndarray:
-    """9 bornes des cases (en pixels) à partir des lignes intérieures, bornées à l'image."""
+def _square_edges(first: float, spacing: float, size: int) -> np.ndarray | None:
+    """
+    9 bornes des cases (en pixels) à partir des lignes intérieures, bornées à
+    l'image ; None si le plateau déborde de l'image de plus d'un pixel.
+    """
     # Les lignes détectées sont le dernier pixel avant le bord : la case suivante commence à +1.
-    edges = first + 1 + spacing * np.arange(-1, 8)
-    return np.clip(np.rint(edges), 0, size).astype(int)
+    edges = np.rint(first + 1 + spacing * np.arange(-1, 8))
+    if edges[0] < -1 or edges[-1] > size + 1:
+        return None
+    return np.clip(edges, 0, size).astype(int)
 
 
 def _locate(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
@@ -89,37 +98,74 @@ def _locate(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
     # pièces peuvent en masquer une partie), et les cases doivent être carrées.
     if x_score < 4 * sy or y_score < 4 * sx or abs(sx - sy) > 2:
         return None
-    xs = _square_edges(x0, sx, rgb.shape[1])
-    ys = _square_edges(y0, sy, rgb.shape[0])
-    if not _alternates(rgb, xs, ys):
+    # Le bord extérieur du plateau, très contrasté sur un fond sombre, peut être
+    # pris pour une ligne intérieure : la fenêtre trouvée est alors décalée d'une
+    # case. On essaie aussi les fenêtres décalées d'une case et on garde celle
+    # dont les cases alternent le mieux (une colonne hors plateau = 8 cases fausses).
+    best = None
+    for dx in (0, 1, -1):
+        xs = _square_edges(x0 + dx * sx, sx, rgb.shape[1])
+        if xs is None:
+            continue
+        for dy in (0, 1, -1):
+            ys = _square_edges(y0 + dy * sy, sy, rgb.shape[0])
+            if ys is None:
+                continue
+            odd = _odd_squares(rgb, xs, ys)
+            if best is None or odd < best[0]:
+                best = (odd, xs, ys)
+    if best is None or best[0] > _MAX_ODD_SQUARES:
         return None
-    return xs, ys
+    return best[1], best[2]
 
 
-def _alternates(rgb: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> bool:
-    """Vrai si les coins des cases (hors pièce) alternent deux couleurs nettement distinctes."""
-    corners = np.array([
-        rgb[ys[r] + (ys[r + 1] - ys[r]) // 8, xs[c] + (xs[c + 1] - xs[c]) // 8]
+def _corner_colors(rgb: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Couleur du coin haut-droit de chaque case, hors pièce et hors coordonnées dessinées."""
+    # Coin haut-droit : chess.com dessine les chiffres en haut à gauche et les
+    # lettres en bas à droite ; les pièces sont centrées.
+    return np.array([
+        rgb[ys[r] + (ys[r + 1] - ys[r]) // 8, xs[c + 1] - 1 - (xs[c + 1] - xs[c]) // 8]
         for r in range(8) for c in range(8)
     ], dtype=float)
+
+
+def _odd_squares(rgb: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> int:
+    """
+    Nombre de cases qui ne suivent pas l'alternance clair/foncé (64 si pas de damier).
+
+    Chaque case est comparée à la couleur médiane de sa parité : la médiane
+    ignore les quelques cases surlignées, qu'on compte ici comme aberrantes.
+    """
+    corners = _corner_colors(rgb, xs, ys)
     parity = np.array([(r + c) % 2 for r in range(8) for c in range(8)])
-    even, odd = corners[parity == 0], corners[parity == 1]
-    contrast = np.abs(even.mean(axis=0) - odd.mean(axis=0)).sum()
-    spread = max(np.abs(even - even.mean(axis=0)).sum(axis=1).max(),
-                 np.abs(odd - odd.mean(axis=0)).sum(axis=1).max())
-    return contrast > _EDGE_THRESHOLD and spread < contrast / 2
+    medians = np.array([np.median(corners[parity == k], axis=0) for k in (0, 1)])
+    contrast = np.abs(medians[0] - medians[1]).sum()
+    if contrast <= _EDGE_THRESHOLD:
+        return 64
+    gaps = np.abs(corners - medians[parity]).sum(axis=1)
+    return int((gaps >= contrast / 2).sum())
 
 
 def _cells(rgb: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """64 cases en vecteurs (32×32×3), rangée du haut d'abord, de gauche à droite."""
+    """
+    64 cases en vecteurs, rangée du haut d'abord, de gauche à droite.
+
+    Chaque case est ramenée en 32×32, rognée d'une marge (coordonnées dessinées
+    dans les coins), puis ses pixels proches du fond de la case sont mis à zéro :
+    une case vide vaut alors zéro quelle que soit sa couleur (claire, foncée ou
+    surlignée), et une pièce ne garde que ses propres pixels.
+    """
     image = Image.fromarray(rgb.astype(np.uint8))
-    return np.array([
-        np.asarray(
+    backgrounds = _corner_colors(rgb, xs, ys)
+    vectors = []
+    for i, (r, c) in enumerate((r, c) for r in range(8) for c in range(8)):
+        cell = np.asarray(
             image.crop((xs[c], ys[r], xs[c + 1], ys[r + 1])).resize((_CELL, _CELL)),
             dtype=float,
-        ).ravel()
-        for r in range(8) for c in range(8)
-    ])
+        )[_MARGIN:-_MARGIN, _MARGIN:-_MARGIN]
+        cell[np.abs(cell - backgrounds[i]).sum(axis=2) < _BACKGROUND_DIST] = 0
+        vectors.append(cell.ravel())
+    return np.array(vectors)
 
 
 def _load_rgb(path) -> np.ndarray:
