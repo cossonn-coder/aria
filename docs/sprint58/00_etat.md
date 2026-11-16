@@ -1,6 +1,7 @@
 # Sprint 58 — état du sprint
 
-**Phase** : tronçon 01 implémenté (non commité), run live à faire par Nico.
+**Phase** : clos le 2026-11-16 (tag `sprint-58`), mergé dans `main` avec le sprint 59.
+Run live 02 non fait : clôture décidée par Nico sans run dédié.
 **Branche** : `feat/sprint58-detection-echecs` (depuis `main` @ `1ce1e94`).
 **Sujet** : #211, contexte échecs trop lourd → resserrer la détection des questions d'échecs.
 Audit : `docs/sprint58/audit_contexte_echecs.md`.
@@ -10,7 +11,7 @@ Audit : `docs/sprint58/audit_contexte_echecs.md`.
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
 | 01 | Détection resserrée des questions d'échecs | `01_detection_echecs.md` | ✅ (598 tests verts) |
-| 02 | Run live (Nico) | `02_run_live.txt` | ⏳ |
+| 02 | Run live (Nico) | `02_run_live.txt` | ⏭ non fait (clôture Nico) |
 
 ## Décisions arrêtées
 
@@ -42,4 +43,4 @@ Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳.
 Tronçon 01 fait : `_CHESS_WORDS` resserré + pseudos `config.chess_usernames` dans
 `mentions_chess_games` (`execution/routers/llm_router.py`), parametrize 8 cas dans
 `tests/execution/test_llm_execution_router.py`, ligne #211 du kickoff mise à jour.
-Prochaine étape : run live par Nico (tronçon 02, `02_run_live.txt`).
+Sprint clos. Suite : sprint 59 (même branche de merge).
