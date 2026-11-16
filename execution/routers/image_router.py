@@ -20,6 +20,14 @@
 #     photo → vision → description injectée dans LLMExecutionRouter
 #              → réponse enrichie par mémoire + intents actifs
 #
+#   Mode échecs (sprint 59, prioritaire) : image d'échiquier (is_chess_image) :
+#     photo → grille (Gemini, sinon lecteur local) → FEN → Stockfish
+#              → {"text": ligne + éval, "images": [diagramme]}, sans LLM
+#
+#   Relance « et si X ? » (CHESS_BOARD_MOVE, sprint 59) : message texte avec un coup
+#   SAN après une position résolue → coup joué sur la FEN du marqueur d'historique
+#              → Stockfish avant/après → {"text": ..., "images": [diagramme]}, sans LLM
+#
 #   Le mode est détecté dans _handle_input() via is_interrogative_caption().
 #   is_interrogative_caption() est la source de vérité — pas le kernel,
 #   pas CognitiveResult — pour éviter de toucher kernel.py.
@@ -38,14 +46,73 @@
 #   Ce router est le seul point d'écriture mémoire pour les images.
 #   Aucun client vision, aucun client génération n'écrit en mémoire.
 
+from pathlib import Path
+from uuid import uuid4
+
+import chess
+
 from execution.routers.execution_base import BaseRouter
 from images.image_types import ImageInput
-from cognition.cognitive_context import CognitiveOperation
-from cognition.cognitive_classifier import is_interrogative_caption
+from cognition.cognitive_context import CHESS_POSITION_MARKER, CognitiveOperation
+from cognition.cognitive_classifier import detect_san_move, is_chess_image, is_interrogative_caption
+from chess_coach import board_local
+from chess_coach.board_reading import grid_to_fen, position_problem, solve
+from chess_coach.render import render_position
+from execution.routers.chess_router import _format_line
 from memory.writer import write_image_artifact, write_conversation_turn
+from config import config
 from logger import get_logger
 
 log = get_logger(__name__)
+
+_NAMES = {"white": "blancs", "black": "noirs"}
+
+
+def _side(board: chess.Board) -> str:
+    """Camp au trait : "white" ou "black"."""
+    return "white" if board.turn == chess.WHITE else "black"
+
+
+def _solve_line(board: chess.Board) -> tuple[str, list, list]:
+    """
+    Stockfish sur la position : (évaluation en clair, 10 premiers coups de la
+    ligne principale, les mêmes en SAN).
+    """
+    score, pv = solve(board.fen())
+    line = pv[:10]
+    line_san, replay = [], board.copy()
+    for move in line:
+        line_san.append(replay.san(move))
+        replay.push(move)
+
+    side = _side(board)
+    other = "black" if side == "white" else "white"
+    if score.is_mate():
+        mate = score.mate()
+        winner = side if mate > 0 else other
+        evaluation = f"mat en {abs(mate)} pour les {_NAMES[winner]}"
+    else:
+        pawns = score.score() / 100
+        winner = side if pawns >= 0 else other
+        evaluation = f"+{abs(pawns):.1f}".replace(".", ",") + f" pour les {_NAMES[winner]}"
+    return evaluation, line, line_san
+
+
+def _write_position_history(payload: dict, fen: str, user_text: str | None, text: str) -> None:
+    """
+    Écrit l'échange dans l'historique, le tour `user` portant le marqueur de
+    position : une relance (« et si 1...Qe7+ ? ») doit voir la position.
+    """
+    conversation_key = str(payload.get("metadata", {}).get("chat_id", "default"))
+    user_turn = f"{CHESS_POSITION_MARKER} {fen}]"
+    if user_text:
+        user_turn += "\n\n" + user_text
+    try:
+        write_conversation_turn(conversation_key, "user", user_turn)
+        write_conversation_turn(conversation_key, "assistant", text)
+        log.info("conversation_write OK key=%s", conversation_key)
+    except Exception:
+        log.exception("conversation_write ERROR key=%s", conversation_key)
 
 
 class ImageExecutionRouter(BaseRouter):
@@ -83,6 +150,9 @@ class ImageExecutionRouter(BaseRouter):
 
         if op_type == CognitiveOperation.IMAGE_GENERATION.value:
             return self._handle_generation(content, payload)
+
+        if op_type == CognitiveOperation.CHESS_BOARD_MOVE.value:
+            return self._handle_board_move(str(content or ""), payload)
 
         raise ValueError(f"ImageExecutionRouter: op_type inconnu '{op_type}'")
 
@@ -125,6 +195,11 @@ class ImageExecutionRouter(BaseRouter):
             log.info("image_write OK wing=aria_episodic intent_id=%s", intent_id)
         except Exception as e:
             log.error("memory write error: %s", e)
+
+        # ── Mode échecs (sprint 59) : prioritaire sur le mode enrichi ──────
+        if is_chess_image(artifact.caption, user_caption):
+            return self._handle_chess_board(str(file_path), artifact.caption or "",
+                                            user_caption, payload)
 
         # ── Mode enrichi : caption interrogative + LLM router disponible ────
         # is_interrogative_caption() est réévalué ici (source de vérité locale).
@@ -217,6 +292,104 @@ class ImageExecutionRouter(BaseRouter):
             # skip_intent : aucune résolution/mutation d'intent (#51)
             "metadata": {**payload.get("metadata", {}), "skip_intent": True},
         })
+
+    def _handle_chess_board(self, path: str, description: str,
+                            user_caption: str | None, payload: dict) -> dict:
+        """
+        Résout une position d'échecs envoyée en image (sprint 59).
+
+        Grille lue par Gemini, sinon par le lecteur local ; FEN déduite ;
+        ligne principale Stockfish + évaluation + diagramme, sans LLM.
+        Position illégale : raison + diagramme lu sans flèche, pas de résolution.
+        """
+        grid = self.internal_router.read_board(path)
+        if grid is not None:
+            log.info("[BOARD] gemini")
+        else:
+            grid = board_local.read_board(path)
+            log.info("[BOARD] %s", "local" if grid is not None else "illisible")
+        if grid is None:
+            return {"text": f"Je n'arrive pas à lire l'échiquier : {description}"}
+
+        fen, bottom = grid_to_fen(grid, user_caption)
+        out_dir = Path(config.image_output_dir) / "chess"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = str(out_dir / f"{uuid4().hex[:8]}_position.png")
+
+        problem = position_problem(fen)
+        if problem:
+            log.info("[BOARD] position impossible : %s fen=%s", problem, fen)
+            render_position(fen, bottom, None, out_path)
+            text = (f"Je lis une position impossible ({problem}). Voici ce que j'ai lu : "
+                    f"renvoie une image plus nette.\nPosition lue : {fen}")
+            return {"text": text, "images": [{"path": out_path, "caption": ""}]}
+
+        board = chess.Board(fen)
+        side = _side(board)
+        evaluation, line, line_san = _solve_line(board)
+
+        text = (f"Trait aux {_NAMES[side]}. Position lue : {fen}\n"
+                f"Ligne principale : {_format_line(line_san, board.fullmove_number, side)}\n"
+                f"Évaluation : {evaluation}")
+        ucis = [move.uci() for move in line[:4]]
+        render_position(fen, bottom, ucis[0] if ucis else None, out_path,
+                        best_line_uci=ucis)
+        log.info("[BOARD] résolu fen=%s eval=%s", fen, evaluation)
+
+        _write_position_history(payload, fen, user_caption, text)
+        return {"text": text, "images": [{"path": out_path, "caption": ""}]}
+
+    def _handle_board_move(self, message: str, payload: dict) -> dict:
+        """
+        Relance « et si X ? » sur la dernière position lue en image (sprint 59).
+
+        La FEN vient du marqueur du dernier tour `user` (posé à la résolution
+        de l'image ou de la relance précédente : les relances s'enchaînent).
+        Le coup SAN est joué ; Stockfish évalue la position de départ (meilleur
+        coup) puis celle obtenue (ligne + éval). Réponse sans LLM + diagramme,
+        le camp qui a joué en bas. Coup injouable : texte seul, historique intact.
+        """
+        conversation_key = str(payload.get("metadata", {}).get("chat_id", "default"))
+        history = self.mempalace_bridge.load_conversation_history(conversation_key, n=2)
+        user_turn = [t["content"] for t in history if t.get("role") == "user"][-1]
+        fen = user_turn.split(CHESS_POSITION_MARKER, 1)[1].split("]", 1)[0].strip()
+
+        board = chess.Board(fen)
+        san = detect_san_move(message)
+        try:
+            move = board.parse_san(san)
+        except ValueError:
+            log.info("[BOARD] coup injouable %s fen=%s", san, fen)
+            return {"text": f"Le coup {san} n'est pas jouable dans la position : {fen}"}
+
+        mover = _side(board)
+        played = _format_line([board.san(move)], board.fullmove_number, mover)
+        best_eval, best_line, best_san = _solve_line(board)
+        if best_line and best_line[0] == move:
+            comparison = "C'est le meilleur coup de la position de départ."
+        else:
+            best = _format_line(best_san[:1], board.fullmove_number, mover)
+            comparison = f"Meilleur coup de départ : {best} ({best_eval})."
+
+        board.push(move)
+        new_fen = board.fen()
+        side = _side(board)
+        evaluation, line, line_san = _solve_line(board)
+
+        text = (f"Après {played} : trait aux {_NAMES[side]}. Position : {new_fen}\n"
+                f"Ligne principale : {_format_line(line_san, board.fullmove_number, side)}\n"
+                f"Évaluation : {evaluation}\n"
+                f"{comparison}")
+        out_dir = Path(config.image_output_dir) / "chess"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = str(out_dir / f"{uuid4().hex[:8]}_position.png")
+        ucis = [m.uci() for m in line[:4]]
+        render_position(new_fen, mover, ucis[0] if ucis else None, out_path,
+                        best_line_uci=ucis)
+        log.info("[BOARD] relance %s fen=%s eval=%s", san, new_fen, evaluation)
+
+        _write_position_history(payload, new_fen, message, text)
+        return {"text": text, "images": [{"path": out_path, "caption": ""}]}
 
     # =========================================================
     # IMAGE GENERATION

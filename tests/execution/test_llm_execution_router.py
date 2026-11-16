@@ -449,6 +449,21 @@ def test_mentions_chess_games():
     assert mentions_chess_games("quelle est ma meilleure ouverture avec les blancs ?", [])
 
 
+# Sprint 58 (#211) : détection resserrée, faux positifs hors échecs écartés.
+@pytest.mark.parametrize("message, expected", [
+    ("analyse mes 3 dernières parties", True),
+    ("donne-moi un conseil pour ma prochaine partie", True),
+    ("quelle est ma meilleure ouverture avec les blancs ?", True),
+    ("j'ai fait 3 défaites d'affilée", True),
+    ("gain de BaguetteChaussette sur abandon de l'adversaire", True),
+    ("une partie de foot ce soir", False),
+    ("les victoires de Napoléon", False),
+    ("mon adversaire politique", False),
+])
+def test_mentions_chess_games_narrowed(message, expected):
+    assert mentions_chess_games(message, []) is expected
+
+
 def _games(n):
     return [{"opponent": f"adv{i}", "nico_color": "white", "outcome": "win",
              "date": f"2026.11.{i + 1:02d}", "timestamp": f"t{i:02d}"} for i in range(n)]

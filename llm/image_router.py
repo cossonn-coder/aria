@@ -17,6 +17,7 @@
 from images.image_types import ImageArtifact, ImageInput
 from config import config
 from llm.vision.groq_vision import GroqVisionClient
+from llm.vision.gemini_vision import GeminiVisionClient
 from llm.image_gen.pollinations_client import PollinationsClient
 from logger import get_logger
 
@@ -66,6 +67,23 @@ VISION_ROUTING_TABLE = [
     },
 ]
 
+# Lecture d'une position d'échecs (sprint 59) : Gemini seul, la chaîne vision
+# prod lit faux. 3.8-flash est juste mais souvent en 503 : il passe en second.
+BOARD_ROUTING_TABLE = [
+    {
+        "provider": "gemini-3.5-flash",
+        "client": GeminiVisionClient,
+        "model": "gemini-3.5-flash",
+        "api_key": lambda: config.gemini_api_key,
+    },
+    {
+        "provider": "gemini-3.8-flash",
+        "client": GeminiVisionClient,
+        "model": "gemini-3.8-flash",
+        "api_key": lambda: config.gemini_api_key,
+    },
+]
+
 GENERATION_ROUTING_TABLE = [
     # Pollinations avec la clé de Nico (sprint 24) : sans filigrane.
     # Clé vide → le client lève, on tombe sur le secours anonyme.
@@ -103,6 +121,33 @@ _TRANSCRIBE_PROMPT = (
 _NO_TEXT = "AUCUN TEXTE"
 
 
+# ── Lecture d'échiquier (sprint 59) ──────────────────────────────────────────
+
+# Consigne mesurée à l'audit : grille telle qu'affichée, sans interprétation.
+_BOARD_PROMPT = (
+    "Cette image montre un échiquier. Lis les 8 rangées TELLES QU'AFFICHÉES, "
+    "de la rangée du haut à celle du bas, chaque rangée de gauche à droite. "
+    "Pour chaque case : lettre de pièce (K Q R B N P pour les pièces blanches, "
+    "k q r b n p pour les noires) ou '.' si vide. "
+    "Réponds UNIQUEMENT par 8 lignes de 8 caractères."
+)
+_BOARD_CHARS = set("KQRBNPkqrbnp.")
+
+
+def _parse_grid(text: str) -> list[str] | None:
+    """Extrait 8 rangées de 8 cases d'une réponse ; None si non conforme."""
+    # Les lignes de clôture ``` (avec ou sans langage) sont ignorées.
+    rows = [
+        line.strip() for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("```")
+    ]
+    if len(rows) != 8:
+        return None
+    if any(len(row) != 8 or not set(row) <= _BOARD_CHARS for row in rows):
+        return None
+    return rows
+
+
 # ── Router ────────────────────────────────────────────────────────────────────
 
 class ImageRouter:
@@ -117,9 +162,11 @@ class ImageRouter:
         self,
         vision_table=None,
         generation_table=None,
+        board_table=None,
     ):
         self.vision_table = vision_table or VISION_ROUTING_TABLE
         self.generation_table = generation_table or GENERATION_ROUTING_TABLE
+        self.board_table = board_table or BOARD_ROUTING_TABLE
 
     def handle_input(self, image_input: ImageInput) -> ImageArtifact:
         """
@@ -197,6 +244,31 @@ class ImageRouter:
         """
         text = self._run_vision(image, prompt=_TRANSCRIBE_PROMPT).strip()
         return "" if text.rstrip(".") == _NO_TEXT else text
+
+    def read_board(self, image) -> list[str] | None:
+        """
+        Lit la grille d'un échiquier en image, telle qu'affichée.
+
+        Args:
+            image: chemin local de l'image.
+
+        Returns:
+            8 chaînes de 8 caractères (rangée du haut d'abord, chaque rangée de
+            gauche à droite ; KQRBNP blancs, kqrbnp noirs, '.' vide), ou None
+            si aucun modèle n'a rendu une grille valide.
+        """
+        # Une entrée à la fois : une réponse non conforme compte comme un échec
+        # et fait passer au modèle suivant, comme une exception réseau.
+        for entry in self.board_table:
+            try:
+                text = self._dispatch([entry], "describe", image=image, prompt=_BOARD_PROMPT)
+            except RuntimeError:
+                continue
+            rows = _parse_grid(text)
+            if rows is not None:
+                return rows
+            log.warning("[BOARD] %s : grille non conforme.", entry.get("provider"))
+        return None
 
     def generate(self, message: str, intent_id: str | None = None) -> ImageArtifact:
         """

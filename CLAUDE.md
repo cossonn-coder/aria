@@ -152,12 +152,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 57 clos (tag `sprint-57`, classer les parties : 🏅 par catégorie cadence × longueur,
-occasions manquées et pire erreur dans les miniatures, ligne 🔎, statistiques d'ouvertures au LLM #209 ;
-voir `docs/sprint57/00_etat.md`).
-Prochain : **sprint 58**, cible à arbitrer.
-Kickoff : `docs/sprint58/context_kickoff_sprint_58.md`.
-Prochaine étape : `/conception sprint 58`.
+Sprints 58 et 59 clos (tags `sprint-58`, `sprint-59`) : détection resserrée des questions
+d'échecs (#211, `docs/sprint58/00_etat.md`) ; position d'échecs envoyée en image → lecture
+Gemini/locale, Stockfish, diagramme, relance « et si X ? » (`docs/sprint59/00_etat.md`).
+En cours : **sprint 60**, photo d'échiquier physique fiable (conception, `docs/sprint60/00_etat.md`).
+Prochaine étape : `/conception sprint 60`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
