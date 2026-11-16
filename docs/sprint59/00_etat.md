@@ -1,7 +1,7 @@
 # Sprint 59 — état du sprint
 
-**Phase** : conception des suites du run live figée (OK de Nico, 2026-11-13), tronçons 05 et 06
-faits, run live 07 en attente (Nico).
+**Phase** : clos le 2026-11-16 (tag `sprint-59`), mergé dans `main` avec le sprint 58.
+Suite : sprint 60 (photo d'échiquier physique fiable, `docs/sprint60/`).
 **Sujet** : résoudre une position d'échecs envoyée en image (capture d'écran ou photo
 d'échiquier physique) : lire la position, puis donner la ligne principale Stockfish.
 **Branche** : `feat/sprint59-position-image`, partie de `feat/sprint58-detection-echecs`
@@ -18,7 +18,7 @@ Audit : `docs/sprint59/audit_position_image.md`. Référence : `docs/sprint59/re
 | 04 | Run live (Nico) | `04_run_live.txt` | ✅ (fait ; suites → 05-07) |
 | 05 | Cas 4 : déclenchement « blancs »/« noirs » + lecteur local robuste (plein écran, surlignage, coordonnées) | `05_cas4_pleinecran.md` | ✅ |
 | 06 | Relance « et si X ? » : coup joué, Stockfish, réponse + diagramme | `06_relance_coup.md` | ✅ |
-| 07 | Run live complémentaire (Nico) | `07_run_live.txt` | ⏳ |
+| 07 | Run live complémentaire (Nico) | `07_run_live.txt` | ✅ (2026-11-13, journal conforme) |
 
 ## Décisions arrêtées
 
@@ -83,4 +83,4 @@ Tronçon 06 fait : opération `CHESS_BOARD_MOVE` → `image_router` ; règle 1c 
 bas), marqueur réécrit avec la nouvelle FEN. Partie commune factorisée (`_solve_line`,
 `_write_position_history`), chemin image inchangé. Tests : `tests/images/test_chess_image.py`.
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du tronçon.
-Prochaine étape : run live 07 par Nico.
+Run live 07 fait (2026-11-13). Sprint clos ; suite au sprint 60.
