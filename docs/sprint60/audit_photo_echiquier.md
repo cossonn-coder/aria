@@ -84,3 +84,75 @@ Lectures :
 - Photo de face, de biais, de côté : diagramme lu conforme, ou case douteuse signalée.
 - Correction « c5 fou noir » : nouvelle position, Stockfish relancé, diagramme corrigé.
 - Une relance « et si X ? » après correction part de la position corrigée.
+
+## 5. Mesure du corpus P1 (2026-11-16)
+
+Photos envoyées par Nico sur Telegram (compressées), légende « corpus p1 … ».
+Lecture prod (`ImageRouter.read_board`, `_BOARD_PROMPT` inchangé, gemini-3.5-flash) →
+`grid_to_fen`. Brut : `docs/sprint60/mesure_p1.txt`.
+
+| Photo | Durée | Cases justes | Erreurs |
+|---|---|---|---|
+| face jour | 56 s | 48/64 | haut du plateau décalé d'une rangée |
+| face soir | 33 s | 63/64 | c5 fou noir → pion |
+| plongée jour | 14 s | 63/64 | c5 fou noir → pion |
+| plongée soir | 31 s | 63/64 | c5 fou noir → pion |
+| biais jour | 71 s | 37/64 | grille inutilisable |
+| biais soir | 56 s | 17/64 | grille inutilisable |
+| côté jour | 59 s | 23/64 (53/64 après bonne rotation) | orientation + lecture |
+| côté soir | 48 s | 21/64 (54/64 après bonne rotation) | orientation + lecture |
+
+Constats [n=1 position, 8 photos] :
+- Face et plongée : 63/64 sur 3 photos sur 4, toujours la même erreur (fou noir c5 lu pion).
+  La 4e (face jour) décale le haut du plateau d'une rangée : perspective, pièces hautes du fond.
+- Biais : inutilisable. Côté : même tourné correctement, 53-54/64 → gérer 4 orientations
+  dans le code ne suffit pas.
+- Lumière : pas d'effet visible (le soir n'est pas pire).
+- Pièces prises posées au bord du plateau sur toutes les photos (Nico : ce sera toujours le cas).
+  Elles comptent : sur la photo du 13/11, 8 pions noirs lus sur le plateau + 1 pion noir pris
+  à côté = 9 → l'erreur c5 aurait été détectée par le décompte.
+- Le jeu de Nico semble avoir des dames de rechange posées à côté (à confirmer).
+
+### 5.1 Prompt modifié (base de la pièce, hors plateau ignoré, ligne HORS:)
+
+Script et prompt : `docs/sprint60/prompt_test.py`. Brut : `mesure_p1_prompt2.txt`.
+4 lectures sur 8 : quota Gemini épuisé (429) après ~20 appels dans la matinée (ARIA + mesures).
+
+| Photo | Prompt actuel | Prompt modifié | Ligne HORS lue | Vrai hors plateau (lu à l'œil) |
+|---|---|---|---|---|
+| face jour | 48/64 | 58/64 | n r R N p n n | q Q N p n |
+| plongée soir | 63/64 | 61/64 | q Q N p n ✓ | q Q N p n |
+| biais jour | 37/64 | 42/64 | N P n p q | q Q N p n |
+| biais soir | 17/64 | grille non conforme | — | — |
+
+- Pas de gain net sur la grille [n=3 lectures comparables] ; c5 toujours lu pion.
+- Liste hors plateau exacte 1 fois sur 3 [n=3].
+- Décompte sur plongée soir : 8 pions noirs lus sur le plateau + p hors plateau = 9 > 8 → doute
+  détecté sur les pions noirs, c'est-à-dire sur l'erreur c5.
+- Dames de rechange (q, Q) à côté du plateau : à exclure du décompte.
+- La clé API Gemini apparaît en clair dans le texte de l'exception httpx (URL `?key=`) :
+  elle peut donc figurer dans le journal ARIA. Dette, hors scope.
+
+## 6. Pivot : captures chess.com d'abord (Nico, 2026-11-16)
+
+Nico : « on va se contenter des impressions écran d'un échiquier digital chess.com pour le
+moment car même ça ne fonctionne pas ». Cas : capture envoyée à 09:34 (thème vert, plateau seul),
+`received_images/AgACAgQAAxkBAAIScmr6wC2G…ADPQQ.jpg`.
+
+- Vraie : `2r3k1/3n1pbp/p3pnp1/1pp5/R7/1P1BP1Pq/1BPNQP1P/6K1 w`.
+- Lue par ARIA : `2r3k1/3n1p1p/p3pnp1/1pp5/R7/1P1BP1Pr/1BPNQP1P/6K1 w` → fou g7 absent, dame h3
+  lue tour ; Stockfish +6,6 sur une position fausse.
+- Lecture faite par le **lecteur local** (même FEN reproduite hors ligne) : Gemini répondait 429,
+  quota consommé par les mesures de conception en cours (09:2x-09:3x).
+- Gemini rejoué sur la même capture à quota revenu : 64/64 en 6 s [n=1].
+
+Causes dans `chess_coach/board_local.py` :
+1. Une seule capture de référence (`chess_coach/data/board_refs/chesscom_vert`) : chaque pièce
+   vue sur 1 ou 2 cases ; dame noire seulement sur case foncée.
+2. g7 (fou noir, case foncée) : après mise à zéro du fond (`_cells`), la case vaut presque zéro →
+   plus proche voisin = case vide (distance = norme du vecteur).
+3. h3 (dame noire, case claire) : tour 5,62 M contre dame 5,75 M — marge ~2 %.
+
+Positions de référence proposées (chaque pièce sur case claire ET foncée, légales, sans échec) :
+- ref1 `r1b1k2r/ppq2pp1/2n1bn1p/3pp3/3PP3/2NB1N1P/PPQ1BPP1/R3K2R w - - 0 1`
+- ref2 `1k1r3r/1pbqbppp/p1n2n2/4p3/4P3/P1N1BN2/1PBQ1PPP/1K1R3R w - - 0 1`

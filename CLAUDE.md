@@ -155,8 +155,9 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 Sprints 58 et 59 clos (tags `sprint-58`, `sprint-59`) : détection resserrée des questions
 d'échecs (#211, `docs/sprint58/00_etat.md`) ; position d'échecs envoyée en image → lecture
 Gemini/locale, Stockfish, diagramme, relance « et si X ? » (`docs/sprint59/00_etat.md`).
-En cours : **sprint 60**, photo d'échiquier physique fiable (conception, `docs/sprint60/00_etat.md`).
-Prochaine étape : `/conception sprint 60`.
+Sprint 60 (lecture fiable d'un échiquier en image) suspendu en conception le 2026-11-16 :
+dettes dans `docs/sprint60/00_etat.md` (lecteur local chess.com faux, quota Gemini, correction…).
+Prochaine étape : choisir la cible du prochain sprint (`/conception`).
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

@@ -1,0 +1,12 @@
+p1_biais_jour       55s 42/64 HORS: NPnpq  
+p1_biais_soir       53s grille non conforme : '....r....\n..ppp.kq\n...bpp..\nRP.PP...\nNPP..nn.\nQK...B.r\n..PPP.p.\n....R...\nHORS: n p N R q'
+p1_cote_jour ERREUR All image providers failed. Last error: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=<masquée>'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+p1_cote_soir ERREUR All image providers failed. Last error: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=<masquée>'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+p1_face_jour        60s 58/64 HORS: n r R N p n n  c5:b→p c6:p→b g6:.→p c7:p→n g7:p→. h7:p→.
+p1_face_soir ERREUR All image providers failed. Last error: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=<masquée>'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+p1_plongee_jour ERREUR All image providers failed. Last error: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=<masquée>'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+p1_plongee_soir     24s 61/64 HORS: q Q N p n  e4:P→. f4:.→P c5:b→p

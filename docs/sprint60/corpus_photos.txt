@@ -1,0 +1,27 @@
+CORPUS SPRINT 60 — une photo par ligne, légende à copier telle quelle sur Telegram.
+Plateau entier dans le cadre, pas de flash, pas de main. Envoyer en "photo" (pas en fichier).
+
+P1 — 1.e4 e5 2.Nf3 Nf6 3.Nxe5 Nc6 4.Nxc6 dxc6 5.d3 Bc5 6.Bg5
+corpus p1 face jour
+corpus p1 biais jour
+corpus p1 cote jour
+corpus p1 plongee jour
+corpus p1 face soir
+corpus p1 biais soir
+corpus p1 cote soir
+corpus p1 plongee soir
+
+P2 — 1.d4 d5 2.c4 e6 3.Nc3 Nf6 4.Bg5 Be7 5.e3 O-O 6.Nf3 Nbd7 7.Rc1 c6 8.Bd3 dxc4 9.Bxc4 Nd5
+corpus p2 face jour
+corpus p2 biais jour
+corpus p2 cote jour
+corpus p2 plongee jour
+
+P3 — Blancs : Re3 Fd3 pions b4 d5 f4 g2 / Noirs : Rf7 Cd6 pions b5 f5 g6 h7
+corpus p3 face jour
+corpus p3 biais jour
+corpus p3 cote jour
+corpus p3 plongee jour
+
+Angles : face = côté blancs, assis, ~45° ; biais = depuis un coin ; cote = depuis la colonne h
+(plateau tourné de 90°) ; plongee = téléphone presque à la verticale au-dessus.

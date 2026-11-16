@@ -1,0 +1,16 @@
+p1_biais_jour            71s  bas=white 37/64  c1:.→Q d1:Q→K e1:K→. f1:B→. h2:P→. d3:P→. f3:.→P d4:.→P g4:.→B c5:b→. g5:B→. h5:.→r c6:p→b d6:.→n g6:.→p d7:.→p e7:.→p f7:p→. g7:p→. h7:p→. a8:r→. c8:b→r d8:q→. e8:k→b f8:.→q g8:.→k h8:r→.
+    ..r.bqk. ppppp... ..bn.np. .......r ...PP.B. .....P.. PPP..PP. RNQK...R
+p1_biais_soir            56s  bas=white 17/64  a1:R→. b1:N→. d1:Q→P e1:K→R f1:B→. h1:R→. a2:P→. b2:P→. d2:.→P f2:P→. g2:P→. h2:P→. a3:.→K d3:P→. e3:.→B g3:.→p h3:.→p a4:.→Q c4:.→P d4:.→P e4:P→. g4:.→p h4:.→r a5:.→N b5:.→P c5:b→P f5:.→n g5:B→n a6:.→R b6:.→P c6:p→b d6:.→p e6:.→p f6:n→. a7:p→. b7:p→. d7:.→p e7:.→p f7:p→. g7:p→q h7:p→k a8:r→. c8:b→. d8:q→r e8:k→. f8:.→b h8:r→.
+    ...r.b.. ..ppp.qk RPbpp... NPP..nn. Q.PP..pr K...B.pp ..PP.... ...PR...
+p1_cote_jour             59s  bas=white 23/64  b1:N→P d1:Q→. e1:K→. f1:B→. g1:.→p h1:R→r a2:P→. c2:P→. e2:.→P f2:P→. g2:P→p h2:P→. a3:.→B b3:.→P d3:P→. f3:.→n g3:.→p d4:.→P e4:P→. h4:.→k a5:.→K c5:b→. d5:.→P g5:B→. h5:.→q a6:.→Q c6:p→P e6:.→b f6:n→p g6:.→p h6:.→b a7:p→N b7:p→P c7:p→. h7:p→. a8:r→R b8:.→P c8:b→. d8:q→. e8:k→. f8:.→p
+    RP...p.r NP...pp. Q.P.bppb K..P...q ...P...k BP...np. .P..P.p. RP....pr
+p1_cote_soir             48s  bas=black 21/64  a1:R→r b1:N→p d1:Q→. e1:K→. f1:B→P a2:P→. b2:P→p c2:P→. h2:P→N a3:.→b b3:.→p c3:.→p d3:P→b g3:.→P h3:.→Q a4:.→r b4:.→q e4:P→. f4:.→P h4:.→K a5:.→r b5:.→k c5:b→. e5:.→P g5:B→. h5:.→Q b6:.→p c6:p→n f6:n→. g6:.→P h6:.→B a7:p→. c7:p→. d7:.→B f7:p→. g7:p→P h7:p→. b8:.→p c8:b→. d8:q→. e8:k→. g8:.→P h8:r→R
+    R.P...pr NPP...p. QP..bppb K.P...qr Q..P..kr BP...np. .P..B.p. RP....pr
+p1_face_jour             56s  bas=white 48/64  g2:P→. c4:.→p g4:.→P f5:.→n a6:.→p b6:.→p f6:n→p g6:.→p h6:.→p a7:p→r b7:p→. f7:p→. g7:p→. h7:p→r a8:r→. h8:r→.
+    ..bqk... r.p....r ppp..ppp ..b..nB. ..p.P.P. ...P.... PPP..P.P RN.QKB.R
+p1_face_soir             33s  bas=white 63/64  c5:b→p
+    r.bqk..r ppp..ppp ..p..n.. ..p...B. ....P... ...P.... PPP..PPP RN.QKB.R
+p1_plongee_jour          14s  bas=white 63/64  c5:b→p
+    r.bqk..r ppp..ppp ..p..n.. ..p...B. ....P... ...P.... PPP..PPP RN.QKB.R
+p1_plongee_soir          31s  bas=white 63/64  c5:b→p
+    r.bqk..r ppp..ppp ..p..n.. ..p...B. ....P... ...P.... PPP..PPP RN.QKB.R

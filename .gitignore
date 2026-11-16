@@ -38,3 +38,4 @@ chroma_db/
 # binaires user locaux non destinés au repo)
 tmp/
 .local/
+docs/sprint60/corpus/
