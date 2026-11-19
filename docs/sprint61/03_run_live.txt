@@ -1,0 +1,32 @@
+Sprint 61 — run live (Nico)
+============================
+
+Préalable : branche feat/sprint61-pointe-combinaison déployée, puis
+  sudo systemctl restart aria.service
+
+Journal à surveiller pendant le test :
+  sudo journalctl -u aria -f -o cat | grep -E "chess_analysis|maia_defenses|chess_caption_split|chess_router"
+
+Message à envoyer sur Telegram
+------------------------------
+La partie du 2026-11-19 contre miguel_tomazii est déjà enregistrée : la recoller telle
+quelle répond « déjà envoyée ». Deux possibilités :
+
+A. La même partie AVEC horloges (déclenche une nouvelle analyse) : sur chess.com, page de la
+   partie → Partager → PGN, case « Horodatage » / timestamps cochée → copier → coller dans
+   Telegram. Le PGN doit contenir des {[%clk 0:09:58]}.
+
+B. Une autre partie récente où tu as raté une combinaison qui gagne du matériel.
+
+Critères de succès (cas A, position 1, coup 12)
+-----------------------------------------------
+1. Journal : « chess_analysis OK … critical=[…a:12.Ba3…] », aucun « maia_defenses FAILED »,
+   « chess_caption_split OK ».
+2. Sous le diagramme de la position 1, une ligne commençant par
+   « Pointe : 14.Ba3 cloue Nb4 sur Ke7 » qui finit par « 15.Bxb4+ gagne Nb4. »
+3. Une ligne « Si 14...a5 (… %) : 15.Bxb4+ … ; si 15...axb4, 16.Rxa8. »
+4. Le Pourquoi ne dit plus que Be7 est « prenable » ou que Qxe7+ « gagne une pièce » ;
+   il nomme un schéma (défenseur éliminé / roi attiré / clouage).
+5. La légende n'est pas coupée en plein milieu de la ligne Pointe.
+
+À me renvoyer : capture ou copie du texte de la position 1 + les lignes du journal.
