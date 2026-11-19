@@ -20,7 +20,6 @@ import chess.engine
 import chess.pgn
 
 from chess_coach.motifs import tag_motifs
-from chess_coach.openings import detect_opening, opening_group
 from config import config
 from logger import get_logger
 
@@ -64,14 +63,11 @@ _STABLE_TIME_CAP = 60
 
 # Nom de Nico dans les en-têtes White / Black ; ses pseudos sont dans config.chess_usernames.
 NICO_NAME = "Nico"
-# Budget de miniatures d'une partie, et premier coup montré (sprint 46).
+# Budget de miniatures d'une partie (sprint 46).
 _CRITICAL_BUDGET = 4
-_CRITICAL_FIRST_MOVE = 4
 # Gain minimal (pts) d'espérance humaine d'un coup explosif sur le meilleur coup ;
 # en deçà, l'explosif est un « pari » (is_gamble).
 _GAIN_MIN = 5
-# Göring joué par Nico : ses 6 premiers coups sont le concept du gambit, pas une décision.
-_GORING_FIRST_MOVE = 7
 # Un coup est une habitude de répertoire dès 2 parties précédentes avec les mêmes coups.
 _KNOWN_MOVE_GAMES = 2
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
@@ -128,6 +124,11 @@ class CriticalPosition:
     # Sortes a / b après le coup 10 : suite humaine probable selon Maia (sprint 54, tronçon 01b),
     # coup joué en tête puis réponse adverse et coup suivant de Nico les plus probables.
     human_line_san: list = field(default_factory=list)
+    # Sortes a / b (sprint 61) : pointe de best_line_san (chess_coach.combination.point_of)
+    # et défenses humaines probables après le coup préparatoire, chacune réfutée :
+    # {"san", "p", "line_san" (défense en tête), "recapture": (reprise, réponse) | None}.
+    point: dict | None = None
+    defenses: list = field(default_factory=list)
 
 
 @dataclass
@@ -487,7 +488,7 @@ def assign_motifs(plies: list, nico_color: str) -> None:
             p.motifs = tag_motifs(prev.fen_before, prev.uci, p.pv_uci[:result[0]])
 
 
-def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start: bool = True) -> int:
+def first_shown_move(plies: list, nico_color: str, past_games=()) -> int:
     """Premier coup de Nico qui peut recevoir une miniature : le début de la nouveauté.
 
     past_games : (couleur de Nico, coups UCI) des autres parties. Un coup est connu
@@ -498,17 +499,11 @@ def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start
     """
     ucis = [p.uci for p in plies]
     known_lines = [line for color, line in past_games if color == nico_color and line != ucis]
-    first_move = next(
+    return next(
         (p.move_number for p in plies if p.color == nico_color
          and sum(line[:p.ply + 1] == ucis[:p.ply + 1] for line in known_lines) < _KNOWN_MOVE_GAMES),
         plies[-1].move_number + 1,
     )
-    floor = _CRITICAL_FIRST_MOVE
-    if standard_start and nico_color == "white":
-        detected = detect_opening(ucis)
-        if detected is not None and opening_group(detected[1]) == "Göring Gambit":
-            floor = _GORING_FIRST_MOVE
-    return max(floor, first_move)
 
 
 def is_gamble(explosive) -> bool:
@@ -523,8 +518,7 @@ def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
     for p in plies:
         if p.color != nico_color or p.move_number < first_move:
             continue
-        # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
-        if p.loss >= (20 if p.move_number <= 10 else 10):
+        if p.loss >= 10:
             prev = plies[p.ply - 1] if p.ply > 0 else None
             kind = "b" if prev is not None and prev.loss >= 20 else "a"
             errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
@@ -538,11 +532,10 @@ def _explosive_skipped(plies: list, nico_color: str, first_move: int) -> bool:
     return missed >= _CRITICAL_BUDGET
 
 
-def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = _CRITICAL_FIRST_MOVE) -> list:
+def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = 1) -> list:
     """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir de first_move, ordre chronologique.
 
-    (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
-    assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
+    (a) erreur de Nico (perte ≥ 10) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
     (e) tournant : erreur adverse ≥ 15 suivie d'un coup de Nico à perte < 10,
     partie non décidée avant l'erreur ; (c) coup unique trouvé (meilleur coup,
     écart au 2e ≥ 15). Les c et e ne sont retenues que si la PV du meilleur coup
@@ -682,6 +675,81 @@ def assign_human_lines(critical: list, nico_elo: int, models_dir: str) -> None:
             board.push(move)
 
 
+# Défenses réfutées d'une pointe (sprint 61) : nombre, durée d'analyse, demi-coups après la défense.
+_MAX_DEFENSES = 3
+_DEFENSE_TIME = 0.3
+_REFUTATION_PLIES = 4
+
+
+def _refute(engine, item) -> list:
+    """Réfute les défenses d'une position (trait à l'adversaire) : une analyse MultiPV
+    restreinte à ces coups, puis, si le premier coup de Nico de la réfutation est une prise
+    et que la reprise naturelle n'est pas le coup suivant, la réponse de Nico à cette reprise."""
+    from chess_coach.explosive import _natural_capture
+    board, distribution = item
+    moves = [chess.Move.from_uci(uci) for uci, _ in distribution]
+    infos = engine.analyse(board, chess.engine.Limit(time=_DEFENSE_TIME), root_moves=moves, multipv=len(moves))
+    by_move = {info["pv"][0]: info for info in infos}
+    defenses = []
+    for move, (_, p) in zip(moves, distribution):
+        pv = by_move[move]["pv"][:_REFUTATION_PLIES + 1]
+        line_board, line_san = board.copy(stack=False), []
+        for m in pv:
+            line_san.append(line_board.san(m))
+            line_board.push(m)
+        recapture = None
+        if len(pv) >= 2:
+            after = board.copy(stack=False)
+            after.push(pv[0])
+            if after.is_capture(pv[1]):
+                after.push(pv[1])
+                take = _natural_capture(after, pv[1].to_square)
+                if take is not None and (len(pv) < 3 or take != pv[2]):
+                    take_san = after.san(take)
+                    after.push(take)
+                    answer = engine.analyse(after, chess.engine.Limit(time=_DEFENSE_TIME))["pv"][0]
+                    recapture = (take_san, after.san(answer))
+        defenses.append({"san": line_san[0], "p": p, "line_san": line_san, "recapture": recapture})
+    return defenses
+
+
+def assign_defenses(critical: list, engine_path: str, opponent_elo: int | None, models_dir: str | None) -> None:
+    """Remplit point et defenses des erreurs de Nico (sortes a / b avec best_line_san).
+
+    Défenses : réponses Maia (Elo adverse) après le coup préparatoire de la pointe, hors
+    coup de la ligne moteur, 3 au plus ; une passe Maia batchée, puis Stockfish. Sans Maia
+    ou si Maia échoue, point reste rempli et defenses vide.
+    """
+    from chess_coach.combination import point_of
+    from chess_coach.difficulty import DEFAULT_ELO, reply_distribution
+    pending = []
+    for c in critical:
+        if c.kind not in ("a", "b") or not c.best_line_san:
+            continue
+        c.point = point_of(c.ply.fen_before, c.best_line_san, c.ply.color)
+        if c.point and c.point["prep"] is not None:
+            board = chess.Board(c.ply.fen_before)
+            for san in c.best_line_san[:c.point["prep"] + 1]:
+                board.push_san(san)
+            pending.append((c, board))
+    if not pending or models_dir is None:
+        return
+    try:
+        distributions = reply_distribution([b.fen() for _c, b in pending],
+                                           opponent_elo or DEFAULT_ELO, models_dir)
+    except Exception:
+        log.exception("maia_defenses FAILED")
+        return
+    items = []
+    for (c, board), replies in zip(pending, distributions):
+        line_move = c.best_line_san[c.point["prep"] + 1] if len(c.best_line_san) > c.point["prep"] + 1 else None
+        skip = board.parse_san(line_move) if line_move else None
+        items.append((board, [r for r in replies if chess.Move.from_uci(r[0]) != skip][:_MAX_DEFENSES]))
+    kept = [(c, item) for (c, _b), item in zip(pending, items) if item[1]]
+    for (c, _item), defenses in zip(kept, run_on_engines(engine_path, _refute, [item for _c, item in kept])):
+        c.defenses = defenses
+
+
 def analyze(text: str, message: str, engine_path: str,
             maia_models_dir: str | None = None, past_games=()) -> GameAnalysis | None:
     """Point d'entrée : PGN brut → GameAnalysis (None si PGN illisible).
@@ -710,7 +778,7 @@ def analyze(text: str, message: str, engine_path: str,
     from chess_coach.explosive import find_explosive
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
     opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
-    first_move = first_shown_move(plies, nico_color, past_games, "FEN" not in headers)
+    first_move = first_shown_move(plies, nico_color, past_games)
     if _explosive_skipped(plies, nico_color, first_move):
         log.info("chess_explosive skipped: b errors fill the budget")
         explosive = []
@@ -726,6 +794,7 @@ def analyze(text: str, message: str, engine_path: str,
             assign_human_lines(critical, int(elo) if elo.isdigit() else DEFAULT_ELO, maia_models_dir)
         except Exception:
             log.exception("maia_human_lines FAILED")
+    assign_defenses(critical, engine_path, opponent_elo, maia_models_dir)
     log.info(
         "chess_analysis OK plies=%d nico=%s source=%s first_move=%d critical=%s duration=%.1fs",
         len(plies), nico_color, source, first_move,

@@ -294,6 +294,9 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
         # La pièce jouée elle-même n'est pas « déclouée » : seules celles restées en place.
         pinned = [sq for sq in chess.SquareSet(board.occupied_co[mover])
                   if sq != move.from_square and board.is_pinned(mover, sq)]
+        # Pièces adverses déjà clouées sur leur roi avant le coup (sprint 61).
+        pinned_before = {sq for sq in chess.SquareSet(board.occupied_co[not mover])
+                         if board.is_pinned(not mover, sq)}
         board.push(move)
         if board.is_checkmate():
             facts.append("mat")
@@ -301,6 +304,10 @@ def _move_fact_items(fen: str, moves_san: list, move_number: int, color: str) ->
             facts.append("échec")
         if attacked and not board.is_checkmate():
             facts.append("attaque " + ", ".join(_square_label(board, sq) for sq in attacked))
+        king = board.king(not mover)
+        for sq in chess.SquareSet(board.occupied_co[not mover]):
+            if sq != king and sq not in pinned_before and board.is_pinned(not mover, sq):
+                facts.append(f"cloue {_square_label(board, sq)} sur {_square_label(board, king)}")
         unpinned = [sq for sq in pinned if not board.is_pinned(mover, sq)]
         if unpinned:
             facts.append("décloue " + ", ".join(_square_label(board, sq) for sq in unpinned))
@@ -478,6 +485,53 @@ def _compared_lines(critical) -> str:
     ))
 
 
+def _line_start(p, i: int) -> tuple:
+    """(numéro, couleur) du i-ème coup d'une suite jouée depuis p (coup de Nico en tête, i = 0)."""
+    number = p.move_number + (i + (1 if p.color == "black" else 0)) // 2
+    color = p.color if i % 2 == 0 else ("black" if p.color == "white" else "white")
+    return number, color
+
+
+def _line_move_label(p, i: int, san: str) -> str:
+    """Libellé du i-ème coup d'une suite jouée depuis p."""
+    return _move_label(*_line_start(p, i), san)
+
+
+def _point_text(critical) -> tuple | None:
+    """Pointe d'une erreur de Nico (sprint 61) : (texte sans « Pointe : », lignes « Si … »
+    des défenses réfutées), ou None sans pointe ou sans coup préparatoire."""
+    point = critical.point
+    if not point or point["prep"] is None:
+        return None
+    p, line = critical.ply, critical.best_line_san
+    prep = _line_move_label(p, point["prep"], line[point["prep"]])
+    gain = _line_move_label(p, point["gain"], line[point["gain"]])
+    why = []
+    if point["brought"] is not None:
+        why.append(f"roi amené par {_line_move_label(p, point['brought'], line[point['brought']])}")
+    if point["defender"] is not None:
+        i, label = point["defender"]
+        why.append(f"{_line_move_label(p, i, line[i])} a pris {label}, défenseur de {point['won']}")
+    paren = f" ({' ; '.join(why)})" if why else ""
+    if point["pin"]:
+        text = f"{prep} cloue {point['pin'][0]} sur {point['pin'][1]}{paren}, {gain} gagne {point['won']}."
+    else:
+        text = f"{prep} prépare {gain}, qui gagne {point['won']}{paren}."
+    # Défense : coup adverse juste après la préparation ; réfutation numérotée à sa suite.
+    d = point["prep"] + 1
+    defenses = []
+    for defense in critical.defenses:
+        head = f"Si {_line_move_label(p, d, defense['san'])} ({defense['p'] * 100:.0f} %)"
+        if len(defense["line_san"]) > 1:
+            head += " : " + _format_line(defense["line_san"][1:], *_line_start(p, d + 1))
+        if defense["recapture"]:
+            take, answer = defense["recapture"]
+            head += (f" ; si {_line_move_label(p, d + 2, take)}, "
+                     f"{_line_move_label(p, d + 3, answer)}")
+        defenses.append(head + ".")
+    return text, defenses
+
+
 def _variant_line(critical) -> str:
     """Ligne « Variante : » d'une légende, racontée par le code (tronçon 15). Vide si
     la ligne n'a aucun coup. Sorte d : variante du coup explosif, puis la ligne « Piège : »
@@ -485,7 +539,10 @@ def _variant_line(critical) -> str:
     sortes la donnent déjà). Sortes a et b : les deux suites comparées."""
     p = critical.ply
     if critical.best_line_san:
-        return _compared_lines(critical)
+        point = _point_text(critical)
+        if point is None:
+            return _compared_lines(critical)
+        return "\n".join([_compared_lines(critical), f"Pointe : {point[0]}"] + point[1])
     if critical.kind in ("c", "e"):
         moves = critical.line_san
     elif critical.kind == "d":
@@ -1286,6 +1343,11 @@ class ChessExecutionRouter(BaseRouter):
                                       critical.human_line_san)
                 if intent:
                     lines.append(intent)
+                point = _point_text(critical)
+                if point:
+                    lines.append(f"  pointe (données) : {point[0]}")
+                    if point[1]:
+                        lines.append(f"  défenses réfutées (données) : {' '.join(point[1])}")
             if critical.kind in ("c", "e"):
                 lines.append(f"  variante : {_format_line(critical.line_san, p.move_number, p.color)} "
                              f"({_EVIDENCE_FR[critical.evidence]})")
@@ -1380,6 +1442,15 @@ class ChessExecutionRouter(BaseRouter):
                 "forte sur plusieurs plans avec fous, dame, cavaliers (Nf3, Nd5) et tours. Tu peux "
                 "nommer ces colonnes et diagonales. Ne présente jamais la reprise du pion sacrifié "
                 "comme l'idée du Göring : reprendre en d4 du cavalier, c'est la Scotch normale.]"
+            )
+        if any(_point_text(c) for c in analysis.critical):
+            parts.append(
+                "[Consigne : pour chaque position qui a la ligne « pointe (données) », le Pourquoi "
+                "garde (1) l'idée probable de Nico et (2) ce qu'elle a négligé ; (3) devient le schéma "
+                "à retenir, en une demi-phrase tirée de la ligne « pointe » (ex. « élimine le défenseur, "
+                "attire le roi, cloue ») ; ne répète pas les coups : la pointe est sous le diagramme ; "
+                "le gain est là où la ligne « pointe » le place, jamais au premier coup s'il n'y est "
+                "pas ; entrée de 250 caractères au plus.]"
             )
         if any(c.kind == "e" for c in analysis.critical):
             parts.append(

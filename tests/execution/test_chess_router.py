@@ -160,7 +160,7 @@ def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
     content = llm_exec.execute.call_args.args[0]["content"]
     assert result["images"][0]["caption"] == (
         "Position 1 — coup 4 (noirs) : joué 🔴 4...Nf6, explosif 🟠 4...Qh4!? (meilleur 🟢 4...Nc6)\n"
-        "Variante : 4...Qh4 attaque pion e4 ; 5.Nxh4 prend Qh4, décloue pion f2 ; 5...e5.\n"
+        "Variante : 4...Qh4 attaque pion e4, cloue pion f2 sur Ke1 ; 5.Nxh4 prend Qh4, décloue pion f2 ; 5...e5.\n"
         "Variante du meilleur coup : 4...Nc6 ; 5.Bb5."
     )
     assert render.call_args.kwargs["alt_uci"] == "d8h4"
@@ -537,7 +537,7 @@ def test_move_facts_capture_and_numbering():
     text = _move_facts(chess.STARTING_FEN, ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"], 1, "white")
 
     assert text.startswith("1.e4")
-    assert "4.Bxc6 (prend Nc6)" in text
+    assert "4.Bxc6 (prend Nc6, cloue pion d7 sur Ke8)" in text
 
 
 def test_variant_line_capture_and_check():
@@ -1103,3 +1103,60 @@ def test_moves_line_flags_suspect_opponent_accuracy():
     assert line.split("\n")[1] == "⚠️ Précision adverse 99 % sur 27 coups (1698 Elo) : à surveiller"
     for change in ({"opponent_moves": 15}, {"accuracy_opponent": 90.0}):
         assert "⚠️" not in chess_router_mod._moves_line({**base, **change}, _colors_analysis())
+
+
+# Sprint 61, tronçon 02 : cas de référence (BaguetteChaussette – miguel_tomazii, après 11...Nxb4).
+_POINT_FEN = "r1b1k2r/1pq1bppp/p4n2/3p4/1n1P4/3B1N2/2P1QPPP/RNB1R1K1 w kq - 0 12"
+_POINT_LINE = ["Qxe7+", "Qxe7", "Rxe7+", "Kxe7", "Ba3", "a5", "Bxb4+"]
+
+
+def _point_critical():
+    """Erreur de Nico au coup 12 avec pointe 14.Ba3 et une défense a5 réfutée."""
+    from chess_coach.combination import point_of
+    ply = _ply(0, 12, "Bd2", "Qxe7+", "e2e7")
+    ply.color, ply.fen_before, ply.uci, ply.pv_san = "white", _POINT_FEN, "c1d2", list(_POINT_LINE)
+    critical = CriticalPosition(kind="a", ply=ply, score=30.0, best_line_san=list(_POINT_LINE),
+                                played_line_san=["Bd2", "Nxd3"])
+    critical.point = point_of(_POINT_FEN, _POINT_LINE, "white")
+    critical.defenses = [{"san": "a5", "p": 0.93, "line_san": ["a5", "Bxb4+", "Kd7", "Ne5+", "Ke6"],
+                          "recapture": ("axb4", "Rxa8")}]
+    return critical
+
+
+def test_move_facts_names_new_absolute_pin():
+    text = _move_facts(_POINT_FEN, _POINT_LINE[:5], 12, "white")
+
+    assert "14.Ba3 (attaque Nb4, cloue Nb4 sur Ke7)" in text
+
+
+def test_variant_line_gives_point_and_refuted_defense():
+    line = _variant_line(_point_critical())
+
+    assert ("Pointe : 14.Ba3 cloue Nb4 sur Ke7 (roi amené par 13...Kxe7 ; 12.Qxe7+ a pris Be7, "
+            "défenseur de Nb4), 15.Bxb4+ gagne Nb4.") in line
+    assert "Si 14...a5 (93 %) : 15.Bxb4+ Kd7 16.Ne5+ Ke6 ; si 15...axb4, 16.Rxa8." in line
+
+
+def test_enriched_gives_point_data_and_consigne(monkeypatch, tmp_path):
+    critical = _point_critical()
+    analysis = GameAnalysis(headers={"White": "staroflexeur"}, nico_color="white", color_source="header",
+                            plies=[critical.ply], critical=[critical])
+    monkeypatch.setattr(chess_router_mod, "analyze", lambda *a: analysis)
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "write_chess_game", MagicMock())
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "explication"}
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = []
+
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_analysis", "content": "1. e4", "metadata": {}}
+    )
+
+    content = llm_exec.execute.call_args.args[0]["content"]
+    assert "  pointe (données) : 14.Ba3 cloue Nb4 sur Ke7" in content
+    assert "  défenses réfutées (données) : Si 14...a5 (93 %)" in content
+    assert "[Consigne : pour chaque position qui a la ligne « pointe (données) »" in content
+    caption = result["images"][0]["caption"]
+    assert "Pointe : 14.Ba3 cloue Nb4 sur Ke7" in caption and len(caption) <= 1024
