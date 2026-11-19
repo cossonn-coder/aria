@@ -1,6 +1,6 @@
 # Sprint 61 — état du sprint
 
-**Phase** : B figée le 2026-11-19 (OK de Nico). Prêt pour `/sprint-auto sprint 61`.
+**Phase** : clos le 2026-11-19 (run live OK, critère 4 accepté partiel → dette 6). Tag `sprint-61`.
 **Sujet** : explication tactique — trouver la pointe d'une combinaison (coup final qui gagne,
 mécanisme, défenses naturelles réfutées) au lieu de commenter son point de départ.
 **Branche** : `feat/sprint61-pointe-combinaison`, depuis `main` @ `52c0aab`.
@@ -48,7 +48,7 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 |---|---|---|---|
 | 01 | Calcul pointe + défenses (`chess_coach/combination.py`, `analysis.py`) | `01_calcul_pointe.md` | ✅ |
 | 02 | Fait « cloue », ligne Pointe, données LLM, consigne (`chess_router.py`) | `02_texte_pointe.md` | ✅ |
-| 03 | Run live (Nico) | `03_run_live.txt` | ⏳ |
+| 03 | Run live (Nico) | `03_run_live.txt` | ✅ |
 
 ## Dettes
 
@@ -59,14 +59,22 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 | 3 | Clouage relatif et mat hors pointe | Pointe limitée au gain matériel et au clouage absolu | Étendre si un cas réel le demande |
 | 4 | Échiquier ARIA centré sur le joueur du bas | Demande de Nico du 2026-11-19 (anticipation adverse, flèches numérotées) | Sprint 62, `/conception` |
 | 5 | Répertoire connu d'ARIA | Nico : ARIA doit savoir ce qu'il joue et le prévenir quand il sort de la meilleure ligne de son répertoire | `/conception` |
+| 6 | Phrase « négligé » du Pourquoi | Run live : « tu as négligé que Be7 était en prise directe par Qe2 » ; la phrase (2) commente encore le départ, pas la pointe 14.Ba3 (critère 4 partiel, accepté par Nico) | Quand une pointe existe, (2) porte sur la pointe |
+| 7 | Progression fausse à la réanalyse | Réanalyse `reason=clock` de la partie miguel_tomazii : `chess_progression OK games=439`, bloc repris de la partie précédente (« victoire contre 1714 » sur une défaite) | Recompter la progression quand la fiche est remplacée |
+| 8 | Bilan inverse le camp | VitalGas : « tournant décisif dès 5.d5 (−21 pts pour l'adversaire) », 5.d5 est le coup de Nico | Données du tournant plus explicites au LLM |
+| 9 | Même ouverture, deux noms | 1.e4 c5 2.Nf3 … 3.b4 : « Portsmouth Gambit » (VitalGas) et « Wing Gambit Deferred » (miguel_tomazii) : stats d'ouverture éclatées | Regrouper dans `opening_group` |
+| 10 | Coups de répertoire jamais jugés | VitalGas : pire coup 5.d5 (−21 pts) sans miniature car dans le répertoire (`first_move=8`) | Lié à la dette 5 |
+| 11 | Texte LLM inventé | ColdSoMe : « ton pion d7 passé » ; SuperAmendment : « 10...Be7!? sacrifie 3 pions » | Faits plus contraints |
+
+## Run live (Nico, 2026-11-19)
+
+- Partie miguel_tomazii (horloges, `reason=clock`) : `critical=['b:12.Ba3', …]` (sorte b, pas a), aucun
+  `maia_defenses FAILED`, `chess_caption_split OK images=5`. Ligne Pointe et ligne « Si 14...a5 (93 %) »
+  conformes au mot près. Pourquoi : schéma nommé, mais phrase « négligé » encore sur Be7 (dette 6).
+- 4 autres parties sans pointe attendue (vérifié en local : pas de gain après préparation).
+- Hors kickoff `fc19c61` (miniatures dès le coup 1) : aucune des parties envoyées ne l'exerçait
+  (`first_move` du répertoire ≥ 4, pas d'imprécision 10-19 avant le coup 11). À observer.
 
 ## §REPRISE
 
-Tronçon 01 commité (c99b58e). Tronçon 02 fait (non commité) dans `execution/routers/chess_router.py` :
-fait « cloue X sur K » dans `_move_fact_items` ; `_point_text` (helpers `_line_start`,
-`_line_move_label`) alimente la ligne « Pointe : » + lignes « Si … » de `_variant_line`, les lignes
-`pointe (données)` / `défenses réfutées (données)` de `_build_enriched` et un bloc `[Consigne : …]`
-conditionnel. Sans clouage, la parenthèse défenseur se place avant le point final
-(« … prépare 15.Bxb4+, qui gagne Nb4 (12.Qxe7+ a pris Be7, défenseur de Nb4). »). 2 tests figés
-mis à jour (nouveaux faits « cloue » légitimes : 4...Qh4 cloue f2, 4.Bxc6 cloue d7), 3 tests
-ajoutés. Suite : run live par Nico avec `03_run_live.txt`.
+Sprint clos. Suite : `docs/sprint62/00_etat.md`.
