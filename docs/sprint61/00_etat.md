@@ -36,6 +36,12 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
   schéma à retenir en une demi-phrase, entrée ≤ 250 car. Raison : budget légende 1 024 car.
 - Découpage 01 calcul / 02 texte / 03 run live ; branche `feat/sprint61-pointe-combinaison`.
 
+## Hors kickoff (Nico, 2026-11-19, après le run live)
+
+- Miniatures dès le coup 1 : plancher coup 4 / coup 7 en Göring retiré (`first_shown_move`),
+  seuil d'erreur unique perte ≥ 10 (fin de « ouverture assumée » ≥ 20 avant le coup 11).
+  Règle du répertoire (coup joué dans ≥ 2 parties, mêmes coups) et Maia coupé jusqu'au coup 10 gardés.
+
 ## Carte des tronçons
 
 | # | Tronçon | Kickoff | État |
@@ -52,6 +58,7 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 | 2 | Motif « fourchette » trompeur | `assign_motifs` tague Qxe7+ fourchette, ni clouage ni élimination du défenseur (audit C5) | Revoir l'usage des motifs dans le Pourquoi |
 | 3 | Clouage relatif et mat hors pointe | Pointe limitée au gain matériel et au clouage absolu | Étendre si un cas réel le demande |
 | 4 | Échiquier ARIA centré sur le joueur du bas | Demande de Nico du 2026-11-19 (anticipation adverse, flèches numérotées) | Sprint 62, `/conception` |
+| 5 | Répertoire connu d'ARIA | Nico : ARIA doit savoir ce qu'il joue et le prévenir quand il sort de la meilleure ligne de son répertoire | `/conception` |
 
 ## §REPRISE
 

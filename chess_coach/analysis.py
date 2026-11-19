@@ -20,7 +20,6 @@ import chess.engine
 import chess.pgn
 
 from chess_coach.motifs import tag_motifs
-from chess_coach.openings import detect_opening, opening_group
 from config import config
 from logger import get_logger
 
@@ -64,14 +63,11 @@ _STABLE_TIME_CAP = 60
 
 # Nom de Nico dans les en-têtes White / Black ; ses pseudos sont dans config.chess_usernames.
 NICO_NAME = "Nico"
-# Budget de miniatures d'une partie, et premier coup montré (sprint 46).
+# Budget de miniatures d'une partie (sprint 46).
 _CRITICAL_BUDGET = 4
-_CRITICAL_FIRST_MOVE = 4
 # Gain minimal (pts) d'espérance humaine d'un coup explosif sur le meilleur coup ;
 # en deçà, l'explosif est un « pari » (is_gamble).
 _GAIN_MIN = 5
-# Göring joué par Nico : ses 6 premiers coups sont le concept du gambit, pas une décision.
-_GORING_FIRST_MOVE = 7
 # Un coup est une habitude de répertoire dès 2 parties précédentes avec les mêmes coups.
 _KNOWN_MOVE_GAMES = 2
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
@@ -492,7 +488,7 @@ def assign_motifs(plies: list, nico_color: str) -> None:
             p.motifs = tag_motifs(prev.fen_before, prev.uci, p.pv_uci[:result[0]])
 
 
-def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start: bool = True) -> int:
+def first_shown_move(plies: list, nico_color: str, past_games=()) -> int:
     """Premier coup de Nico qui peut recevoir une miniature : le début de la nouveauté.
 
     past_games : (couleur de Nico, coups UCI) des autres parties. Un coup est connu
@@ -503,17 +499,11 @@ def first_shown_move(plies: list, nico_color: str, past_games=(), standard_start
     """
     ucis = [p.uci for p in plies]
     known_lines = [line for color, line in past_games if color == nico_color and line != ucis]
-    first_move = next(
+    return next(
         (p.move_number for p in plies if p.color == nico_color
          and sum(line[:p.ply + 1] == ucis[:p.ply + 1] for line in known_lines) < _KNOWN_MOVE_GAMES),
         plies[-1].move_number + 1,
     )
-    floor = _CRITICAL_FIRST_MOVE
-    if standard_start and nico_color == "white":
-        detected = detect_opening(ucis)
-        if detected is not None and opening_group(detected[1]) == "Göring Gambit":
-            floor = _GORING_FIRST_MOVE
-    return max(floor, first_move)
 
 
 def is_gamble(explosive) -> bool:
@@ -528,8 +518,7 @@ def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
     for p in plies:
         if p.color != nico_color or p.move_number < first_move:
             continue
-        # Ouverture assumée : avant le coup 10, seule une perte ≥ 20 est une erreur.
-        if p.loss >= (20 if p.move_number <= 10 else 10):
+        if p.loss >= 10:
             prev = plies[p.ply - 1] if p.ply > 0 else None
             kind = "b" if prev is not None and prev.loss >= 20 else "a"
             errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
@@ -543,11 +532,10 @@ def _explosive_skipped(plies: list, nico_color: str, first_move: int) -> bool:
     return missed >= _CRITICAL_BUDGET
 
 
-def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = _CRITICAL_FIRST_MOVE) -> list:
+def select_critical(plies: list, nico_color: str, explosive=(), first_move: int = 1) -> list:
     """Sélectionne ≤ 4 positions (coups manqués d'abord), à partir de first_move, ordre chronologique.
 
-    (a) erreur de Nico (perte ≥ 10, ≥ 20 en ouverture : coups 1 à 10, ouverture
-    assumée) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
+    (a) erreur de Nico (perte ≥ 10) ; (b) idem juste après une erreur adverse (perte adverse ≥ 20) ;
     (e) tournant : erreur adverse ≥ 15 suivie d'un coup de Nico à perte < 10,
     partie non décidée avant l'erreur ; (c) coup unique trouvé (meilleur coup,
     écart au 2e ≥ 15). Les c et e ne sont retenues que si la PV du meilleur coup
@@ -790,7 +778,7 @@ def analyze(text: str, message: str, engine_path: str,
     from chess_coach.explosive import find_explosive
     opponent_elo = headers.get("BlackElo" if nico_color == "white" else "WhiteElo", "")
     opponent_elo = int(opponent_elo) if opponent_elo.isdigit() else None
-    first_move = first_shown_move(plies, nico_color, past_games, "FEN" not in headers)
+    first_move = first_shown_move(plies, nico_color, past_games)
     if _explosive_skipped(plies, nico_color, first_move):
         log.info("chess_explosive skipped: b errors fill the budget")
         explosive = []

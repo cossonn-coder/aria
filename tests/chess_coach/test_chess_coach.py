@@ -229,16 +229,6 @@ def test_select_critical_gamble_after_errors():
     assert [(c.kind, c.ply.ply) for c in selected] == [("a", 22), ("a", 24), ("a", 26), ("a", 28)]
 
 
-def test_select_critical_starts_at_move_4():
-    # Erreur et explosif du coup 3 écartés, erreur du coup 4 retenue.
-    plies = [_ply(i, 0) for i in range(9)]
-    plies[4], plies[6] = _ply(4, 30), _ply(6, 30)
-    plies[2] = _ply(2, 2, move_number=3)
-    explosive = [_explosive_d(plies[2], 20.0)]
-    selected = select_critical(plies, "white", explosive)
-    assert [(c.kind, c.ply.move_number) for c in selected] == [("a", 4)]
-
-
 def _line_plies(sans: str) -> list:
     # Demi-coups d'une suite SAN, pour first_shown_move (seuls ply, couleur, numéro et uci comptent).
     board, plies = chess.Board(), []
@@ -258,11 +248,10 @@ def _ucis(sans: str) -> list:
     return [p.uci for p in _line_plies(sans)]
 
 
-def test_first_shown_move_goring_floor_without_history():
-    # Sans historique, le Göring des blancs ne montre rien avant le coup 7.
-    assert first_shown_move(_line_plies(GORING), "white") == 7
-    assert first_shown_move(_line_plies(GORING), "white", standard_start=False) == 4
-    assert first_shown_move(_line_plies(ITALIAN), "white") == 4
+def test_first_shown_move_no_floor_without_history():
+    # Sans historique, miniature possible dès le coup 1, Göring compris (plus de plancher).
+    assert first_shown_move(_line_plies(GORING), "white") == 1
+    assert first_shown_move(_line_plies(ITALIAN), "white") == 1
 
 
 def test_first_shown_move_repertoire_until_novelty():
@@ -272,10 +261,10 @@ def test_first_shown_move_repertoire_until_novelty():
     other = _ucis("e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4 exd4")
     assert first_shown_move(plies, "white", [("white", other)] * 2) == 5
     # Une seule partie précédente, ou l'autre couleur, ne fait pas une habitude.
-    assert first_shown_move(plies, "white", [("white", other)]) == 4
-    assert first_shown_move(plies, "white", [("black", other)] * 2) == 4
+    assert first_shown_move(plies, "white", [("white", other)]) == 1
+    assert first_shown_move(plies, "white", [("black", other)] * 2) == 1
     # Le renvoi de la même partie ne compte pas ; tout connu → aucune miniature.
-    assert first_shown_move(plies, "white", [("white", ucis)] * 2) == 4
+    assert first_shown_move(plies, "white", [("white", ucis)] * 2) == 1
     assert first_shown_move(plies, "white", [("white", ucis + ["a2a3"])] * 2) == 7
 
 
@@ -309,9 +298,9 @@ def test_select_critical_unique_threshold_15():
     assert [(c.kind, c.ply.ply) for c in select_critical(plies, "white")] == [("c", 0)]
 
 
-@pytest.mark.parametrize("loss, move_number, retained", [(12, 5, False), (12, 15, True), (25, 5, True)])
+@pytest.mark.parametrize("loss, move_number, retained", [(12, 5, True), (12, 15, True), (8, 5, False)])
 def test_select_critical_opening_threshold(loss, move_number, retained):
-    # Ouverture assumée : perte ≥ 20 exigée jusqu'au coup 10, ≥ 10 ensuite.
+    # Même seuil partout : perte ≥ 10, ouverture comprise.
     # Une 2e erreur nette (ply 2) garde la sélection non vide dans les deux cas.
     plies = [_ply(0, loss, move_number=move_number), _ply(1, 0), _ply(2, 30, move_number=20)]
     selected = select_critical(plies, "white")
