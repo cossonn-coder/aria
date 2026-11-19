@@ -40,7 +40,7 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
-| 01 | Calcul pointe + défenses (`chess_coach/combination.py`, `analysis.py`) | `01_calcul_pointe.md` | ⏳ |
+| 01 | Calcul pointe + défenses (`chess_coach/combination.py`, `analysis.py`) | `01_calcul_pointe.md` | ✅ |
 | 02 | Fait « cloue », ligne Pointe, données LLM, consigne (`chess_router.py`) | `02_texte_pointe.md` | ⏳ |
 | 03 | Run live (Nico) | `03_run_live.txt` | ⏳ |
 
@@ -55,5 +55,8 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 
 ## §REPRISE
 
-Conception figée. Exécution : `/sprint-auto sprint 61` (tronçons 01 puis 02), puis run live
+Tronçon 01 fait (non commité) : `point_of` et `assign_defenses` (appelée dans `analyze` après
+`assign_human_lines`), 616 tests verts. Essai réel (Stockfish + Maia, Elo 1711) sur le cas de
+référence : pointe attendue, une seule défense `a5` [p=0,93 ; Maia tronque à 90 % cumulés],
+réfutation `a5 Bxb4+ Kd7 Ne5+ Ke6`, reprise `(axb4, Rxa8)`. Suite : tronçon 02, puis run live
 par Nico avec `03_run_live.txt`.
