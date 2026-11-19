@@ -41,7 +41,7 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
 | 01 | Calcul pointe + défenses (`chess_coach/combination.py`, `analysis.py`) | `01_calcul_pointe.md` | ✅ |
-| 02 | Fait « cloue », ligne Pointe, données LLM, consigne (`chess_router.py`) | `02_texte_pointe.md` | ⏳ |
+| 02 | Fait « cloue », ligne Pointe, données LLM, consigne (`chess_router.py`) | `02_texte_pointe.md` | ✅ |
 | 03 | Run live (Nico) | `03_run_live.txt` | ⏳ |
 
 ## Dettes
@@ -55,8 +55,11 @@ Meilleur 12.Qxe7+ Qxe7 13.Rxe7+ Kxe7 14.Ba3 (+3,3, Stockfish profondeur 22).
 
 ## §REPRISE
 
-Tronçon 01 fait (non commité) : `point_of` et `assign_defenses` (appelée dans `analyze` après
-`assign_human_lines`), 616 tests verts. Essai réel (Stockfish + Maia, Elo 1711) sur le cas de
-référence : pointe attendue, une seule défense `a5` [p=0,93 ; Maia tronque à 90 % cumulés],
-réfutation `a5 Bxb4+ Kd7 Ne5+ Ke6`, reprise `(axb4, Rxa8)`. Suite : tronçon 02, puis run live
-par Nico avec `03_run_live.txt`.
+Tronçon 01 commité (c99b58e). Tronçon 02 fait (non commité) dans `execution/routers/chess_router.py` :
+fait « cloue X sur K » dans `_move_fact_items` ; `_point_text` (helpers `_line_start`,
+`_line_move_label`) alimente la ligne « Pointe : » + lignes « Si … » de `_variant_line`, les lignes
+`pointe (données)` / `défenses réfutées (données)` de `_build_enriched` et un bloc `[Consigne : …]`
+conditionnel. Sans clouage, la parenthèse défenseur se place avant le point final
+(« … prépare 15.Bxb4+, qui gagne Nb4 (12.Qxe7+ a pris Be7, défenseur de Nb4). »). 2 tests figés
+mis à jour (nouveaux faits « cloue » légitimes : 4...Qh4 cloue f2, 4.Bxc6 cloue d7), 3 tests
+ajoutés. Suite : run live par Nico avec `03_run_live.txt`.
