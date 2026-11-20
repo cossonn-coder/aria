@@ -995,10 +995,28 @@ function restoreState() {
   newPosition();
 }
 
+// Ouverture d'une fiche stockée (sprint 65) : identifiant passé par Telegram (start_param de la
+// Mini App, à défaut paramètre d'URL tgWebAppStartParam). La partie et son analyse viennent de la
+// fiche (POST /stored), sans recalcul ; il prime sur l'état sauvé. Introuvable → état sauvé.
+async function openStored(id) {
+  const response = await fetch("/stored", { method: "POST", body: JSON.stringify({ id }) });
+  if (!response.ok) {
+    restoreState();
+    $("status").textContent = "partie introuvable";
+    return;
+  }
+  const stored = await response.json();
+  $("playing").value = stored.playing;
+  $("pgn").value = stored.pgn;
+  loadGame(0, stored);
+  newPosition();
+}
+
 // Charge une partie PGN : comme « Nouvelle partie » (colonnes et bleu vidés), Elo et noms
 // depuis les en-têtes ("?" ou absent → champ vide), position cursor (départ par défaut) ; la courbe, les mats et les meilleurs
-// coups sont demandés au serveur (POST /game) et rangés par FEN dans evals.
-async function loadGame(cursor = 0) {
+// coups sont demandés au serveur (POST /game) et rangés par FEN dans evals, ou pris dans curve
+// quand ils sont déjà connus (fiche stockée, sprint 65).
+async function loadGame(cursor = 0, curve = null) {
   const pgn = $("pgn").value;
   const reader = new Chess();
   // loadPgn lève une erreur sur un PGN illisible : on repart alors d'une partie vide.
@@ -1021,16 +1039,18 @@ async function loadGame(cursor = 0) {
   game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…" };
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   goTo(cursor);
-  const loaded = game;
-  const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn, playing: $("playing").value }) });
-  if (loaded !== game) return;
-  if (response.ok) {
-    const { wins, mates, best, history } = await response.json();
+  if (!curve) {
+    const loaded = game;
+    const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn, playing: $("playing").value }) });
+    if (loaded !== game) return;
+    if (response.ok) curve = await response.json();
+    else game.message = "courbe indisponible";
+  }
+  if (curve) {
+    const { wins, mates, best, history } = curve;
     wins.forEach((win, i) => evals.set(game.fens[i], { win, mate: mates[i], best: best[i] }));
     game.wins = wins;
     game.history = history;
-  } else {
-    game.message = "courbe indisponible";
   }
   refreshGame();
   drawShapes();
@@ -1181,7 +1201,10 @@ if (telegram?.initData) {
   telegram.disableVerticalSwipes();
 }
 
-restoreState();
+const storedId = telegram?.initDataUnsafe?.start_param
+  || new URLSearchParams(location.search).get("tgWebAppStartParam");
+if (storedId) openStored(storedId);
+else restoreState();
 poll();
 </script>
 </body>

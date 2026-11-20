@@ -72,12 +72,15 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | État |
 |---|---|---|
-| 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ⏳ |
+| 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ✅ (634 tests verts) |
 | 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ⏳ |
 | 03 | `03_run_live.txt` : run live (Nico) | ⏳ |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
-`/sprint-auto sprint 65` (tronçon 01), puis 02, puis run live `03_run_live.txt` par Nico.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Tronçon 01 fait :
+`board_interface.stored_game` + `POST /stored` (fiche → pgn, playing, wins, best, mates `None`,
+history, sans moteur), `GET /` sur le chemin seul, page `openStored` au démarrage
+(`start_param` / `tgWebAppStartParam`, prime sur `localStorage`). Prochaine étape :
+`/sprint-auto sprint 65` (tronçon 02), puis run live `03_run_live.txt` par Nico.
 Dettes 62-3 et 62-7 : à fermer au run live.

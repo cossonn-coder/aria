@@ -277,3 +277,63 @@ def test_accuracy_route_serves_line_accuracy():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_index_accepts_telegram_start_param(monkeypatch):
+    # Sprint 65, tronçon 01 : Telegram ouvre la Mini App avec des paramètres d'URL.
+    monkeypatch.setattr("interfaces.board_interface._load_maia_in_background", lambda: None)
+    server = make_server(0, BoardWorker(lambda: object(), ""))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}/?tgWebAppStartParam=abc"
+        with urllib.request.urlopen(url) as response:
+            assert response.status == 200 and "openStored(storedId)" in response.read().decode()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_stored_serves_fiche_without_analysis(monkeypatch):
+    # Sprint 65, tronçon 01 (62-7) : partie et courbe lues dans la fiche, aucun moteur.
+    import chess.pgn
+    import io
+
+    import interfaces.board_interface as board_interface
+
+    def no_analysis(*args):
+        raise AssertionError("analyze_game appelé")
+
+    monkeypatch.setattr(board_interface, "analyze_game", no_analysis)
+    plies = [
+        {"color": "white", "uci": "e2e4", "win_before": 50, "win_after": 52, "loss": 0,
+         "quality": "best", "best_san": "e4"},
+        {"color": "black", "uci": "e7e5", "win_before": 48, "win_after": 40, "loss": 8,
+         "quality": "inaccuracy", "best_san": "c5"},
+        {"color": "white", "uci": "g1f3", "win_before": 60, "win_after": 58, "loss": 2,
+         "quality": "good", "best_san": "Nf3"},
+    ]
+    fiche = {"id": "chess_game_0123456789abcdef", "plies_json": json.dumps(plies),
+             "nico_color": "black", "opponent": "Bob", "elo_nico": 1500, "elo_opponent": 1450,
+             "date": "2026.11.20", "result": "0-1", "time_control": "600"}
+    server = make_server(0, BoardWorker(lambda: object(), ""), load_games=lambda: [fiche])
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        data = _request(base, "/stored", {"id": "0123456789abcdef"})
+        game = chess.pgn.read_game(io.StringIO(data["pgn"]))
+        assert [m.uci() for m in game.mainline_moves()] == ["e2e4", "e7e5", "g1f3"]
+        assert game.headers["White"] == "Bob" and game.headers["Black"] == "Nico"
+        assert game.headers["BlackElo"] == "1500" and game.headers["TimeControl"] == "600"
+        # Coup noir : 100 − win_before ramène au point de vue des blancs.
+        assert data["wins"] == [50, 52, 60, 58]
+        assert data["best"] == ["e4", "c5", "Nf3", None]
+        assert data["mates"] == [None] * 4
+        assert data["playing"] == "black"
+        assert data["history"][0].startswith("Précision")
+
+        with pytest.raises(urllib.error.HTTPError) as missing:
+            _request(base, "/stored", {"id": "ffffffffffffffff"})
+        assert missing.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
