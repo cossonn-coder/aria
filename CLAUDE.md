@@ -152,11 +152,11 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 61 clos (tag `sprint-61`) : pointe d'une combinaison sous le diagramme (coup final,
-clouage, défenses réfutées) et miniatures dès le coup 1 (`docs/sprint61/00_etat.md`).
+Sprint 62 clos (tag `sprint-62`) : mat raté en ≤ 7 coups toujours commenté, suite jusqu'au mat,
+légende « mat en N manqué » (`docs/sprint62/00_etat.md`).
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
-Prochain : **sprint 62**, cible à arbitrer (échiquier centré sur le joueur du bas, ou
-répertoire connu d'ARIA) : `docs/sprint62/00_etat.md`. Prochaine étape : `/conception sprint 62`.
+Prochain : **sprint 63**, suivi Telegram avec moteur (62-2 + 61-1), feuille de route dans
+`docs/sprint63/00_etat.md`. Prochaine étape : `/conception sprint 63`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

@@ -559,6 +559,15 @@ def test_caption_error_shows_eval_drop():
     assert caption.endswith("évaluation : 62 % → 41 % (−21 pts)")
 
 
+def test_caption_missed_mate():
+    # Sprint 62 : mat raté → « mat en N manqué » à la place de la perte en pts.
+    ply = _ply(7, 4, "Bg4", "Bxf7+", "c4f7")
+    ply.missed_mate = 2
+    caption = _caption(1, CriticalPosition(kind="a", ply=ply, score=20.0), [ply])
+    assert caption.endswith("meilleur 🟢 4...Bxf7+, mat en 2 manqué")
+    assert "pts" not in caption
+
+
 def test_caption_only_move_shows_second_best_gap():
     ply = _ply(7, 4, "Bg4", "Bg4", "c8g4")
     ply.win_before, ply.second_gap = 72.0, 24.0

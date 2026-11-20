@@ -45,6 +45,8 @@ _PV_DISPLAY = 6
 # Suites comparées d'une erreur (sprint 50) : borne en demi-coups, pour tenir dans une légende.
 _FORCING_MAX = 10
 _FORCING_TIME = 0.15
+# Mat raté (sprint 62) : longueur maximale, en coups du trait, d'un mat forcé manqué toujours commenté.
+_MISSED_MATE_MAX = 7
 
 # Options Stockfish du live et de position_eval (sprint 27) : la machine a 16 cœurs.
 ENGINE_OPTIONS = {"Threads": 8, "Hash": 256}
@@ -105,6 +107,9 @@ class PlyAnalysis:
     played_p: float | None = None
     # Motifs tactiques du meilleur coup (sprint 29, clés de chess_coach.motifs).
     motifs: list = field(default_factory=list)
+    # Mat raté (sprint 62) : N si le meilleur coup mate en N ≤ _MISSED_MATE_MAX et que le coup
+    # joué ne garde pas de mat (voir missed_mate) ; None sinon.
+    missed_mate: int | None = None
 
 
 @dataclass
@@ -203,6 +208,16 @@ def _win(cp: int) -> float:
     """Centipions (point de vue du joueur) → % de gain, formule Lichess."""
     cp = max(-_CP_CLAMP, min(_CP_CLAMP, cp))
     return 50 + 50 * (2 / (1 + math.exp(-0.00368208 * cp)) - 1)
+
+
+def missed_mate(best_mate: int | None, cp_after: int) -> int | None:
+    """Longueur du mat raté, ou None. best_mate : mat du meilleur coup en coups du trait
+    (score moteur .mate(), None sans mat) ; cp_after : score après le coup joué, point de vue
+    du trait. Le coup joué garde un mat si cp_after est un score de mat (≥ _MATE_SCORE − _CP_CLAMP) ;
+    le mat donné par le coup lui-même vaut _MATE_SCORE."""
+    if best_mate is None or not 0 < best_mate <= _MISSED_MATE_MAX:
+        return None
+    return None if cp_after >= _MATE_SCORE - _CP_CLAMP else best_mate
 
 
 def _terminal_cp(board: chess.Board) -> int:
@@ -374,6 +389,7 @@ def analyze_game(game, nico_color: str, engine_path: str, time_per_position: flo
             eval_after_cp=sign * cp_after,
             pv_uci=[m.uci() for m in best_pv[:_CLEAR_HARD_MAX]],
             pv_mate=best_score.is_mate() and best_score.mate() > 0,
+            missed_mate=missed_mate(best_score.mate(), cp_after),
         ))
     return plies
 
@@ -518,7 +534,8 @@ def _critical_errors(plies: list, nico_color: str, first_move: int) -> list:
     for p in plies:
         if p.color != nico_color or p.move_number < first_move:
             continue
-        if p.loss >= 10:
+        # Un mat raté est toujours une erreur, même à perte < 10 (sprint 62).
+        if p.loss >= 10 or p.missed_mate is not None:
             prev = plies[p.ply - 1] if p.ply > 0 else None
             kind = "b" if prev is not None and prev.loss >= 20 else "a"
             errors.append(CriticalPosition(kind=kind, ply=p, score=p.loss))
@@ -541,7 +558,9 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     écart au 2e ≥ 15). Les c et e ne sont retenues que si la PV du meilleur coup
     rend l'avantage clair (clear_advantage) ; un ply à la fois e et c reste e.
     (d) occasion explosive, fournie par chess_coach.explosive (perte du coup joué
-    < 10, donc jamais a/b). Budget unique de 4 (sprint 57) : la pire erreur de Nico
+    < 10, donc jamais a/b). Un mat raté (missed_mate) est une erreur a/b quelle que soit
+    sa perte. Budget unique de 4 (sprint 57) : les mats ratés d'abord (sprint 62, mat le
+    plus court en tête), puis la pire erreur de Nico
     (a ou b, plus forte perte) d'abord, puis les occasions manquées b et d hors pari,
     puis a, puis d pari (is_gamble), puis e, puis c, chaque groupe par score décroissant ;
     une position déjà prise est sautée. Une position
@@ -581,8 +600,11 @@ def select_critical(plies: list, nico_color: str, explosive=(), first_move: int 
     plain = [c for c in errors if c.kind == "a"]
     gambles = [d for d in explosives if is_gamble(d.explosive)]
     sure = [d for d in explosives if not is_gamble(d.explosive)]
-    for group in (worst, missed, sure, plain, gambles, turns, uniques):
-        for candidate in sorted(group, key=lambda c: c.score, reverse=True):
+    # Mats ratés (sprint 62) en tête du budget, le plus court d'abord.
+    mates = sorted((c for c in errors if c.ply.missed_mate is not None), key=lambda c: c.ply.missed_mate)
+    for group in (mates, worst, missed, sure, plain, gambles, turns, uniques):
+        ordered = group if group is mates else sorted(group, key=lambda c: c.score, reverse=True)
+        for candidate in ordered:
             if candidate.ply.ply not in taken and len(selected) < _CRITICAL_BUDGET:
                 selected.append(candidate)
                 taken.add(candidate.ply.ply)
@@ -637,15 +659,37 @@ def forcing_line(engine, fen: str, pv_uci: list) -> list:
     return line
 
 
+def mate_line(engine, fen: str, pv_uci: list, mate_in: int) -> list:
+    """Suite d'un coup qui mate en mate_in (SAN, ce coup en tête), jusqu'au mat, coups calmes
+    compris, bornée à 2 * mate_in − 1 demi-coups. PV tronquée : réanalyse, comme forcing_line."""
+    board = chess.Board(fen)
+    moves = [chess.Move.from_uci(uci) for uci in pv_uci]
+    line = []
+    while len(line) < 2 * mate_in - 1 and not board.is_game_over():
+        if not moves:
+            moves = list(engine.analyse(board, chess.engine.Limit(time=_FORCING_TIME))["pv"])
+        move = moves.pop(0)
+        line.append(board.san(move))
+        board.push(move)
+    return line
+
+
+def _compared_line(engine, item) -> list:
+    """item = (fen, pv_uci, mat raté ou None) : suite jusqu'au mat si mat raté, sinon forcée."""
+    fen, pv_uci, mate_in = item
+    return mate_line(engine, fen, pv_uci, mate_in) if mate_in else forcing_line(engine, fen, pv_uci)
+
+
 def assign_forcing_lines(critical: list, plies: list, engine_path: str) -> None:
-    """Remplit les deux suites comparées des erreurs (sortes a et b)."""
+    """Remplit les deux suites comparées des erreurs (sortes a et b) ; la suite du meilleur
+    coup d'un mat raté va jusqu'au mat (sprint 62)."""
     errors = [c for c in critical if c.kind in ("a", "b")]
     items = []
     for c in errors:
         p = c.ply
         after = plies[p.ply + 1].pv_uci if p.ply + 1 < len(plies) else []
-        items += [(p.fen_before, p.pv_uci), (p.fen_before, [p.uci, *after])]
-    lines = run_on_engines(engine_path, lambda engine, item: forcing_line(engine, *item), items)
+        items += [(p.fen_before, p.pv_uci, p.missed_mate), (p.fen_before, [p.uci, *after], None)]
+    lines = run_on_engines(engine_path, _compared_line, items)
     for i, c in enumerate(errors):
         c.best_line_san, c.played_line_san = lines[2 * i], lines[2 * i + 1]
 

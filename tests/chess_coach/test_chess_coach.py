@@ -15,6 +15,7 @@ from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
 from chess_coach.analysis import forcing_line
+from chess_coach.analysis import mate_line, missed_mate
 from chess_coach.explosive import (ExplosiveMove, _accepted_deficit, _admissible, _expectation, _line_sacrifice,
                                    is_brilliant)
 from chess_coach.render import (ARROW_HEAD, CURVE_LINE, CURVE_MARGIN, CURVE_SIZE, SIZE, _square_center, error_arrow,
@@ -550,6 +551,36 @@ def test_forcing_line_extends_truncated_pv():
     """Ligne tronquée : le moteur est relancé ; la menace (Nf3 sur e5) et sa réponse sont montrées."""
     engine = _ScriptedEngine(["e7e5"], ["g1f3"], ["b8c6"], ["a2a3"])
     assert forcing_line(engine, _START, ["e2e4"]) == ["e4", "e5", "Nf3", "Nc6"]
+
+
+# Partie du 2026-11-20 (sprint 62) : après 9...fxe6, 10.Bb5+ c6 11.Nf6# mate en 2.
+_MATE_FEN = "rnb4r/pppkp1bp/4p1p1/3N3n/5B2/8/PPP2PPP/3RKBNR w K - 0 10"
+
+
+def test_mate_line_goes_to_mate():
+    """PV tronquée au premier coup : réanalyse jusqu'au mat."""
+    engine = _ScriptedEngine(["c7c6", "d5f6"])
+    assert mate_line(engine, _MATE_FEN, ["f1b5"], 2) == ["Bb5+", "c6", "Nf6#"]
+
+
+def test_missed_mate_rule():
+    # Mat en 2 raté (+467 joué) ; mat gardé ou donné par le coup joué ; mat trop long.
+    assert missed_mate(2, 467) == 2
+    assert missed_mate(2, 99999) is None
+    assert missed_mate(1, 100000) is None
+    assert missed_mate(8, 467) is None
+    assert missed_mate(None, 467) is None
+
+
+def test_select_critical_missed_mate_first():
+    # Sprint 62 : 5 erreurs ≥ 30 + un mat raté à 12 pts : le mat est retenu, en tête du budget.
+    plies = [_ply(i, 0) for i in range(41)]
+    for i, loss in ((22, 40), (24, 30), (26, 35), (28, 45), (30, 50)):
+        plies[i] = _ply(i, loss)
+    plies[18] = _ply(18, 12)
+    plies[18].missed_mate = 2
+    selected = select_critical(plies, "white")
+    assert [(c.kind, c.ply.ply) for c in selected] == [("a", 18), ("a", 22), ("a", 28), ("a", 30)]
 
 
 def test_is_brilliant_piece_left_to_a_pawn():
