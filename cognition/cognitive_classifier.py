@@ -8,6 +8,7 @@
 #   1. Metadata image (Telegram envoie une photo)   → IMAGE_INPUT
 #   1b. PGN collé (en-tête White/Black + coups)      → CHESS_ANALYSIS
 #   1c. Coup SAN après une position lue en image     → CHESS_BOARD_MOVE
+#   1d. Position citée après une analyse de partie   → CHESS_FOLLOWUP
 #   2. URL http(s):// dans le message                → URL_READ
 #   2b. « oui » / « lis la suite » après lecture partielle → URL_READ
 #   2c. « relis… » ou « oui » après proposition de relecture → DOC_REREAD
@@ -29,12 +30,14 @@
 #   is_interrogative_caption()        — caption = question sur le contenu de l'image
 #   is_chess_image()                  — image d'échiquier à résoudre (sprint 59)
 #   detect_san_move()                 — premier coup SAN du message (sprint 59)
+#   detect_chess_followup()           — question citant une position analysée (sprint 63)
 
 import json
 import re
 from cognition.cognitive_context import (
-    CHESS_POSITION_MARKER, CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER,
+    CHESS_ANALYSIS_MARKER, CHESS_POSITION_MARKER, CognitiveOperation, REREAD_PROPOSAL, URL_PARTIAL_MARKER,
 )
+from config import config
 from memory.mempalace_bridge import MempalaceBridge
 from memory.writer import write_classifier_cache
 from logger import get_logger
@@ -249,6 +252,29 @@ def detect_chess_board_move(message: str, metadata: dict, bridge) -> bool:
     return bool(user_turns) and CHESS_POSITION_MARKER in user_turns[-1]
 
 
+# Position citée dans une question de suivi (sprint 63) : « position 2 », « coup 10 ».
+POSITION_CITE_RE = re.compile(r"\bposition\s+(\d+)", re.IGNORECASE)
+MOVE_CITE_RE = re.compile(r"\bcoup\s+(\d+)", re.IGNORECASE)
+
+
+def detect_chess_followup(message: str, metadata: dict, bridge) -> bool:
+    """
+    Retourne True si le message cite une position d'une partie analysée.
+
+    L'historique n'est lu (via le bridge) que si le message cite une position
+    (« position N », « coup N » ou un coup SAN) : un tour `user` des
+    max_history_turns derniers tours doit porter CHESS_ANALYSIS_MARKER, posé
+    par ChessExecutionRouter dans le message enrichi de l'analyse (sprint 63).
+    """
+    cites = (POSITION_CITE_RE.search(message) or MOVE_CITE_RE.search(message)
+             or detect_san_move(message) is not None)
+    if not cites or bridge is None:
+        return False
+    conversation_key = str(metadata.get("chat_id", "default"))
+    history = bridge.load_conversation_history(conversation_key, n=config.max_history_turns * 2)
+    return any(t.get("role") == "user" and CHESS_ANALYSIS_MARKER in t["content"] for t in history)
+
+
 # Verbes de relecture explicite d'un document en mémoire (sprint 43).
 _DOC_REREAD_WORDS = ["relis", "relire", "rouvre"]
 
@@ -412,6 +438,10 @@ def classify_operation(
     # ── 1c. Relance « et si X ? » sur une position lue en image (sprint 59) ──
     if detect_chess_board_move(message, metadata, bridge):
         return CognitiveOperation.CHESS_BOARD_MOVE
+
+    # ── 1d. Question citant une position d'une partie analysée (sprint 63) ──
+    if detect_chess_followup(message, metadata, bridge):
+        return CognitiveOperation.CHESS_FOLLOWUP
 
     # ── 2. URL collée → lecture de la page ──────────────────────────────────
     # Prioritaire sur la recherche web (URL + « cherche en ligne » = lecture)

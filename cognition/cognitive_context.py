@@ -23,6 +23,7 @@ class CognitiveOperation(Enum):
     DOC_REREAD = "doc_reread"  # relecture d'un document en mémoire (sprint 43)
     WEB_RESEARCH = "web_research"  # recherche autonome (sprint 45)
     CHESS_BOARD_MOVE = "chess_board_move"  # relance « et si X ? » sur position lue en image (sprint 59)
+    CHESS_FOLLOWUP = "chess_followup"  # question citant une position d'une partie analysée (sprint 63)
 
 
 # Préfixe du marqueur de lecture partielle posé par web_router dans le
@@ -38,6 +39,11 @@ REREAD_PROPOSAL = "Veux-tu que je relise « "
 # l'historique (« [Position d'échecs lue sur image : <FEN>] ») ; une relance
 # « et si X ? » le relit (sprint 59, tronçon 06).
 CHESS_POSITION_MARKER = "[Position d'échecs lue sur image :"
+
+# Marqueur d'analyse de partie posé par chess_router dans le message enrichi
+# (donc dans le tour `user` de l'historique) ; une question de suivi qui cite
+# une position le relit pour retrouver le PGN (sprint 63).
+CHESS_ANALYSIS_MARKER = "[Analyse Stockfish de la partie"
 
 
 # TOP_K mémoire par opération

@@ -1169,3 +1169,62 @@ def test_enriched_gives_point_data_and_consigne(monkeypatch, tmp_path):
     assert "[Consigne : pour chaque position qui a la ligne « pointe (données) »" in content
     caption = result["images"][0]["caption"]
     assert "Pointe : 14.Ba3 cloue Nb4 sur Ke7" in caption and len(caption) <= 1024
+
+
+# ── Sprint 63 : question de suivi avec moteur (Stockfish réel) ───────────────
+
+from pathlib import Path
+
+from cognition.cognitive_context import CHESS_ANALYSIS_MARKER
+from config import config
+
+STOCKFISH = Path(config.stockfish_path)
+
+_FOLLOWUP_PGN = (
+    '[White "staroflexeur"]\n[Black "X"]\n\n1.e4 g6 2.d4 Bg7 3.Nc3 d6 4.Bf4 Nf6 5.e5 dxe5 '
+    '6.dxe5 Qxd1+ 7.Rxd1 Nh5 8.Nd5 Kd7 9.e6+ fxe6 10.Nxc7+ *'
+)
+_FOLLOWUP_TURN = (
+    f"Partie contre X\n{CHESS_ANALYSIS_MARKER} — Nico joue les blancs (pseudo dans l'en-tête) :\n"
+    "Position 1 (erreur de Nico) — coup 10 :\n  joué 10.Nxc7+, perte 40 pts\n"
+    "[Consigne : …]\n\n" + _FOLLOWUP_PGN
+)
+
+
+def _followup(monkeypatch, tmp_path, message):
+    monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
+    monkeypatch.setattr(chess_router_mod, "render_position", lambda *a, **k: a[3])
+    bridge = MagicMock()
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": _FOLLOWUP_TURN}, {"role": "assistant", "content": "analyse"},
+    ]
+    llm_exec = MagicMock()
+    llm_exec.execute.return_value = {"text": "réponse LLM"}
+    result = ChessExecutionRouter(llm_execution_router=llm_exec, mempalace_bridge=bridge).execute(
+        {"op_type": "chess_followup", "content": message, "metadata": {"chat_id": 42}})
+    return result, llm_exec
+
+
+@pytest.mark.skipif(not STOCKFISH.exists(), reason="Stockfish absent")
+def test_followup_move_and_proposed_mate(monkeypatch, tmp_path):
+    message = "au coup 10 j'avais mat avec Bb5+ ?"
+    result, llm_exec = _followup(monkeypatch, tmp_path, message)
+    assert result["text"].startswith("Coup 10 (blancs) : joué 10.Nxc7+")
+    assert "10.Bb5+" in result["text"] and "mat en 2" in result["text"]
+    assert len(result["images"]) == 1
+    content = llm_exec.execute.call_args[0][0]["content"]
+    assert message in content and "pièces :" in content
+    assert CHESS_ANALYSIS_MARKER not in content
+
+
+@pytest.mark.skipif(not STOCKFISH.exists(), reason="Stockfish absent")
+def test_followup_position_n_same_position(monkeypatch, tmp_path):
+    result, _ = _followup(monkeypatch, tmp_path, "position 1 ?")
+    assert result["text"].startswith("Coup 10 (blancs) : joué 10.Nxc7+")
+
+
+def test_followup_unknown_move_without_engine_nor_llm(monkeypatch, tmp_path):
+    monkeypatch.setattr(chess_router_mod, "solve", MagicMock(side_effect=AssertionError))
+    result, llm_exec = _followup(monkeypatch, tmp_path, "et au coup 40 ?")
+    assert result["text"].startswith("Je ne trouve pas cette position dans la partie contre X.")
+    llm_exec.execute.assert_not_called()

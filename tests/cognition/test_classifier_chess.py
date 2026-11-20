@@ -16,3 +16,30 @@ def test_chesscom_pgn_with_link_is_chess_analysis():
 
 def test_moves_without_header_are_not_pgn():
     assert not detect_pgn("après 1.e4 e5 2.Cf3 quelles idées ?")
+
+
+# ── Sprint 63 : question de suivi citant une position d'une partie analysée ──
+
+from unittest.mock import MagicMock
+
+from cognition.cognitive_context import CHESS_ANALYSIS_MARKER, CHESS_POSITION_MARKER
+
+
+def _bridge(user_turn):
+    bridge = MagicMock()
+    bridge.load_conversation_history.return_value = [
+        {"role": "user", "content": user_turn}, {"role": "assistant", "content": "réponse"},
+    ]
+    return bridge
+
+
+def test_followup_citing_move_after_analysis():
+    turn = f"{CHESS_ANALYSIS_MARKER} — Nico joue les blancs (pseudo dans l'en-tête) :\n…"
+    message = "au coup 10 j'avais mat avec Bb5+ ?"
+    assert classify_operation(message, bridge=_bridge(turn)) == CognitiveOperation.CHESS_FOLLOWUP
+    assert classify_operation(message, bridge=_bridge("bonjour")) != CognitiveOperation.CHESS_FOLLOWUP
+
+
+def test_board_move_stays_before_followup():
+    turn = f"{CHESS_POSITION_MARKER} 8/8/8/8/8/8/8/8 w - - 0 1]\n{CHESS_ANALYSIS_MARKER}"
+    assert classify_operation("et si 1...e6 ?", bridge=_bridge(turn)) == CognitiveOperation.CHESS_BOARD_MOVE

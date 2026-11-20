@@ -28,6 +28,7 @@ from uuid import uuid4
 import chess
 
 from chess_coach.analysis import analyze, is_gamble, new_targets, parse_pgn, split_pgn
+from chess_coach.board_reading import solve
 from chess_coach.clock import long_thinks, lost_on_time, move_times, time_line, verdict
 from chess_coach.conversion import conversion_line, repeated_ideas, winning_period
 from chess_coach.explosive import is_brilliant
@@ -40,7 +41,8 @@ from chess_coach.render import (ALT_ARROW, CURVE_BEST, CURVE_CORRECT, CURVE_NEUT
 from chess_coach.structure import structure_line
 from chess_coach.summary import nico_wins, story_line, story_plies, summarize, summary_text
 from config import config
-from cognition.cognitive_context import CognitiveOperation
+from cognition.cognitive_classifier import MOVE_CITE_RE, POSITION_CITE_RE, _SAN_MOVE_RE
+from cognition.cognitive_context import CHESS_ANALYSIS_MARKER, CognitiveOperation
 from execution.routers.execution_base import BaseRouter
 from logger import get_logger
 from memory.writer import delete_chess_games, write_chess_game
@@ -1039,6 +1041,96 @@ def _duplicate_text(game: dict) -> str:
             f"{f' le {date}' if date else ''}.")
 
 
+# ── Question de suivi avec moteur (sprint 63) ────────────────────────────────
+
+# Premier en-tête PGN du tour d'analyse : les lignes « [Analyse … » et « [Consigne : … »
+# n'ont pas de guillemet après leur premier mot.
+_PGN_HEADER_RE = re.compile(r'^\s*\[[A-Za-z]+ "', re.MULTILINE)
+_NICO_COLOR_RE = re.compile(r"Nico joue les (blancs|noirs)")
+# « 10.Bb5+ », « 10...Nf6 » : coup numéroté, camp donné par « . » ou « ... ».
+_NUMBERED_SAN_RE = re.compile(r"(\d+)\s*(\.\.\.|\.)\s*" + _SAN_MOVE_RE.pattern)
+# Nombre de coups des lignes moteur données en faits au LLM.
+_FOLLOWUP_LINE_MAX = 8
+
+_FOLLOWUP_CONSIGNE = (
+    "[Consigne : réponds en 2 à 3 phrases à la question de Nico, à partir de ces faits "
+    "uniquement. N'invente aucun coup. Un mat n'existe que s'il figure dans une ligne. "
+    "Ne recopie pas la ligne d'évaluation, elle est déjà affichée.]"
+)
+
+
+def _game_plies(game) -> list:
+    """Demi-coups de la partie : (n° de coup, camp, FEN avant, coup)."""
+    board = game.board()
+    plies = []
+    for move in game.mainline_moves():
+        color = "white" if board.turn == chess.WHITE else "black"
+        plies.append((board.fullmove_number, color, board.fen(), move))
+        board.push(move)
+    return plies
+
+
+def _cited_ply(message: str, turn: str, plies: list, nico_color: str):
+    """Demi-coup cité par la question (premier cas qui s'applique), ou None :
+    « position N » du tour d'analyse, SAN numéroté, « coup N » de Nico, puis
+    SAN seul (première position de Nico, depuis la fin, où il est légal)."""
+    def at(number: int, color: str):
+        return next((p for p in plies if p[0] == number and p[1] == color), None)
+
+    if match := POSITION_CITE_RE.search(message):
+        block = re.search(rf"^Position {match.group(1)} \(.*?\n  joué (\d+)(\.\.\.|\.)", turn, re.MULTILINE)
+        return at(int(block.group(1)), "white" if block.group(2) == "." else "black") if block else None
+    if match := _NUMBERED_SAN_RE.search(message):
+        return at(int(match.group(1)), "white" if match.group(2) == "." else "black")
+    if match := MOVE_CITE_RE.search(message):
+        return at(int(match.group(1)), nico_color)
+    san = _SAN_MOVE_RE.search(message).group(1)
+    for p in reversed(plies):
+        if p[1] == nico_color and _parse_san(p[2], san) is not None:
+            return p
+    return None
+
+
+def _parse_san(fen: str, san: str):
+    """Coup SAN légal dans `fen`, ou None."""
+    try:
+        return chess.Board(fen).parse_san(san)
+    except ValueError:
+        return None
+
+
+def _proposed_move(message: str, fen: str, played):
+    """Premier SAN du message légal dans `fen` et différent du coup joué, ou None."""
+    for match in _SAN_MOVE_RE.finditer(message):
+        move = _parse_san(fen, match.group(1))
+        if move is not None and move != played:
+            return move
+    return None
+
+
+def _mover_eval(score, after_move: bool, mover: str) -> tuple:
+    """Évaluation vue du camp qui joue le coup cité : (texte, mat en N ou None).
+    after_move : score déjà inversé d'une position après le coup ; le coup lui-même
+    compte alors dans « mat en N »."""
+    other = "black" if mover == "white" else "white"
+    if score.is_mate():
+        mate = score.mate()
+        if mate > 0 or (after_move and mate == 0):
+            n = mate + 1 if after_move else mate
+            return f"mat en {n}", n
+        return f"mat en {-mate} pour les {_COLOR_FR[other]}", None
+    return f"{score.score() / 100:+.1f}".replace(".", ","), None
+
+
+def _san_line(fen: str, moves: list) -> list:
+    """Coups UCI de `moves` rejoués depuis `fen`, en SAN."""
+    board, sans = chess.Board(fen), []
+    for move in moves:
+        sans.append(board.san(move))
+        board.push(move)
+    return sans
+
+
 class ChessExecutionRouter(BaseRouter):
     """
     Effecteur « coach d'échecs » du pipeline d'exécution.
@@ -1055,6 +1147,10 @@ class ChessExecutionRouter(BaseRouter):
     def execute(self, payload: dict) -> dict:
         message  = str(payload.get("content") or "")
         metadata = payload.get("metadata", {})
+
+        # Question de suivi citant une position d'une partie analysée (sprint 63).
+        if payload.get("op_type") == CognitiveOperation.CHESS_FOLLOWUP.value:
+            return self._execute_followup(message, metadata)
 
         # Plusieurs parties (sprint 42) : toutes analysées, réponse groupée.
         games = split_pgn(message)
@@ -1088,6 +1184,85 @@ class ChessExecutionRouter(BaseRouter):
                 "metadata": metadata,
             })
         return self._execute_game(analysis, message, metadata, timestamp=timestamp, replaces=replaces)
+
+    def _execute_followup(self, message: str, metadata: dict) -> dict:
+        """Question de suivi avec moteur (sprint 63) : la partie est relue dans le dernier
+        tour d'analyse de l'historique (PGN en fin de tour), rejouée jusqu'à la position
+        citée, évaluée par Stockfish ; ligne et diagramme écrits par le code, puis réponse
+        LLM courte nourrie des seuls faits de cette position."""
+        conversation_key = str(metadata.get("chat_id", "default"))
+        history = self.mempalace_bridge.load_conversation_history(
+            conversation_key, n=config.max_history_turns * 2)
+        turn = [t["content"] for t in history
+                if t.get("role") == "user" and CHESS_ANALYSIS_MARKER in t["content"]][-1]
+        game = parse_pgn(turn[_PGN_HEADER_RE.search(turn).start():])
+        nico_color = "black" if _NICO_COLOR_RE.search(turn).group(1) == "noirs" else "white"
+        opponent = game.headers.get("Black" if nico_color == "white" else "White", "adversaire inconnu")
+
+        cited = _cited_ply(message, turn, _game_plies(game), nico_color)
+        if cited is None:
+            log.info("chess_followup NOT_FOUND message=%r", message[:80])
+            return {"text": f"Je ne trouve pas cette position dans la partie contre {opponent}. "
+                            "Cite le coup, ex. « coup 10 »."}
+        number, color, fen, played = cited
+        proposed = _proposed_move(message, fen, played)
+
+        # ── Moteur : avant le coup, après le coup joué, après le coup proposé ──
+        board = chess.Board(fen)
+        best_score, best_pv = solve(fen)
+        best_eval, mate = _mover_eval(best_score, False, color)
+        best_san = _san_line(fen, best_pv[:_FOLLOWUP_LINE_MAX])
+        played_san = board.san(played)
+
+        def after(move) -> tuple:
+            """(évaluation après `move`, ligne SAN coup compris)."""
+            replay = board.copy()
+            replay.push(move)
+            score, pv = solve(replay.fen())
+            return (_mover_eval(-score, True, color)[0],
+                    [board.san(move)] + _san_line(replay.fen(), pv[:_FOLLOWUP_LINE_MAX - 1]))
+
+        played_eval, played_line = after(played)
+        text = (f"Coup {number} ({_COLOR_FR[color]}) : joué {_move_label(number, color, played_san)} "
+                f"({played_eval}) ; meilleur {_format_line(best_san, number, color)} ({best_eval})")
+        facts = [
+            f"Position avant le coup {number} des {_COLOR_FR[color]} "
+            f"(Nico joue les {_COLOR_FR[nico_color]}) :",
+            _pieces_line(fen),
+            f"  {_material_line(fen, nico_color)}",
+            f"  {_attacked_line(fen)}",
+            f"  structure : {structure_line(fen, nico_color)}",
+            f"  meilleur coup, évaluation {best_eval}, faits : {_move_facts(fen, best_san, number, color)}",
+            f"  coup joué, évaluation {played_eval}, faits : {_move_facts(fen, played_line, number, color)}",
+        ]
+        proposed_san = None
+        if proposed is not None:
+            proposed_eval, proposed_line = after(proposed)
+            proposed_san = proposed_line[0]
+            text += f" ; proposé {_move_label(number, color, proposed_san)} : {proposed_eval}"
+            facts.append(f"  coup proposé par Nico, évaluation {proposed_eval}, "
+                         f"faits : {_move_facts(fen, proposed_line, number, color)}")
+        text += "."
+
+        # ── Diagramme : position avant le coup, Nico en bas ──────────────────
+        out_dir = Path(config.image_output_dir) / "chess"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = str(out_dir / f"{uuid4().hex[:8]}_suivi.png")
+        best_ucis = [m.uci() for m in best_pv[:3]]
+        render_position(fen, nico_color, best_ucis[0] if best_ucis else None, out_path,
+                        played_uci=played.uci(), best_line_uci=best_ucis)
+
+        # ── LLM : réponse courte sur les seuls faits de la position ──────────
+        content = "\n".join(facts) + "\n" + _FOLLOWUP_CONSIGNE + f"\n\n{message}"
+        answer = self.llm_execution_router.execute({
+            "op_type" : CognitiveOperation.REASONING.value,
+            "content" : content,
+            "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME, "skip_history": True},
+        })
+        log.info("chess_followup OK move=%s proposed=%s mate=%s",
+                 _move_label(number, color, played_san), proposed_san or "-", mate or "-")
+        return {"text": text + "\n" + answer.get("text", ""),
+                "images": [{"path": out_path, "caption": ""}]}
 
     def _past_games(self) -> list:
         """(couleur de Nico, coups UCI) des fiches ; palace indisponible → aucune, l'analyse continue."""
@@ -1292,7 +1467,7 @@ class ChessExecutionRouter(BaseRouter):
             f"{label} {sum(1 for p in nico_plies if p.quality == key)}" for key, label in _QUALITY_FR
         )
 
-        lines = [anchor, f"[Analyse Stockfish de la partie — Nico joue les {_COLOR_FR[color]} "
+        lines = [anchor, f"{CHESS_ANALYSIS_MARKER} — Nico joue les {_COLOR_FR[color]} "
                  f"({_SOURCE_FR[analysis.color_source]}) :"]
         lines += _header_lines(analysis.headers)
         lines.append(f"Compteurs Nico : {counts}")
