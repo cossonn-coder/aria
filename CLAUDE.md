@@ -156,7 +156,7 @@ Sprint 63 clos (tag `sprint-63`) sans run live : suivi Telegram avec moteur (`CH
 live `docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
 Prochain : **sprint 64**, `/parties` sans échiquier (62-4, 62-5, 62-6), feuille de route dans
-`docs/sprint64/00_etat.md`. Prochaine étape : `/conception sprint 64`.
+`docs/sprint64/00_etat.md`. Prochaine étape : `/sprint-auto sprint 64`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

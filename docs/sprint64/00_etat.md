@@ -1,8 +1,9 @@
 # Sprint 64 — état du sprint
 
-**Phase** : A, à concevoir (`/conception sprint 64`).
+**Phase** : B figée (Nico, 2026-11-20 : « ok »). Prête pour `/sprint-auto sprint 64`.
 **Sujet** : `/parties` sans échiquier : tri (62-4), rapide/blitz (62-5), `details` (62-6).
-**Branche** : à créer depuis `main` à la conception.
+**Branche** : `feat/sprint64-parties`, depuis `main` @ `9ab136f`.
+**Audit** : `audit_parties.md`.
 
 ## Contexte hérité
 
@@ -28,6 +29,24 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 8. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 9. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
+## Décisions arrêtées (Nico, 2026-11-20)
+
+- **Tri 62-4** : nombre de parties, puis % de victoires, puis nombre de nulles (le plus d'abord).
+  `/ouvertures` garde la plus jouée en bas. Raison : demande « puis égalité » = les nulles.
+- **Cadence 62-5** : règle chess.com, durée = base + 40 × incrément ; blitz < 600 s ≤ rapide.
+  Mots `rapide` / `blitz` sur `/parties` et `/ouvertures`, combinables avec ouverture et
+  période. Fiches sans cadence exclues des deux filtres.
+- **`details` 62-6** : sans `details`, bilan court (« Aujourd'hui » ou période, puis
+  « 10 dernières », + performance). Avec `details` : sortie complète actuelle, une ligne par
+  partie quelle que soit la période. Non cliquable : lien vers l'échiquier = étape 4 (62-3).
+
+## Tronçons
+
+| # | Tronçon | État |
+|---|---|---|
+| 01 | `01_parties.md` : arguments, tri, cadence, `/parties` court / `details` | ⏳ |
+| 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
+
 ## Dettes
 
 | # | Dette | Constat | Piste |
@@ -46,9 +65,9 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'au run live `docs/sprint63/02_run_live.txt` |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
 | 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | — |
-| 62-4 | Tri des ouvertures | `/parties` et `/ouvertures` : tri par nombre de parties, puis % de victoires, puis égalité | **Sprint 64** |
-| 62-5 | `/parties rapide` et `/parties blitz` | Séparer par cadence (`TimeControl` du PGN) | **Sprint 64** |
-| 62-6 | `/parties details` | Liste cliquable des parties ; sans `details` : V/D du jour et des 10 dernières | **Sprint 64** |
+| 62-4 | Tri des ouvertures | `/parties` et `/ouvertures` : tri par nombre de parties, puis % de victoires, puis égalité | **Sprint 64** (fermée au run live) |
+| 62-5 | `/parties rapide` et `/parties blitz` | Séparer par cadence (`TimeControl` du PGN) | **Sprint 64** (fermée au run live) |
+| 62-6 | `/parties details` | Liste cliquable des parties ; sans `details` : V/D du jour et des 10 dernières | **Sprint 64** (fermée au run live) |
 | 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | — |
 | 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | — |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
@@ -58,4 +77,5 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Prochaine étape : `/conception sprint 64`.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
+`/sprint-auto sprint 64` (tronçon 01), puis run live par Nico (`02_run_live.txt`).
