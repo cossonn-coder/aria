@@ -152,11 +152,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 64 clos (tag `sprint-64`) : `/parties` court ou `details`, filtres `rapide` / `blitz`, tri des
-ouvertures. Sprint 63 : live `docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
+Sprint 65 clos (tag `sprint-65`) : parties de `/parties` et `/ouvertures <nom>` cliquables, ouvertes
+dans l'échiquier ARIA avec l'analyse stockée. Sprint 63 : live `docs/sprint63/02_run_live.txt` à
+jouer à la prochaine partie neuve.
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
-Prochain : **sprint 65**, `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7),
-feuille de route dans `docs/sprint65/00_etat.md`. Prochaine étape : `/conception sprint 65`.
+Prochain : **sprint 66**, miniatures jouables dans l'échiquier (62-8), feuille de route dans
+`docs/sprint66/00_etat.md`. Prochaine étape : `/conception sprint 66`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

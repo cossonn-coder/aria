@@ -1,6 +1,6 @@
 # Sprint 65 — état du sprint
 
-**Phase** : B figée (Nico, 2026-11-20 : « on suit tes recommandations, je valide »). Prêt pour `/sprint-auto sprint 65`.
+**Phase** : close (Nico, 2026-11-20 : « ok sur tel ça marche et ça à l'air bien », puis clôture demandée). Tag `sprint-65`.
 **Audit** : `audit_parties_echiquier.md`.
 **Sujet** : `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7).
 **Branche** : `feat/sprint65-parties-echiquier`, depuis `main` @ `4f0d8ed`.
@@ -44,8 +44,8 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 61-11 | Texte LLM inventé | « pion d7 passé », « Be7!? sacrifie 3 pions » | Faits plus contraints |
 | 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'au run live `docs/sprint63/02_run_live.txt` |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
-| 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | **Sprint 65** |
-| 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | **Sprint 65** |
+| 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | **Fermée** (sprint 65, run live validé) |
+| 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | **Fermée** (sprint 65, run live validé) |
 | 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | — |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
 | 62-11 | « pire coup » du résumé ignore le mat raté | Résumé : « pire coup 13.Be3 » alors que 10.Nxc7+ rate un mat (`summary.py:125`) | Après sprint 62 si Nico le veut |
@@ -53,6 +53,8 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 64-1 | Deux règles de cadence | `chess_coach/level._cadence` (Lichess, blitz < 480 s) ≠ `meta_commands.game_cadence` (chess.com, < 600 s) : 480–599 s classé différemment | Aligner si Nico le veut |
 | 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
 | 65-1 | Charger une position FEN dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | Champ ou collage FEN qui place la position et lance l'analyse live |
+| 65-2 | « partie introuvable » effacé | Échiquier : le message sur la ligne d'état est remplacé par l'analyse live après ~1 s (comme « PGN illisible ») | Garder le message affiché si Nico le veut |
+| 65-3 | Échiquier inaccessible hors tailnet | Tailscale Serve « tailnet only » : seul le téléphone ouvre la Mini App, pas l'ordi de Nico | Tailscale sur l'ordi ; Funnel (public) seulement après arbitrage |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## Décisions arrêtées (Nico, 2026-11-20)
@@ -74,19 +76,8 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 |---|---|---|
 | 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ✅ (634 tests verts) |
 | 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ✅ (636 tests verts) |
-| 03 | `03_run_live.txt` : run live (Nico) | ⏳ |
+| 03 | `03_run_live.txt` : run live (Nico) | ✅ (validé 2026-11-20 sur téléphone, `board_stored id=98783cc1785998f1 plies=24`, aucun `board_game`) |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis `03_run_live.txt`. Tronçons 01 et 02 faits.
-01 : `board_interface.stored_game` + `POST /stored` (fiche → pgn, playing, wins, best, mates `None`,
-history, sans moteur), `GET /` sur le chemin seul, page `openStored` au démarrage
-(`start_param` / `tgWebAppStartParam`, prime sur `localStorage`).
-02 : `meta_commands` — paramètre `link` (fiche → URL) dans `parties_text`, `parties_opening_text`,
-`opening_report_text`, `_ranking_lines` ; avec `link`, texte échappé et lignes de partie en
-`<a href>` ; sans `link`, sortie inchangée. `telegram_interface` : `_game_url`
-(`https://t.me/<bot>?startapp=<hash>`) et `_deliver_html` (HTML, aperçu désactivé, découpe par
-lignes ≤ 4096) pour `/parties` (toutes formes) et `/ouvertures <nom>` ; `/ouvertures` sans nom
-reste en texte brut.
-Prochaine étape : run live `03_run_live.txt` par Nico (prérequis : Mini App principale dans
-BotFather). Dettes 62-3 et 62-7 : à fermer au run live.
+Sprint clos (tag `sprint-65`). Suite : `docs/sprint66/00_etat.md`.
