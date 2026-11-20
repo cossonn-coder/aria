@@ -48,7 +48,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | État |
 |---|---|---|
-| 01 | `01_suivi_moteur.md` : détection, router de suivi, moteur, diagramme, LLM sur faits | ⏳ |
+| 01 | `01_suivi_moteur.md` : détection, router de suivi, moteur, diagramme, LLM sur faits | ✅ (627 verts ; regex SAN `_SAN_MOVE_RE` importée du classifieur) |
 | 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
 
 ## Dettes
@@ -81,5 +81,6 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
-`/sprint-auto sprint 63` (tronçon 01), puis run live par Nico (`02_run_live.txt`).
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Tronçon 01 implémenté
+(`CHESS_FOLLOWUP`, règle 1d, `ChessExecutionRouter._execute_followup`). Prochaine étape :
+run live par Nico (`02_run_live.txt`).
