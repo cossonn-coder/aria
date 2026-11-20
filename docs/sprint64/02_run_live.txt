@@ -1,0 +1,28 @@
+Sprint 64 — run live (Nico)
+===========================
+
+Préalable : branche feat/sprint64-parties déployée, puis
+  sudo systemctl restart aria.service
+
+Journal :
+  sudo journalctl -u aria -f -o cat | grep -E "meta_command|ERROR"
+
+Messages à envoyer sur Telegram, dans l'ordre
+---------------------------------------------
+/parties
+/parties details
+/parties week
+/parties blitz all
+/ouvertures
+/ouvertures rapide
+/parties details blitz all
+
+Critères de succès
+------------------
+1. /parties : deux lignes seulement (bilan du jour, puis « 10 dernières : … »).
+2. /parties details : une ligne par partie, puis ouvertures, classement, bilan.
+3. /parties blitz all : bilan sur 10 parties [état prod au 2026-11-20] ; /ouvertures rapide :
+   aucune partie blitz dans les compteurs.
+4. /ouvertures : la plus jouée en bas ; à nombre de parties égal, meilleur % plus bas ;
+   puis plus de nulles plus bas. Pas de liste 5 meilleures / 5 pires.
+5. Journal : un « meta_command name=… » par message, aucun ERROR.

@@ -1,8 +1,9 @@
 # Sprint 64 — état du sprint
 
-**Phase** : A, à concevoir (`/conception sprint 64`).
+**Phase** : close (Nico, 2026-11-20 : « le run live est validé »). Tag `sprint-64`.
 **Sujet** : `/parties` sans échiquier : tri (62-4), rapide/blitz (62-5), `details` (62-6).
-**Branche** : à créer depuis `main` à la conception.
+**Branche** : `feat/sprint64-parties`, depuis `main` @ `9ab136f`.
+**Audit** : `audit_parties.md`.
 
 ## Contexte hérité
 
@@ -28,6 +29,27 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 8. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 9. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
+## Décisions arrêtées (Nico, 2026-11-20)
+
+- **Tri 62-4** : nombre de parties, puis % de victoires, puis nombre de nulles (le plus d'abord).
+  `/ouvertures` garde la plus jouée en bas. Raison : demande « puis égalité » = les nulles.
+- **Cadence 62-5** : règle chess.com, durée = base + 40 × incrément ; blitz < 600 s ≤ rapide.
+  Mots `rapide` / `blitz` sur `/parties` et `/ouvertures`, combinables avec ouverture et
+  période. Fiches sans cadence exclues des deux filtres.
+- **`details` 62-6** : sans `details`, bilan court (« Aujourd'hui » ou période, puis
+  « 10 dernières », + performance). Avec `details` : sortie complète actuelle, une ligne par
+  partie quelle que soit la période. Non cliquable : lien vers l'échiquier = étape 4 (62-3).
+
+- **`/ouvertures` sans classement** (Nico, 2026-11-20, après le tronçon 01) : plus de liste
+  des 5 meilleures / 5 pires ; le classement reste dans `/parties details`.
+
+## Tronçons
+
+| # | Tronçon | État |
+|---|---|---|
+| 01 | `01_parties.md` : arguments, tri, cadence, `/parties` court / `details` | ✅ (631 tests verts) |
+| 02 | `02_run_live.txt` : run live (Nico) | ✅ (validé 2026-11-20) |
+
 ## Dettes
 
 | # | Dette | Constat | Piste |
@@ -46,16 +68,18 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'au run live `docs/sprint63/02_run_live.txt` |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
 | 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | — |
-| 62-4 | Tri des ouvertures | `/parties` et `/ouvertures` : tri par nombre de parties, puis % de victoires, puis égalité | **Sprint 64** |
-| 62-5 | `/parties rapide` et `/parties blitz` | Séparer par cadence (`TimeControl` du PGN) | **Sprint 64** |
-| 62-6 | `/parties details` | Liste cliquable des parties ; sans `details` : V/D du jour et des 10 dernières | **Sprint 64** |
+| 62-4 | Tri des ouvertures | `/parties` et `/ouvertures` : tri par nombre de parties, puis % de victoires, puis égalité | **Fermée** (sprint 64, run live validé) |
+| 62-5 | `/parties rapide` et `/parties blitz` | Séparer par cadence (`TimeControl` du PGN) | **Fermée** (sprint 64, run live validé) |
+| 62-6 | `/parties details` | Liste cliquable des parties ; sans `details` : V/D du jour et des 10 dernières | **Fermée** (sprint 64, run live validé) |
 | 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | — |
 | 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | — |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
 | 62-11 | « pire coup » du résumé ignore le mat raté | Résumé : « pire coup 13.Be3 » alors que 10.Nxc7+ rate un mat (`summary.py:125`) | Après sprint 62 si Nico le veut |
 | 62-10 | Accès Iona | Note de Nico 2026-11-20 : « accès Iona à faire », contenu à préciser | — |
+| 64-1 | Deux règles de cadence | `chess_coach/level._cadence` (Lichess, blitz < 480 s) ≠ `meta_commands.game_cadence` (chess.com, < 600 s) : 480–599 s classé différemment | Aligner si Nico le veut |
+| 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Prochaine étape : `/conception sprint 64`.
+Sprint clos (tag `sprint-64`). Suite : `docs/sprint65/00_etat.md`.
