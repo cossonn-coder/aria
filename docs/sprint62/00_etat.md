@@ -1,6 +1,6 @@
 # Sprint 62 — état du sprint
 
-**Phase** : B figée le 2026-11-20, prêt pour `/sprint-auto sprint 62`.
+**Phase** : clos le 2026-11-20 (run live validé par Nico, tag `sprint-62`).
 **Sujet** : mat raté toujours commenté (62-1).
 **Branche** : `feat/sprint62-mat-rate`, depuis `main` @ `5db5246`.
 
@@ -47,7 +47,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | # | Tronçon | État |
 |---|---|---|
 | 01 | `01_mat_rate.md` : donnée, sélection, suite jusqu'au mat, légende | ✅ (622 verts ; Stockfish local sur 10.Nxc7+ : `missed_mate=2`, suite `Bb5+ c6 Nf6#`) |
-| 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
+| 02 | `02_run_live.txt` : run live (Nico) | ✅ (validé par Nico, 2026-11-20) |
 
 ## Dettes
 
@@ -79,4 +79,4 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Tronçon 01 fait : `missed_mate` (fonction pure `missed_mate`, `analysis.py`), groupe « mats ratés » en tête de `select_critical`, `mate_line` pour la suite du meilleur coup, légende et ligne LLM « mat en N manqué » (`chess_router.py`). Prochaine étape : run live `02_run_live.txt` (Nico).
+Sprint clos. Suite : `docs/sprint63/00_etat.md`.
