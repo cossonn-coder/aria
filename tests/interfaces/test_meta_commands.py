@@ -338,3 +338,9 @@ def test_parties_text_short_default():
         "Aucune partie aujourd'hui.",
         "2 dernières : 2 D — 0 %",
     ]
+
+
+def test_openings_text_without_ranking():
+    games = [_opening_game("win", accuracy=float(a), opponent=f"adv{a}") for a in (70, 95, 60, 80, 90, 85, 75)]
+    text = meta_commands.openings_text(games)
+    assert "meilleures" not in text and "pires" not in text and "Par précision" not in text

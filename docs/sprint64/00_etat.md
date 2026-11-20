@@ -40,6 +40,9 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
   « 10 dernières », + performance). Avec `details` : sortie complète actuelle, une ligne par
   partie quelle que soit la période. Non cliquable : lien vers l'échiquier = étape 4 (62-3).
 
+- **`/ouvertures` sans classement** (Nico, 2026-11-20, après le tronçon 01) : plus de liste
+  des 5 meilleures / 5 pires ; le classement reste dans `/parties details`.
+
 ## Tronçons
 
 | # | Tronçon | État |

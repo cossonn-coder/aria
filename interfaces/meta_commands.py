@@ -314,14 +314,12 @@ def _opening_stat_lines(games: list[dict]) -> list[str]:
 
 def openings_text(games: list[dict], period: str = "all", today: str | None = None) -> str:
     """Stats d'ouvertures des fiches de la période, de la moins jouée à la plus jouée,
-    puis le classement par précision, les issues inconnues, et la performance en dernier."""
+    puis les issues inconnues, et la performance en dernier. Plus de classement par
+    précision (Nico, sprint 64) : il reste dans /parties details."""
     games = _in_period(games, period, today)
     if not games:
         return NO_OPENINGS if period == "all" else _no_games_text(period)
     lines = _opening_stat_lines(games)[::-1]
-    ranking = _ranking_lines(games)
-    if ranking:
-        lines += [""] + ranking + [""]
     unknown = sum(1 for g in games if g.get("outcome") not in ("win", "draw", "loss"))
     lines.append(f"Issue inconnue, non comptée : {unknown} fiche(s)")
     lines += _performance_line(games)
