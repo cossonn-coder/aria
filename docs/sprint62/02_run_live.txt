@@ -1,0 +1,22 @@
+Sprint 62 — run live (Nico)
+============================
+
+Préalable : branche feat/sprint62-mat-rate déployée, puis
+  sudo systemctl restart aria.service
+
+Journal :
+  sudo journalctl -u aria -f -o cat | grep -E "chess_analysis|chess_router|chess_caption_split"
+
+Message à envoyer sur Telegram
+------------------------------
+La partie du 2026-11-20 contre Loveyoulongtime69 est déjà enregistrée sans horloges :
+la renvoyer AVEC horloges déclenche une nouvelle analyse. Sur chess.com, page de la partie →
+Partager → PGN, case « Horodatage » / timestamps cochée → copier → coller dans Telegram.
+Le PGN doit contenir des {[%clk 0:09:58]}.
+
+Critères de succès
+------------------
+1. Journal : « chess_analysis OK … critical=['a:10.Nxc7+', …] » : 10.Nxc7+ est retenu.
+2. Position 1 : « coup 10 (blancs) : joué … 10.Nxc7+, meilleur 🟢 10.Bb5+, mat en 2 manqué ».
+3. Ligne « Meilleur coup : 🟢 10.Bb5+ … 11.Nf6# … » suivie de « → mat ».
+4. Le Pourquoi parle du mat 10.Bb5+ c6 11.Nf6#, sans coup inventé.

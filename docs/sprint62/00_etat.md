@@ -1,7 +1,8 @@
 # Sprint 62 — état du sprint
 
-**Phase** : A (audit 62-1 fait, arbitrages en cours), rien de figé.
-**Branche** : à créer depuis `main` après merge du sprint 61.
+**Phase** : B figée le 2026-11-20, prêt pour `/sprint-auto sprint 62`.
+**Sujet** : mat raté toujours commenté (62-1).
+**Branche** : `feat/sprint62-mat-rate`, depuis `main` @ `5db5246`.
 
 ## Contexte hérité
 
@@ -19,7 +20,7 @@
 - Chantier `/parties` + échiquier ARIA (demande Nico 2026-11-20, lignes 62-3 à 62-9) : volumineux,
   à découper sur plusieurs sprints.
 
-## Feuille de route (proposée, à valider)
+## Feuille de route (validée par Nico, 2026-11-20)
 
 Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un sujet par sprint, dans l'ordre :
 
@@ -33,11 +34,20 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 8. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 9. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
-## Questions ouvertes (sprint 62)
+## Décisions arrêtées (Nico, 2026-11-20)
 
-- Portée : mat en ≤ 3 coups de Nico ? (reco : oui)
-- Priorité : mat raté en tête du budget, toujours retenu ? (reco : oui)
-- Légende : « mat en N manqué » au lieu de « −13 pts » ; qualité et stats inchangées ? (reco : oui)
+- Portée : mat en ≤ 7 coups de Nico (un sacrifice grec se calcule). Limite connue : à nœuds fixes,
+  le moteur peut ne pas voir un mat long ; non traité.
+- Priorité : mat raté = pire erreur possible, en tête du budget, toujours retenu.
+- Légende « mat en N manqué » au lieu des pts ; qualité, précision, Elo inchangés.
+- Ordre de la feuille de route validé.
+
+## Tronçons
+
+| # | Tronçon | État |
+|---|---|---|
+| 01 | `01_mat_rate.md` : donnée, sélection, suite jusqu'au mat, légende | ⏳ |
+| 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
 
 ## Dettes
 
@@ -63,9 +73,10 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | — |
 | 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | — |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
+| 62-11 | « pire coup » du résumé ignore le mat raté | Résumé : « pire coup 13.Be3 » alors que 10.Nxc7+ rate un mat (`summary.py:125`) | Après sprint 62 si Nico le veut |
 | 62-10 | Accès Iona | Note de Nico 2026-11-20 : « accès Iona à faire », contenu à préciser | — |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Prochaine étape : réponses de Nico aux 3 questions ouvertes, puis kickoff 62-1 (`audit_mat_rate.md`).
+Lire `CLAUDE.md`, ce fichier. Prochaine étape : `/sprint-auto sprint 62` (tronçon 01), puis run live `02_run_live.txt`.
