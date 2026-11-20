@@ -7,6 +7,7 @@
 # commandes ne passent pas par le kernel et ne sont pas écrites dans
 # l'historique de conversation.
 
+import html
 import json
 import subprocess
 import unicodedata
@@ -211,42 +212,56 @@ def _no_games_text(period: str) -> str:
     return f"Aucune partie sur les {_PERIOD_LABELS[period]}."
 
 
-def _ranking_line(game: dict) -> str:
+def _esc(text: str, link) -> str:
+    """Texte échappé pour l'envoi HTML Telegram si link est fourni, inchangé sinon (sprint 65)."""
+    return html.escape(text, quote=False) if link else text
+
+
+def _game_link(text: str, game: dict, link) -> str:
+    """Ligne de partie : texte brut sans link ; avec link (fiche → URL), lien HTML
+    vers l'échiquier ARIA sur cette fiche, texte échappé (sprint 65, 62-3)."""
+    if not link:
+        return text
+    return f'<a href="{link(game)}">{html.escape(text, quote=False)}</a>'
+
+
+def _ranking_line(game: dict, link=None) -> str:
     """« 92 % · Göring Gambit (blancs) · contre luismota32 (1340) · victoire · 2026-11-06 »."""
     opponent = game.get("opponent") or "?"
     if game.get("elo_opponent"):
         opponent += f" ({game['elo_opponent']})"
     group = game_opening_group(game) if game.get("opening") else "ouverture inconnue"
-    return " · ".join([
+    return _game_link(" · ".join([
         f"{game['accuracy']:.0f} %",
         f"{group} ({_COLOR_FR.get(game.get('nico_color'), '?')})",
         f"contre {opponent}",
         _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
         _game_day(game),
-    ])
+    ]), game, link)
 
 
-def _ranking_lines(games: list[dict]) -> list[str]:
+def _ranking_lines(games: list[dict], link=None) -> list[str]:
     """5 meilleures / 5 pires parties par précision (sans précision = non classée).
     5 classées ou moins : une seule liste ; les pires ne reprennent pas les meilleures."""
     ranked = sorted((g for g in games if g.get("accuracy")), key=lambda g: -g["accuracy"])
     if not ranked:
         return []
     if len(ranked) <= RANKED_GAMES:
-        return ["Par précision :"] + [_ranking_line(g) for g in ranked]
+        return ["Par précision :"] + [_ranking_line(g, link) for g in ranked]
     worst = ranked[RANKED_GAMES:][::-1][:RANKED_GAMES]
-    return ([f"🏆 {RANKED_GAMES} meilleures :"] + [_ranking_line(g) for g in ranked[:RANKED_GAMES]]
-            + [f"📉 {RANKED_GAMES} pires :"] + [_ranking_line(g) for g in worst])
+    return ([f"🏆 {RANKED_GAMES} meilleures :"] + [_ranking_line(g, link) for g in ranked[:RANKED_GAMES]]
+            + [f"📉 {RANKED_GAMES} pires :"] + [_ranking_line(g, link) for g in worst])
 
 
 def parties_text(games: list[dict], today: str | None = None, period: str = "day",
-                 details: bool = False) -> str:
+                 details: bool = False, link=None) -> str:
     """Sans details (sprint 64) : bilan de la période, puis celui des 10 dernières fiches
     toutes périodes. Avec details : une ligne par partie de la période, la plus ancienne
     d'abord ; puis les stats d'ouvertures, le classement par précision, et le bilan de la
-    période en dernier (Telegram affiche le bas du message)."""
+    période en dernier (Telegram affiche le bas du message).
+    link (fiche → URL, sprint 65) : sortie HTML, chaque ligne de partie en lien."""
     if not details:
-        return _short_parties_text(games, today, period)
+        return _esc(_short_parties_text(games, today, period), link)
     games = _in_period(games, period, today)
     if not games:
         return _no_games_text(period)
@@ -255,20 +270,20 @@ def parties_text(games: list[dict], today: str | None = None, period: str = "day
         opponent = game.get("opponent") or "?"
         if game.get("elo_opponent"):
             opponent += f" ({game['elo_opponent']})"
-        lines.append(" · ".join([
+        lines.append(_game_link(" · ".join([
             _COLOR_FR.get(game.get("nico_color"), "?"),
             f"contre {opponent}",
             _OUTCOME_FR.get(game.get("outcome"), "issue inconnue"),
             game.get("opening") or "ouverture inconnue",
-        ]))
+        ]), game, link))
     lines.append("")
-    opening_lines = _opening_stat_lines(games)
+    opening_lines = [_esc(line, link) for line in _opening_stat_lines(games)]
     if opening_lines:
         lines += opening_lines + [""]
-    ranking = _ranking_lines(games)
+    ranking = _ranking_lines(games, link)
     if ranking:
         lines += ranking + [""]
-    lines.append(_period_bilan(games, period))
+    lines.append(_esc(_period_bilan(games, period), link))
     return "\n".join(lines)
 
 
@@ -293,11 +308,12 @@ def _short_parties_text(games: list[dict], today: str | None, period: str) -> st
     return "\n".join(lines)
 
 
-def parties_opening_text(games: list[dict], query: str, today: str | None = None, period: str = "day") -> str:
+def parties_opening_text(games: list[dict], query: str, today: str | None = None, period: str = "day",
+                         link=None) -> str:
     """/parties <ouverture> [période] et /ouvertures <nom> <période> : rapport de
     /ouvertures <nom>, limité aux parties de la période (sprint 50, période sprint 53)."""
     games = _in_period(games, period, today)
-    return opening_report_text(games, query) if games else _no_games_text(period)
+    return opening_report_text(games, query, link) if games else _no_games_text(period)
 
 
 # ── /ouvertures ──────────────────────────────────────────────────────────────
@@ -414,8 +430,9 @@ def _color_section(group: str, color: str, games: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def opening_report_text(games: list[dict], query: str) -> str:
-    """Statistiques de l'ouverture désignée par query, une section par couleur, la plus jouée en bas."""
+def opening_report_text(games: list[dict], query: str, link=None) -> str:
+    """Statistiques de l'ouverture désignée par query, une section par couleur, la plus jouée en bas.
+    link (fiche → URL, sprint 65) : sortie HTML, lignes du classement en liens."""
     by_group: dict[str, list[dict]] = {}
     for game in games:
         if game.get("opening") and game.get("outcome") in _OUTCOME_LABELS:
@@ -424,17 +441,17 @@ def opening_report_text(games: list[dict], query: str) -> str:
     wanted = _plain(query)
     matches = [g for g in by_group if _plain(g) == wanted] or [g for g in by_group if wanted in _plain(g)]
     if not matches:
-        return f"Aucune ouverture ne correspond à « {query} ». Liste : /ouvertures"
+        return _esc(f"Aucune ouverture ne correspond à « {query} ». Liste : /ouvertures", link)
     if len(matches) > 1:
-        return f"Plusieurs ouvertures correspondent : {', '.join(sorted(matches))}."
+        return _esc(f"Plusieurs ouvertures correspondent : {', '.join(sorted(matches))}.", link)
 
     by_color: dict[str, list[dict]] = {}
     for game in by_group[matches[0]]:
         by_color.setdefault(game["nico_color"], []).append(game)
     sections = sorted(by_color.items(), key=lambda item: len(item[1]))
     # Classement au-dessus des sections : le bas du message reste la couleur la plus jouée.
-    blocks = ["\n".join(_ranking_lines(by_group[matches[0]]))]
-    blocks += [_color_section(matches[0], color, g) for color, g in sections]
+    blocks = ["\n".join(_ranking_lines(by_group[matches[0]], link))]
+    blocks += [_esc(_color_section(matches[0], color, g), link) for color, g in sections]
     return "\n\n".join(b for b in blocks if b)
 
 

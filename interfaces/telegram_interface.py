@@ -12,7 +12,7 @@
 # Gestion de la concurrence : un Lock par user_id évite les
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update, WebAppInfo
 from telegram.constants import ChatAction
 from telegram.error import NetworkError, TelegramError
 from telegram.ext import (
@@ -454,10 +454,10 @@ class TelegramInterface(BaseInterface):
         games = meta_commands.filter_cadence(games, cadence)
         period = period or "day"
         if query:
-            text = meta_commands.parties_opening_text(games, query, period=period)
+            text = meta_commands.parties_opening_text(games, query, period=period, link=self._game_url)
         else:
-            text = meta_commands.parties_text(games, period=period, details=details)
-        await self._deliver(update.effective_chat.id, text)
+            text = meta_commands.parties_text(games, period=period, details=details, link=self._game_url)
+        await self._deliver_html(update.effective_chat.id, text)
 
     async def _cmd_ouvertures(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=ouvertures")
@@ -467,10 +467,16 @@ class TelegramInterface(BaseInterface):
         games = meta_commands.filter_cadence(games, cadence)
         period = period or "all"
         if query:
-            text = meta_commands.parties_opening_text(games, query, period=period)
+            text = meta_commands.parties_opening_text(games, query, period=period, link=self._game_url)
+            await self._deliver_html(update.effective_chat.id, text)
         else:
             text = meta_commands.openings_text(games, period=period)
-        await self._deliver(update.effective_chat.id, text)
+            await self._deliver(update.effective_chat.id, text)
+
+    def _game_url(self, game: dict) -> str:
+        """Lien Mini App principale qui ouvre l'échiquier ARIA sur la fiche (sprint 65, 62-3) :
+        start_param = id de fiche sans « chess_game_ » (16 hex)."""
+        return f"https://t.me/{self.app.bot.username}?startapp={game['id'].removeprefix('chess_game_')}"
 
     async def _cmd_oublie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -621,6 +627,25 @@ class TelegramInterface(BaseInterface):
             )
             # Une seule réponse en attente par chat : la plus récente écrase.
             self.undelivered[chat_id] = message
+
+    async def _deliver_html(self, chat_id: int, text: str):
+        """
+        Envoie un texte HTML Telegram (liens de parties, sprint 65), aperçu de lien
+        désactivé. Découpe par lignes (morceaux ≤ 4096) pour ne jamais couper une balise.
+        """
+        chunks = [""]
+        for line in text.split("\n"):
+            if chunks[-1] and len(chunks[-1]) + 1 + len(line) > 4096:
+                chunks.append(line)
+            else:
+                chunks[-1] = f"{chunks[-1]}\n{line}" if chunks[-1] else line
+        for chunk in chunks:
+            await self._send_with_retry(chat_id, lambda chunk=chunk: self.app.bot.send_message(
+                chat_id=chat_id,
+                text=chunk,
+                parse_mode="HTML",
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            ))
 
     async def _deliver(self, chat_id: int, message):
         """

@@ -1,0 +1,30 @@
+Sprint 65 — run live (Nico) : /parties → échiquier ARIA sans recalcul
+
+PRÉREQUIS (une fois)
+BotFather : /mybots → ton bot → Bot Settings → Configure Mini App → Enable Mini App
+URL = la valeur de BOARD_URL du .env (https://…)
+Puis : sudo systemctl restart aria.service
+
+TERMINAL (à laisser ouvert)
+sudo journalctl -u aria -f -o cat | grep -E "board_stored|board_game|meta_command"
+
+MESSAGES TELEGRAM (un par un)
+
+/parties details week
+  → chaque ligne de partie et chaque ligne du classement 🏆/📉 est soulignée (lien)
+  → toucher une ligne du classement : l'échiquier s'ouvre DANS Telegram sur cette partie
+  → la courbe s'affiche aussitôt (pas de « courbe en calcul… »), « Je joue » = ta couleur,
+    noms et Elo remplis, historique (précision, performance) présent
+  → journalctl : board_stored id=… plies=…   et AUCUNE ligne board_game plies=
+
+/ouvertures goring
+  (ou une ouverture que tu joues)
+  → classement cliquable, même comportement
+
+/parties
+  → bilan court inchangé, rien de cassé
+
+SUCCÈS
+- La partie ouverte est la bonne (adversaire, date, coups).
+- Courbe immédiate, pas de board_game dans le journal.
+- L'analyse live de la position (flèches) tourne toujours quand tu avances dans la partie.

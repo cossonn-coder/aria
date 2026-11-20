@@ -13,12 +13,14 @@
 import json
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
 import chess
 import chess.engine
+import chess.pgn
 
 from chess_coach import difficulty
 from chess_coach.analysis import ENGINE_OPTIONS, _win, analyze_game, detect_color, parse_pgn
@@ -215,6 +217,38 @@ def game_history(game, plies: list, playing: str, games: list) -> list[str]:
     return lines
 
 
+def stored_game(fiche: dict, games: list) -> dict:
+    """Partie d'une fiche chess_game pour l'échiquier, sans moteur (sprint 65, dette 62-7).
+
+    Mêmes clés que /game, plus pgn (coups uci de plies_json rejoués depuis la position
+    initiale, en-têtes depuis les métadonnées) et playing (camp de Nico). mates : None
+    partout, la fiche ne stocke pas d'eval_*_cp. games : fiches lues pour l'historique.
+    """
+    plies = [SimpleNamespace(**p) for p in json.loads(fiche["plies_json"])]
+    color = fiche["nico_color"]
+    other = "black" if color == "white" else "white"
+    game = chess.pgn.Game()
+    names = {color: "Nico", other: fiche.get("opponent") or "?"}
+    game.headers["White"], game.headers["Black"] = names["white"], names["black"]
+    elos = {color: fiche.get("elo_nico"), other: fiche.get("elo_opponent")}
+    for side, key in (("white", "WhiteElo"), ("black", "BlackElo")):
+        if elos[side]:
+            game.headers[key] = str(elos[side])
+    for key, header in (("date", "Date"), ("result", "Result"), ("time_control", "TimeControl")):
+        if fiche.get(key):
+            game.headers[header] = fiche[key]
+    node = game
+    for p in plies:
+        node = node.add_variation(chess.Move.from_uci(p.uci))
+    # Même formule que game_wins : win_before / win_after ramenés au point de vue des blancs.
+    wins = [p.win_before if p.color == "white" else 100 - p.win_before for p in plies]
+    last = plies[-1]
+    wins.append(last.win_after if last.color == "white" else 100 - last.win_after)
+    return {"pgn": str(game), "playing": color, "wins": [round(w, 1) for w in wins],
+            "mates": [None] * len(wins), "best": [p.best_san for p in plies] + [None],
+            "history": game_history(game, plies, color, games)}
+
+
 def position_eval(fen: str) -> dict:
     """Évaluation d'une position seule (jeu libre, sprint 39) : un Stockfish par appel.
 
@@ -267,7 +301,8 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, json.dumps(payload).encode(), "application/json")
 
     def do_GET(self):
-        if self.path == "/":
+        # Telegram ouvre la Mini App avec des paramètres d'URL (tgWebAppStartParam…) : chemin seul.
+        if urllib.parse.urlsplit(self.path).path == "/":
             _load_maia_in_background()
             self._send(200, _INDEX.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/state":
@@ -276,7 +311,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "text/plain")
 
     def do_POST(self):
-        if self.path not in ("/position", "/game", "/eval", "/send", "/accuracy"):
+        if self.path not in ("/position", "/game", "/stored", "/eval", "/send", "/accuracy"):
             self._send(404, b"", "text/plain")
             return
         data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -285,6 +320,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/game":
             self._game(data["pgn"], data.get("playing", ""))
+            return
+        if self.path == "/stored":
+            self._stored(data["id"])
             return
         if self.path == "/accuracy":
             self._json(line_accuracy(data["wins"], data["best"], data["first"]))
@@ -311,6 +349,18 @@ class _Handler(BaseHTTPRequestHandler):
         log.info(f"board_game plies={len(curve['wins']) - 1} duration={time.monotonic() - start:.1f}s")
         curve["history"] = self._history(game, plies, playing)
         self._json(curve)
+
+    def _stored(self, game_hash: str):
+        """Partie d'une fiche chess_game, identifiée par le hash de son id ; jamais d'analyse."""
+        load_games = self.server.load_games
+        games = load_games() if load_games is not None else []
+        fiche = next((g for g in games if g["id"] == "chess_game_" + game_hash), None)
+        if fiche is None:
+            self._send(404, json.dumps({"error": "partie introuvable"}).encode(), "application/json")
+            return
+        result = stored_game(fiche, games)
+        log.info(f"board_stored id={game_hash} plies={len(result['wins']) - 1}")
+        self._json(result)
 
     def _history(self, game, plies: list, playing: str) -> list[str]:
         """Historique de la partie ; [] sans lecteur de fiches ou si la lecture échoue

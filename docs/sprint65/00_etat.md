@@ -1,8 +1,9 @@
 # Sprint 65 — état du sprint
 
-**Phase** : A, à concevoir (`/conception sprint 65`).
+**Phase** : close (Nico, 2026-11-20 : « ok sur tel ça marche et ça à l'air bien », puis clôture demandée). Tag `sprint-65`.
+**Audit** : `audit_parties_echiquier.md`.
 **Sujet** : `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7).
-**Branche** : à créer depuis `main` après la clôture du sprint 64.
+**Branche** : `feat/sprint65-parties-echiquier`, depuis `main` @ `4f0d8ed`.
 
 ## Contexte hérité
 
@@ -43,17 +44,40 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 61-11 | Texte LLM inventé | « pion d7 passé », « Be7!? sacrifie 3 pions » | Faits plus contraints |
 | 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'au run live `docs/sprint63/02_run_live.txt` |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
-| 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | **Sprint 65** |
-| 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | **Sprint 65** |
+| 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | **Fermée** (sprint 65, run live validé) |
+| 62-7 | Réutiliser l'analyse Telegram | Partie ouverte depuis `/parties` : charger l'analyse existante, ne pas tout recalculer | **Fermée** (sprint 65, run live validé) |
 | 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | — |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
 | 62-11 | « pire coup » du résumé ignore le mat raté | Résumé : « pire coup 13.Be3 » alors que 10.Nxc7+ rate un mat (`summary.py:125`) | Après sprint 62 si Nico le veut |
 | 62-10 | Accès Iona | Note de Nico 2026-11-20 : « accès Iona à faire », contenu à préciser | — |
 | 64-1 | Deux règles de cadence | `chess_coach/level._cadence` (Lichess, blitz < 480 s) ≠ `meta_commands.game_cadence` (chess.com, < 600 s) : 480–599 s classé différemment | Aligner si Nico le veut |
 | 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
+| 65-1 | Charger une position FEN dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | Champ ou collage FEN qui place la position et lance l'analyse live |
+| 65-2 | « partie introuvable » effacé | Échiquier : le message sur la ligne d'état est remplacé par l'analyse live après ~1 s (comme « PGN illisible ») | Garder le message affiché si Nico le veut |
+| 65-3 | Échiquier inaccessible hors tailnet | Tailscale Serve « tailnet only » : seul le téléphone ouvre la Mini App, pas l'ordi de Nico | Tailscale sur l'ordi ; Funnel (public) seulement après arbitrage |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
+
+## Décisions arrêtées (Nico, 2026-11-20)
+
+- **Parties cliquables** : toutes les lignes qui nomment une partie (`/parties details` ligne par
+  partie + classement 🏆/📉, classement de `/parties <ouv.>` et `/ouvertures <nom>`).
+- **Forme** : liens dans le texte vers la Mini App principale `https://t.me/<bot>?startapp=<hash>`,
+  envoi HTML. Raison : toutes les lignes cliquables, ouverture dans Telegram. Prérequis : Mini App
+  principale configurée dans BotFather (Nico, avant le run live).
+- **Analyse rechargée (62-7)** : coups, courbe, meilleurs coups, historique lus dans la fiche,
+  aucun `analyze_game`. Hors : repères de mat (pas d'`eval_cp` stocké, palace intact), texte du
+  coach (étape 5, 62-8). L'analyse live par position reste active.
+- **Hors sprint** : FEN dans l'échiquier → dette 65-1. Pseudo `BaguetteCopter` ajouté hors sprint
+  sur `main` (`4f0d8ed`).
+
+## Tronçons
+
+| # | Tronçon | État |
+|---|---|---|
+| 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ✅ (634 tests verts) |
+| 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ✅ (636 tests verts) |
+| 03 | `03_run_live.txt` : run live (Nico) | ✅ (validé 2026-11-20 sur téléphone, `board_stored id=98783cc1785998f1 plies=24`, aucun `board_game`) |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis `docs/sprint64/00_etat.md`. Prochaine étape :
-`/conception sprint 65`.
+Sprint clos (tag `sprint-65`). Suite : `docs/sprint66/00_etat.md`.
