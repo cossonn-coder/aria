@@ -1,0 +1,35 @@
+Sprint 63 — run live (Nico)
+============================
+
+Préalable : branche feat/sprint63-suivi-moteur déployée, puis
+  sudo systemctl restart aria.service
+
+Journal :
+  sudo journalctl -u aria -f -o cat | grep -E "chess_followup|chess_router|operation"
+
+Pourquoi une partie neuve : une partie déjà enregistrée répond « déjà envoyée » sans
+réécrire l'analyse dans l'historique. Le suivi a besoin d'une analyse récente dans la
+conversation : coller une partie jamais envoyée (la prochaine que tu joues).
+
+Messages à envoyer sur Telegram, dans l'ordre
+---------------------------------------------
+1. Le PGN de la partie neuve (avec horloges si possible).
+   Attendre l'analyse. Noter le coup de la Position 1 (ex. « coup 14 ») et son meilleur coup.
+
+2. position 1 : pourquoi ce coup était mauvais ?
+
+3. au coup <N de la Position 1> et si <meilleur coup de la Position 1, ex. Nf5> ?
+
+4. au coup <un coup de la partie hors positions commentées> c'était quoi le plan ?
+
+5. (contrôle, ne doit PAS passer par le moteur) :
+   comment je progresse en finale ?
+
+Critères de succès
+------------------
+1. Journal, messages 2-4 : « chess_followup OK move=… » ; message 5 : pas de chess_followup.
+2. Messages 2-4 : un diagramme de la bonne position (Nico en bas) et une 1re ligne
+   « Coup N (camp) : joué … ; meilleur … ».
+3. Message 3 : le coup proposé est évalué (« proposé … : … »), cohérent avec le meilleur coup.
+4. Aucun coup inventé dans le texte du LLM : tout coup cité figure dans la 1re ligne ou est
+   jouable dans la position du diagramme. Aucun mat annoncé hors d'une ligne du code.
