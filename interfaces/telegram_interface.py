@@ -450,18 +450,21 @@ class TelegramInterface(BaseInterface):
     async def _cmd_parties(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=parties")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
-        query, period = meta_commands.parse_period_args(context.args or [])
+        query, period, cadence, details = meta_commands.parse_period_args(context.args or [])
+        games = meta_commands.filter_cadence(games, cadence)
         period = period or "day"
         if query:
             text = meta_commands.parties_opening_text(games, query, period=period)
         else:
-            text = meta_commands.parties_text(games, period=period)
+            text = meta_commands.parties_text(games, period=period, details=details)
         await self._deliver(update.effective_chat.id, text)
 
     async def _cmd_ouvertures(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("meta_command name=ouvertures")
         games = await asyncio.to_thread(self.bridge.load_chess_games)
-        query, period = meta_commands.parse_period_args(context.args or [])
+        # « details » ne concerne que /parties : ignoré ici.
+        query, period, cadence, _ = meta_commands.parse_period_args(context.args or [])
+        games = meta_commands.filter_cadence(games, cadence)
         period = period or "all"
         if query:
             text = meta_commands.parties_opening_text(games, query, period=period)

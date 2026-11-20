@@ -44,7 +44,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | État |
 |---|---|---|
-| 01 | `01_parties.md` : arguments, tri, cadence, `/parties` court / `details` | ⏳ |
+| 01 | `01_parties.md` : arguments, tri, cadence, `/parties` court / `details` | ✅ (631 tests verts) |
 | 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
 
 ## Dettes
@@ -77,5 +77,9 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
-`/sprint-auto sprint 64` (tronçon 01), puis run live par Nico (`02_run_live.txt`).
+Lire `CLAUDE.md`, ce fichier, puis `02_run_live.txt`. Tronçon 01 livré (non commité par le
+sous-agent) : `parse_period_args` rend (requête, période, cadence, details) ; `game_cadence` /
+`filter_cadence` dans `meta_commands.py` (règle chess.com, distincte de `chess_coach/level._cadence`,
+seuils Lichess, que l'audit §3 n'avait pas repérée) ; `/ouvertures` ignore `details`.
+Lignes par partie de `details` triées par `_game_date_key`. Prochaine étape : run live par Nico
+(`02_run_live.txt`).

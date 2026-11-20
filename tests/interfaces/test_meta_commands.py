@@ -62,20 +62,20 @@ def test_parties_text_all_games_of_the_day_with_stats():
     games.append({**game, "date": "", "timestamp": "2026-11-04T09:00:00+00:00", "opponent": "sans_date"})
     games.append({**game, "date": "2026-11-04", "opponent": "adv6", "elo_opponent": 1500,
                   "nico_color": "black", "outcome": "loss", "opening": "Dutch Defense"})
-    assert meta_commands.parties_text(games, today="2026-11-04").splitlines() == [
+    assert meta_commands.parties_text(games, today="2026-11-04", details=True).splitlines() == [
         "blancs · contre adv1 · victoire · Italian Game",
         "blancs · contre adv2 · victoire · Italian Game",
         "blancs · contre adv3 · victoire · Italian Game",
         "blancs · contre adv4 · victoire · Italian Game",
-        "blancs · contre sans_date · victoire · Italian Game",
         "noirs · contre adv6 (1500) · défaite · Dutch Defense",
+        "blancs · contre sans_date · victoire · Italian Game",
         "",
         "Italian Game (blancs) : 5 V, 0 N, 0 D — 100 % [5 parties]",
         "Dutch Defense (noirs) : 0 V, 0 N, 1 D — 0 % [1 partie]",
         "",
         "Aujourd'hui : 5 V, 1 D — 83 % · performance 700 [1 partie]",
     ]
-    assert meta_commands.parties_text(games, today="2026-11-05") == "Aucune partie aujourd'hui."
+    assert meta_commands.parties_text(games, today="2026-11-05", details=True) == "Aucune partie aujourd'hui."
 
 
 def test_parties_opening_text_report_of_the_day_only():
@@ -192,22 +192,28 @@ def test_performance_line_with_last_five():
 # ── Sprint 53 : périodes et classement par précision ─────────────────────────
 
 def test_parse_period_args():
-    assert meta_commands.parse_period_args(["goring", "week"]) == ("goring", "week")
-    assert meta_commands.parse_period_args(["month"]) == ("", "month")
-    assert meta_commands.parse_period_args(["goring"]) == ("goring", None)
-    assert meta_commands.parse_period_args(["Année"]) == ("", "year")
+    assert meta_commands.parse_period_args(["goring", "week"]) == ("goring", "week", None, False)
+    assert meta_commands.parse_period_args(["month"]) == ("", "month", None, False)
+    assert meta_commands.parse_period_args(["goring"]) == ("goring", None, None, False)
+    assert meta_commands.parse_period_args(["Année"]) == ("", "year", None, False)
+    # Sprint 64 : cadence et details à n'importe quelle place.
+    assert meta_commands.parse_period_args(["evans", "blitz", "week"]) == ("evans", "week", "blitz", False)
+    assert meta_commands.parse_period_args(["Détails", "rapide"]) == ("", None, "rapide", True)
 
 
 def test_parties_text_week_stats_only_and_period_bilan():
     game = {"nico_color": "white", "outcome": "win", "opening": "Italian Game", "opponent": "adv"}
     games = [{**game, "date": "2026.10.28"},  # hors fenêtre (8 jours avant)
              {**game, "date": "2026.10.29"}, {**game, "date": "2026.11.04", "outcome": "loss"}]
-    assert meta_commands.parties_text(games, today="2026-11-04", period="week").splitlines() == [
+    assert meta_commands.parties_text(games, today="2026-11-04", period="week", details=True).splitlines() == [
+        "blancs · contre adv · victoire · Italian Game",
+        "blancs · contre adv · défaite · Italian Game",
+        "",
         "Italian Game (blancs) : 1 V, 0 N, 1 D — 50 % [2 parties]",
         "",
         "7 derniers jours : 1 V, 1 D — 50 %",
     ]
-    assert meta_commands.parties_text(games, today="2026-12-31", period="week") == (
+    assert meta_commands.parties_text(games, today="2026-12-31", period="week", details=True) == (
         "Aucune partie sur les 7 derniers jours.")
 
 
@@ -215,7 +221,7 @@ def test_ranking_seven_games_best_five_then_worst_two_above_bilan():
     games = [_opening_game("win", accuracy=float(a), opponent=f"adv{a}", date="2026.11.04")
              for a in (70, 95, 60, 80, 90, 85, 75)]
     games.append(_opening_game("loss", opponent="sans_precision", date="2026.11.04"))
-    lines = meta_commands.parties_text(games, today="2026-11-04", period="week").splitlines()
+    lines = meta_commands.parties_text(games, today="2026-11-04", period="week", details=True).splitlines()
     start = lines.index("🏆 5 meilleures :")
     assert lines[start:] == [
         "🏆 5 meilleures :",
@@ -299,3 +305,36 @@ def test_consigne_args_and_texts():
     assert meta_commands.no_consigne_text("9") == "Pas de consigne 9. Liste : /consignes"
     assert meta_commands.consignes_text([{"text": "a"}, {"text": "b"}]) == "1. a\n2. b"
     assert meta_commands.consignes_text([]) == "Aucune consigne."
+
+
+# ── Sprint 64 : tri, cadence, /parties court ─────────────────────────────────
+
+def test_opening_stat_lines_tie_broken_by_win_rate_then_draws():
+    games = [_opening_game(o, group="A") for o in ("win", "loss", "loss")]
+    games += [_opening_game(o, group="B") for o in ("win", "draw", "loss")]
+    games += [_opening_game(o, group="C") for o in ("win", "win", "loss")]
+    assert [line.split(" (")[0] for line in meta_commands._opening_stat_lines(games)] == ["C", "B", "A"]
+
+
+def test_game_cadence_chess_com_rule():
+    assert [meta_commands.game_cadence(tc) for tc in ("600", "180+2", "300+3", "")] == [
+        "rapide", "blitz", "blitz", None]
+
+
+def test_filter_cadence_excludes_unknown():
+    games = [{"time_control": "600"}, {"time_control": "300"}, {"time_control": ""}]
+    assert meta_commands.filter_cadence(games, "blitz") == [{"time_control": "300"}]
+    assert meta_commands.filter_cadence(games, None) == games
+
+
+def test_parties_text_short_default():
+    games = [_opening_game("win", date="2026.11.04", elo_opponent=1500)]
+    games += [_opening_game(o, date=f"2026.10.{d:02d}") for o, d in zip(["loss"] * 3 + ["win"] * 8, range(1, 12))]
+    assert meta_commands.parties_text(games, today="2026-11-04").splitlines() == [
+        "Aujourd'hui : 1 V — 100 % · performance 2300 [1 partie]",
+        "10 dernières : 9 V, 1 D — 90 %",
+    ]
+    assert meta_commands.parties_text(games[1:3], today="2026-11-04").splitlines() == [
+        "Aucune partie aujourd'hui.",
+        "2 dernières : 2 D — 0 %",
+    ]
