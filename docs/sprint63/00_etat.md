@@ -1,6 +1,6 @@
 # Sprint 63 — état du sprint
 
-**Phase** : B figée (Nico, 2026-11-20 : « ok aux recommandés »). Prête pour `/sprint-auto sprint 63`.
+**Phase** : close (Nico, 2026-11-20 : « clos ce sprint », clôture sans run live). Tag `sprint-63`.
 **Sujet** : suivi Telegram avec moteur (62-2 + 61-1).
 **Branche** : `feat/sprint63-suivi-moteur`, depuis `main` @ `9308221`.
 **Audit** : `audit_suivi_moteur.md`.
@@ -49,13 +49,13 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | # | Tronçon | État |
 |---|---|---|
 | 01 | `01_suivi_moteur.md` : détection, router de suivi, moteur, diagramme, LLM sur faits | ✅ (627 verts ; regex SAN `_SAN_MOVE_RE` importée du classifieur) |
-| 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
+| 02 | `02_run_live.txt` : run live (Nico) | ⏭ non fait (clôture sans live, Nico 2026-11-20) |
 
 ## Dettes
 
 | # | Dette | Constat | Piste |
 |---|---|---|---|
-| 61-1 | Question de suivi sans moteur | Historique coupé à 1 500 car. : faits de la position N absents | **Sprint 63** (fermée au run live) |
+| 61-1 | Question de suivi sans moteur | Historique coupé à 1 500 car. : faits de la position N absents | Code livré au sprint 63 ; reste ouverte jusqu'à un run live (`02_run_live.txt`) |
 | 61-2 | Motif « fourchette » trompeur | `assign_motifs` tague Qxe7+ fourchette | Revoir l'usage des motifs dans le Pourquoi |
 | 61-3 | Clouage relatif et mat hors pointe | Pointe limitée au gain matériel et au clouage absolu | Étendre si un cas réel le demande |
 | 61-4 | Échiquier centré sur le joueur du bas | Demande Nico 2026-11-19 | Étape 6 de la feuille de route |
@@ -66,7 +66,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 61-9 | Même ouverture, deux noms | Portsmouth Gambit / Wing Gambit Deferred après 3.b4 | Regrouper dans `opening_group` |
 | 61-10 | Coups de répertoire jamais jugés | 5.d5 −21 pts sans miniature (`first_move=8`) | Lié à 61-5 |
 | 61-11 | Texte LLM inventé | « pion d7 passé », « Be7!? sacrifie 3 pions » | Faits plus contraints |
-| 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | **Sprint 63** (fermée au run live) |
+| 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'à un run live (`02_run_live.txt`) |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
 | 62-3 | Liens cliquables dans `/parties` | Meilleures et pires parties doivent s'ouvrir dans l'échiquier ARIA | — |
 | 62-4 | Tri des ouvertures | `/parties` et `/ouvertures` : tri par nombre de parties, puis % de victoires, puis égalité | — |
@@ -81,6 +81,5 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Tronçon 01 implémenté
-(`CHESS_FOLLOWUP`, règle 1d, `ChessExecutionRouter._execute_followup`). Prochaine étape :
-run live par Nico (`02_run_live.txt`).
+Sprint clos sans run live. Le protocole `02_run_live.txt` reste à jouer à la prochaine
+partie neuve ; 61-1 et 62-2 se ferment sur ce live. Suite : `docs/sprint64/00_etat.md`.
