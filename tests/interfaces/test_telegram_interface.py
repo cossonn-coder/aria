@@ -437,3 +437,25 @@ def test_glue_restores_space_dropped_at_cut():
     head = '[White "Nico"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3'
     tail = "Nc6 3. Bb5 1-0"
     assert telegram_interface._glue(head, tail) == f"{head} {tail}"
+
+
+@pytest.mark.asyncio
+async def test_parties_details_sends_html_with_mini_app_links():
+    # Sprint 65 (62-3) : /parties details → HTML, lignes de partie en liens Mini App.
+    bridge = MagicMock()
+    bridge.load_chess_games.return_value = [{
+        "id": "chess_game_0123456789abcdef", "nico_color": "white", "outcome": "win",
+        "opening": "Italian Game", "opponent": "adv", "date": "2026.11.04",
+    }]
+    iface = TelegramInterface(kernel=MagicMock(), token="x", bridge=bridge)
+    iface.app = MagicMock()
+    iface.app.bot.username = "aria_bot"
+    iface.app.bot.send_message = AsyncMock()
+    context = MagicMock()
+    context.args = ["details", "tout"]
+
+    await iface._cmd_parties(_command_update(), context)
+
+    kwargs = iface.app.bot.send_message.await_args.kwargs
+    assert kwargs["parse_mode"] == "HTML"
+    assert '<a href="https://t.me/aria_bot?startapp=0123456789abcdef">' in kwargs["text"]

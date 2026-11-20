@@ -344,3 +344,15 @@ def test_openings_text_without_ranking():
     games = [_opening_game("win", accuracy=float(a), opponent=f"adv{a}") for a in (70, 95, 60, 80, 90, 85, 75)]
     text = meta_commands.openings_text(games)
     assert "meilleures" not in text and "pires" not in text and "Par précision" not in text
+
+
+def test_parties_text_details_with_link_html_lines():
+    # Sprint 65 (62-3) : avec link, lignes de partie et classement en liens, texte échappé.
+    link = lambda g: f"https://t.me/bot?startapp={g['id'].removeprefix('chess_game_')}"
+    games = [_opening_game("win", accuracy=90.0, opponent="a&b", date="2026.11.04", id="chess_game_0123456789abcdef")]
+    lines = meta_commands.parties_text(games, today="2026-11-04", details=True, link=link).splitlines()
+    url = "https://t.me/bot?startapp=0123456789abcdef"
+    assert lines[0] == f'<a href="{url}">blancs · contre a&amp;b · victoire · x</a>'
+    assert f'<a href="{url}">90 % · Göring Gambit (blancs) · contre a&amp;b · victoire · 2026-11-04</a>' in lines
+    blocks = meta_commands.opening_report_text(games, "goring", link=link).split("\n\n")
+    assert blocks[0].splitlines()[1].startswith(f'<a href="{url}">90 %')

@@ -73,14 +73,20 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | # | Tronçon | État |
 |---|---|---|
 | 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ✅ (634 tests verts) |
-| 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ⏳ |
+| 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ✅ (636 tests verts) |
 | 03 | `03_run_live.txt` : run live (Nico) | ⏳ |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Tronçon 01 fait :
-`board_interface.stored_game` + `POST /stored` (fiche → pgn, playing, wins, best, mates `None`,
+Lire `CLAUDE.md`, ce fichier, puis `03_run_live.txt`. Tronçons 01 et 02 faits.
+01 : `board_interface.stored_game` + `POST /stored` (fiche → pgn, playing, wins, best, mates `None`,
 history, sans moteur), `GET /` sur le chemin seul, page `openStored` au démarrage
-(`start_param` / `tgWebAppStartParam`, prime sur `localStorage`). Prochaine étape :
-`/sprint-auto sprint 65` (tronçon 02), puis run live `03_run_live.txt` par Nico.
-Dettes 62-3 et 62-7 : à fermer au run live.
+(`start_param` / `tgWebAppStartParam`, prime sur `localStorage`).
+02 : `meta_commands` — paramètre `link` (fiche → URL) dans `parties_text`, `parties_opening_text`,
+`opening_report_text`, `_ranking_lines` ; avec `link`, texte échappé et lignes de partie en
+`<a href>` ; sans `link`, sortie inchangée. `telegram_interface` : `_game_url`
+(`https://t.me/<bot>?startapp=<hash>`) et `_deliver_html` (HTML, aperçu désactivé, découpe par
+lignes ≤ 4096) pour `/parties` (toutes formes) et `/ouvertures <nom>` ; `/ouvertures` sans nom
+reste en texte brut.
+Prochaine étape : run live `03_run_live.txt` par Nico (prérequis : Mini App principale dans
+BotFather). Dettes 62-3 et 62-7 : à fermer au run live.
