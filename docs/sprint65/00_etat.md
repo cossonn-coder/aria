@@ -1,8 +1,9 @@
 # Sprint 65 — état du sprint
 
-**Phase** : A, à concevoir (`/conception sprint 65`).
+**Phase** : B figée (Nico, 2026-11-20 : « on suit tes recommandations, je valide »). Prêt pour `/sprint-auto sprint 65`.
+**Audit** : `audit_parties_echiquier.md`.
 **Sujet** : `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7).
-**Branche** : à créer depuis `main` après la clôture du sprint 64.
+**Branche** : `feat/sprint65-parties-echiquier`, depuis `main` @ `4f0d8ed`.
 
 ## Contexte hérité
 
@@ -51,9 +52,32 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 62-10 | Accès Iona | Note de Nico 2026-11-20 : « accès Iona à faire », contenu à préciser | — |
 | 64-1 | Deux règles de cadence | `chess_coach/level._cadence` (Lichess, blitz < 480 s) ≠ `meta_commands.game_cadence` (chess.com, < 600 s) : 480–599 s classé différemment | Aligner si Nico le veut |
 | 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
+| 65-1 | Charger une position FEN dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | Champ ou collage FEN qui place la position et lance l'analyse live |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
+
+## Décisions arrêtées (Nico, 2026-11-20)
+
+- **Parties cliquables** : toutes les lignes qui nomment une partie (`/parties details` ligne par
+  partie + classement 🏆/📉, classement de `/parties <ouv.>` et `/ouvertures <nom>`).
+- **Forme** : liens dans le texte vers la Mini App principale `https://t.me/<bot>?startapp=<hash>`,
+  envoi HTML. Raison : toutes les lignes cliquables, ouverture dans Telegram. Prérequis : Mini App
+  principale configurée dans BotFather (Nico, avant le run live).
+- **Analyse rechargée (62-7)** : coups, courbe, meilleurs coups, historique lus dans la fiche,
+  aucun `analyze_game`. Hors : repères de mat (pas d'`eval_cp` stocké, palace intact), texte du
+  coach (étape 5, 62-8). L'analyse live par position reste active.
+- **Hors sprint** : FEN dans l'échiquier → dette 65-1. Pseudo `BaguetteCopter` ajouté hors sprint
+  sur `main` (`4f0d8ed`).
+
+## Tronçons
+
+| # | Tronçon | État |
+|---|---|---|
+| 01 | `01_echiquier_fiche.md` : route `/stored` + page qui ouvre une fiche par `start_param` | ⏳ |
+| 02 | `02_liens_parties.md` : lignes de partie en liens Mini App dans `/parties` et `/ouvertures <nom>` | ⏳ |
+| 03 | `03_run_live.txt` : run live (Nico) | ⏳ |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis `docs/sprint64/00_etat.md`. Prochaine étape :
-`/conception sprint 65`.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
+`/sprint-auto sprint 65` (tronçon 01), puis 02, puis run live `03_run_live.txt` par Nico.
+Dettes 62-3 et 62-7 : à fermer au run live.
