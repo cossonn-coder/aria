@@ -46,7 +46,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | État |
 |---|---|---|
-| 01 | `01_mat_rate.md` : donnée, sélection, suite jusqu'au mat, légende | ⏳ |
+| 01 | `01_mat_rate.md` : donnée, sélection, suite jusqu'au mat, légende | ✅ (622 verts ; Stockfish local sur 10.Nxc7+ : `missed_mate=2`, suite `Bb5+ c6 Nf6#`) |
 | 02 | `02_run_live.txt` : run live (Nico) | ⏳ |
 
 ## Dettes
@@ -79,4 +79,4 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Prochaine étape : `/sprint-auto sprint 62` (tronçon 01), puis run live `02_run_live.txt`.
+Lire `CLAUDE.md`, ce fichier. Tronçon 01 fait : `missed_mate` (fonction pure `missed_mate`, `analysis.py`), groupe « mats ratés » en tête de `select_critical`, `mate_line` pour la suite du meilleur coup, légende et ligne LLM « mat en N manqué » (`chess_router.py`). Prochaine étape : run live `02_run_live.txt` (Nico).

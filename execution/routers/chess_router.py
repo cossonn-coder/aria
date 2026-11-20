@@ -891,10 +891,13 @@ def _caption(index: int, critical, plies: list) -> str:
                 f"explosif {_MARK_TRAP if _trap_replies(critical) else _MARK_EXPLOSIVE} "
                 f"{_move_label(p.move_number, p.color, critical.explosive.san)}!? "
                 f"(meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)})")
+    # Mat raté (sprint 62) : la perte en pts le ferait lire comme une imprécision.
+    verdict = (f"mat en {p.missed_mate} manqué" if p.missed_mate is not None
+               else f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
     return (f"Position {index} — coup {p.move_number} ({_COLOR_FR[p.color]}) : "
             f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}, "
             f"meilleur {_MARK_BEST} {_move_label(p.move_number, p.color, p.best_san)}, "
-            f"évaluation : {_win_drop(p.win_before, p.win_after, p.loss)}")
+            f"{verdict}")
 
 
 def _think_caption(index: int, p, seconds: float, think_verdict: str) -> str:
@@ -1325,6 +1328,8 @@ class ChessExecutionRouter(BaseRouter):
             ]
             if p.motifs:
                 lines.append(f"  motifs : {', '.join(_motif_fr(m) for m in p.motifs)}")
+            if p.missed_mate is not None:
+                lines.append(f"  mat en {p.missed_mate} manqué : le meilleur coup mate de force")
             if critical.kind == "e":
                 prev = analysis.plies[p.ply - 1]
                 lines.append(f"  erreur adverse {_move_label(prev.move_number, prev.color, prev.san)} : "
