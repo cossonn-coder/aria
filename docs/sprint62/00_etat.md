@@ -1,6 +1,6 @@
 # Sprint 62 — état du sprint
 
-**Phase** : 0 (cible à arbitrer), rien de figé.
+**Phase** : A (audit 62-1 fait, arbitrages en cours), rien de figé.
 **Branche** : à créer depuis `main` après merge du sprint 61.
 
 ## Contexte hérité
@@ -18,6 +18,26 @@
   jugé car dans le répertoire).
 - Chantier `/parties` + échiquier ARIA (demande Nico 2026-11-20, lignes 62-3 à 62-9) : volumineux,
   à découper sur plusieurs sprints.
+
+## Feuille de route (proposée, à valider)
+
+Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un sujet par sprint, dans l'ordre :
+
+1. **62 : mat raté** (62-1). Audit : `audit_mat_rate.md`.
+2. Suivi Telegram avec moteur (62-2 + 61-1).
+3. `/parties` sans échiquier : tri (62-4), rapide/blitz (62-5), `details` (62-6).
+4. `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7).
+5. Miniatures jouables dans l'échiquier (62-8).
+6. Échiquier centré joueur du bas + réponses adverses (61-4 + 62-9).
+7. Répertoire connu d'ARIA (61-5 + 61-10).
+8. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
+9. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
+
+## Questions ouvertes (sprint 62)
+
+- Portée : mat en ≤ 3 coups de Nico ? (reco : oui)
+- Priorité : mat raté en tête du budget, toujours retenu ? (reco : oui)
+- Légende : « mat en N manqué » au lieu de « −13 pts » ; qualité et stats inchangées ? (reco : oui)
 
 ## Dettes
 
@@ -48,4 +68,4 @@
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier. Prochaine étape : `/conception sprint 62` (choix de la cible).
+Lire `CLAUDE.md`, ce fichier. Prochaine étape : réponses de Nico aux 3 questions ouvertes, puis kickoff 62-1 (`audit_mat_rate.md`).
