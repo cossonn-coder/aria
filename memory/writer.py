@@ -316,6 +316,50 @@ def delete_consigne(doc_id: str) -> None:
     col.delete(ids=[doc_id])
 
 
+# ── Retours 👍 / 😢 sur les messages envoyés (sprint 67) ─────────────────────
+
+def write_sent_message(chat_id: int, message_id: int, text: str, kind: str, request: str) -> None:
+    """
+    Note un message envoyé par ARIA sur Telegram dans aria_feedback, room
+    <chat_id>, en attente d'une réaction de Nico (reaction = "").
+
+    doc_id déterministe tg_<chat_id>_<message_id> : la réaction, qui ne porte
+    que l'id du message, retrouve la fiche sans recherche. wing / room / type
+    structurels, posés en dernier (invariant W4).
+    """
+    col = get_collection(config.mempalace_path)
+    doc_id = f"tg_{chat_id}_{message_id}"
+
+    meta = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "kind": kind,
+        "request": request,
+        "reaction": "",
+        "comment": "",
+        "timestamp": _now_iso(),
+        "wing": "aria_feedback",
+        "room": str(chat_id),
+        "type": "sent_message",
+    }
+    _validate(meta)
+    col.upsert(documents=[text or "(photo sans légende)"], ids=[doc_id], metadatas=[meta])
+
+
+def update_message_feedback(chat_id: int, message_id: int, reaction: str, comment: str | None = None) -> None:
+    """
+    Pose la réaction (et le commentaire éventuel) de Nico sur un message noté.
+    ChromaDB fusionne les métadonnées : texte et demande d'origine restent
+    intacts. Un message envoyé avant le sprint 67 n'a pas de fiche : l'id
+    absent est ignoré par ChromaDB.
+    """
+    col = get_collection(config.mempalace_path)
+    meta = {"reaction": reaction, "reacted_at": _now_iso()}
+    if comment is not None:
+        meta["comment"] = comment
+    col.update(ids=[f"tg_{chat_id}_{message_id}"], metadatas=[meta])
+
+
 # ── Écriture conversationnelle (tours user/assistant) ────────────────────────
 
 _ALLOWED_CONVERSATION_ROLES = {"user", "assistant"}

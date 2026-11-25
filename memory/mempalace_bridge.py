@@ -389,6 +389,50 @@ class MempalaceBridge:
         ]
         consignes.sort(key=lambda c: c["timestamp"])
         return consignes
+
+    def load_feedback(self, since: str | None = None) -> list[dict]:
+        """
+        Messages envoyés par ARIA et leurs retours 👍 / 😢 (sprint 67), triés
+        par timestamp croissant. Lecture non-vectorielle par filtre wing + type,
+        comme load_consignes.
+
+        since (ISO) : ne garde que les messages envoyés depuis, ou réagis
+        depuis (un vieux message réagi récemment compte comme nouveau).
+
+        Returns:
+            liste de {**metadata, "id", "text"}.
+
+        Raises:
+            RuntimeError : si le bridge a été construit sans get_by_metadata.
+        """
+        if self._get_by_metadata is None:
+            raise RuntimeError(
+                "get_by_metadata callable required for feedback; "
+                "inject at construction"
+            )
+
+        from config import config as _config
+
+        where = {"$and": [
+            {"wing": "aria_feedback"},
+            {"type": "sent_message"},
+        ]}
+        result = self._get_by_metadata(_config.mempalace_path, where) or {}
+        ids = result.get("ids") or []
+        docs = result.get("documents") or []
+        metas = result.get("metadatas") or []
+
+        feedback = [
+            {**(meta or {}), "id": doc_id, "text": doc or ""}
+            for doc_id, doc, meta in zip(ids, docs, metas)
+        ]
+        if since:
+            feedback = [
+                f for f in feedback
+                if f.get("timestamp", "") >= since or f.get("reacted_at", "") >= since
+            ]
+        feedback.sort(key=lambda f: f.get("timestamp", ""))
+        return feedback
     def load_document_text(self, source: str) -> dict | None:
         """
         Texte intégral d'un document lu (sprint 43), stocké en wing
@@ -459,7 +503,7 @@ class MempalaceBridge:
         from config import config as _config
 
         counts = {}
-        for wing in ("aria_episodic", "aria_semantic", "aria_classifier", "aria_conversation"):
+        for wing in ("aria_episodic", "aria_semantic", "aria_classifier", "aria_conversation", "aria_feedback"):
             result = self._get_by_metadata(_config.mempalace_path, {"wing": wing}, include=[]) or {}
             counts[wing] = len(result.get("ids") or [])
         return counts

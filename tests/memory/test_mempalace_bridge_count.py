@@ -20,5 +20,6 @@ def test_count_by_wing_one_query_per_wing():
         "aria_semantic": 0,
         "aria_classifier": 0,
         "aria_conversation": 2,
+        "aria_feedback": 0,
     }
     assert all(include == [] for _, include in calls)
