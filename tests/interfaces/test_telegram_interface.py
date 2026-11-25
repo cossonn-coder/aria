@@ -16,6 +16,14 @@ from interfaces import telegram_interface
 from interfaces.telegram_interface import TelegramInterface
 
 
+@pytest.fixture(autouse=True)
+def feedback_writer():
+    # Sprint 67 : chaque envoi est noté dans aria_feedback ; jamais de vraie écriture en test.
+    with patch("interfaces.telegram_interface.write_sent_message", MagicMock()) as sent, \
+            patch("interfaces.telegram_interface.update_message_feedback", MagicMock()) as feedback:
+        yield sent, feedback
+
+
 @pytest.mark.asyncio
 async def test_send_text_retries_after_timeout():
     iface = TelegramInterface(kernel=MagicMock(), token="x")
@@ -459,3 +467,54 @@ async def test_parties_details_sends_html_with_mini_app_links():
     kwargs = iface.app.bot.send_message.await_args.kwargs
     assert kwargs["parse_mode"] == "HTML"
     assert '<a href="https://t.me/aria_bot?startapp=0123456789abcdef">' in kwargs["text"]
+
+
+# ── Sprint 67 : retours 👍 / 👎 sur les messages envoyés ─────────────────────
+
+@pytest.mark.asyncio
+async def test_sent_text_is_noted_with_its_request(feedback_writer):
+    sent, _ = feedback_writer
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=7, text="ok", caption=None, photo=None))
+    iface.current_request[42] = "salut"
+
+    await iface.send(42, "ok")
+
+    sent.assert_called_once_with(42, 7, "ok", "text", "salut")
+
+
+@pytest.mark.asyncio
+async def test_reaction_updates_feedback(feedback_writer):
+    from telegram import ReactionTypeEmoji
+    _, feedback = feedback_writer
+    iface = TelegramInterface(kernel=MagicMock(), token="x")
+    update = MagicMock()
+    update.message_reaction.chat.id = 42
+    update.message_reaction.message_id = 7
+    update.message_reaction.new_reaction = (ReactionTypeEmoji("👎"),)
+
+    await iface._handle_reaction(update, None)
+
+    feedback.assert_called_once_with(42, 7, "👎")
+
+
+@pytest.mark.asyncio
+async def test_reply_with_emoji_notes_comment_not_kernel(feedback_writer):
+    _, feedback = feedback_writer
+    kernel = MagicMock()
+    kernel.handle_event = AsyncMock()
+    iface = TelegramInterface(kernel=kernel, token="x")
+    iface.app = MagicMock()
+    iface.app.bot.send_message = AsyncMock()
+    context = MagicMock()
+    context.bot.id = 999
+    update = _text_update("👎 trop long", 3)
+    update.message.reply_to_message.from_user.id = 999
+    update.message.reply_to_message.message_id = 7
+
+    await iface._handle_message(update, context)
+
+    feedback.assert_called_once_with(42, 7, "👎", comment="trop long")
+    kernel.handle_event.assert_not_called()
+    iface.app.bot.send_message.assert_awaited_once_with(chat_id=42, text=telegram_interface.FEEDBACK_ACK)

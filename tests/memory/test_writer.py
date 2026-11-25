@@ -375,3 +375,20 @@ def test_write_consigne_structural_fields_and_delete(fake_col):
         "aria_semantic", "consignes", "consigne", "telegram")
     w.delete_consigne(doc_id)
     assert fake_col.calls[-1] == {"ids": [doc_id]}
+
+
+# ── Sprint 67 : messages envoyés et retours 👍 / 👎 ──────────────────────────
+
+def test_write_sent_message_in_feedback_wing(fake_col):
+    w.write_sent_message(42, 7, "ok", "text", "salut")
+    assert fake_col.last_id == "tg_42_7"
+    meta = fake_col.last_meta
+    assert (meta["wing"], meta["room"], meta["type"]) == ("aria_feedback", "42", "sent_message")
+    assert meta["reaction"] == "" and meta["request"] == "salut"
+
+
+def test_update_message_feedback_sets_reaction_and_comment(fake_col):
+    w.update_message_feedback(42, 7, "👎", comment="trop long")
+    assert fake_col.last_id == "tg_42_7"
+    assert fake_col.last_meta["reaction"] == "👎"
+    assert fake_col.last_meta["comment"] == "trop long"

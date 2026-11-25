@@ -12,7 +12,9 @@
 # Gestion de la concurrence : un Lock par user_id évite les
 # réponses entrelacées si l'utilisateur envoie plusieurs messages rapides.
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update, WebAppInfo
+from telegram import (
+    BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, ReactionTypeEmoji, Update, WebAppInfo,
+)
 from telegram.constants import ChatAction
 from telegram.error import NetworkError, TelegramError
 from telegram.ext import (
@@ -20,6 +22,7 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
+    MessageReactionHandler,
     filters,
 )
 
@@ -37,8 +40,10 @@ from interfaces.base_interface import BaseInterface
 from memory.writer import (
     delete_consigne,
     update_chess_game_result,
+    update_message_feedback,
     write_conversation_reset,
     write_consigne,
+    write_sent_message,
 )
 from core.event import Event, EventType
 from files.extract import extract_text
@@ -103,6 +108,11 @@ def _glue(head: str, tail: str) -> str:
 # (sprint 40). Constante module : surchargée en test.
 REBOOT_MARKER = Path.home() / ".aria" / "reboot_pending"
 
+# Retour par réponse (sprint 67) : une réponse à un message d'ARIA qui commence
+# par l'un de ces emojis note réaction + commentaire au lieu de partir au kernel.
+FEEDBACK_EMOJIS = ("👍", "👎")
+FEEDBACK_ACK = "📝 Retour noté."
+
 
 def _log_external_failure(future):
     """Journalise l'exception d'un traitement lancé par submit_text."""
@@ -135,6 +145,10 @@ class TelegramInterface(BaseInterface):
         # Fragment de PGN en attente de sa suite, par chat_id : (texte, tâche
         # de traitement différé). En RAM (sprint 51).
         self.pgn_fragments = {}
+        # Demande en cours de traitement, par chat_id (sprint 67) : notée avec
+        # chaque message envoyé, pour juger une réponse avec sa question.
+        # Un décalage entre deux messages très rapprochés est accepté.
+        self.current_request = {}
 
     def start(self):
         self.app = ApplicationBuilder().token(self.token).post_init(self._post_init).build()
@@ -146,7 +160,8 @@ class TelegramInterface(BaseInterface):
 
         # Retries de bootstrap infinis : PTB réessaie indéfiniment l'initialisation
         # (get_me) au lieu de lever et de tuer le process au démarrage.
-        self.app.run_polling(bootstrap_retries=-1)
+        # ALL_TYPES : sans lui, Telegram n'envoie pas les réactions (sprint 67).
+        self.app.run_polling(bootstrap_retries=-1, allowed_updates=Update.ALL_TYPES)
 
     def _add_handlers(self):
         """Branche messages, photos et métacommandes, filtrés sur Nico seul."""
@@ -173,6 +188,25 @@ class TelegramInterface(BaseInterface):
             self.app.add_handler(
                 CommandHandler(name, getattr(self, f"_cmd_{name}"), filters=only_nico)
             )
+
+        # Réactions 👍 / 👎 de Nico sur les messages d'ARIA (sprint 67).
+        self.app.add_handler(
+            MessageReactionHandler(
+                self._handle_reaction, user_id=config.allowed_user_id,
+                # Filtre par utilisateur : PTB exige d'exclure les réactions anonymes (comptes).
+                message_reaction_types=MessageReactionHandler.MESSAGE_REACTION_UPDATED,
+            )
+        )
+
+        # Demande d'origine des métacommandes, notée en un seul endroit : groupe -1,
+        # traité avant le CommandHandler de la commande (sprint 67).
+        self.app.add_handler(
+            MessageHandler(only_nico & filters.COMMAND, self._note_command), group=-1
+        )
+
+    async def _note_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Mémorise la commande reçue comme demande d'origine des messages qui suivent."""
+        self.current_request[update.effective_chat.id] = update.message.text
 
     async def _post_init(self, application):
         """
@@ -215,6 +249,20 @@ class TelegramInterface(BaseInterface):
 
         user_id, chat_id = str(update.effective_user.id), update.effective_chat.id
         text = update.message.text
+
+        # Réponse 👍 / 👎 à un message d'ARIA : retour noté, pas de conversation (sprint 67).
+        replied = update.message.reply_to_message
+        if (text.startswith(FEEDBACK_EMOJIS) and replied is not None
+                and replied.from_user is not None and replied.from_user.id == context.bot.id):
+            emoji = next(e for e in FEEDBACK_EMOJIS if text.startswith(e))
+            comment = text[len(emoji):].strip()
+            await asyncio.to_thread(update_message_feedback, chat_id, replied.message_id, emoji, comment=comment)
+            log.info("feedback_comment chat_id=%s message_id=%s reaction=%s chars=%d",
+                     chat_id, replied.message_id, emoji, len(comment))
+            # Envoi direct, hors _deliver : l'accusé n'est pas un message à juger.
+            await self.app.bot.send_message(chat_id=chat_id, text=FEEDBACK_ACK)
+            return
+
         pending = self.pgn_fragments.pop(chat_id, None)
         if pending is not None:
             pending_text, timer = pending
@@ -236,6 +284,7 @@ class TelegramInterface(BaseInterface):
 
     async def _process_text(self, user_id: str, chat_id: int, text: str):
         """Traite un texte de l'utilisateur : kernel sous verrou, puis envoi de la réponse."""
+        self.current_request[chat_id] = text
         async with self.user_locks[user_id]:
             event = Event.create(
                 event_type=EventType.TEXT,
@@ -246,6 +295,18 @@ class TelegramInterface(BaseInterface):
             result = await self._handle_with_waiting(chat_id, event)
 
         await self.send(chat_id, result)
+
+    async def _handle_reaction(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Réaction de Nico sur un message (sprint 67) : posée sur la fiche du message,
+        sans réponse. Dernier emoji de la liste ; "" si retirée ou emoji personnalisé.
+        """
+        reaction = update.message_reaction
+        chat_id, message_id = reaction.chat.id, reaction.message_id
+        last = reaction.new_reaction[-1] if reaction.new_reaction else None
+        emoji = last.emoji if isinstance(last, ReactionTypeEmoji) else ""
+        await asyncio.to_thread(update_message_feedback, chat_id, message_id, emoji)
+        log.info("feedback_reaction chat_id=%s message_id=%s reaction=%s", chat_id, message_id, emoji)
 
     # =========================================================
     # ENTRÉE EXTERNE (échiquier, sprint 39)
@@ -287,6 +348,7 @@ class TelegramInterface(BaseInterface):
 
         user_id = str(update.effective_user.id)
         chat_id = update.effective_chat.id
+        self.current_request[chat_id] = update.message.caption or "(photo)"
 
         async with self.user_locks[user_id]:
             photo = update.message.photo[-1]
@@ -334,6 +396,8 @@ class TelegramInterface(BaseInterface):
         chat_id = update.effective_chat.id
         document = update.message.document
         caption = update.message.caption
+        # Un .pgn la remplace par son texte dans _process_text.
+        self.current_request[chat_id] = f"(fichier {document.file_name}) {caption or ''}".strip()
 
         if document.file_size and document.file_size > MAX_FILE_BYTES:
             await self._deliver(chat_id, FILE_TOO_BIG)
@@ -594,7 +658,7 @@ class TelegramInterface(BaseInterface):
         """
         for attempt in range(1, SEND_ATTEMPTS + 1):
             try:
-                return await make_call()
+                msg = await make_call()
             except NetworkError as e:
                 if attempt == SEND_ATTEMPTS:
                     raise
@@ -603,6 +667,14 @@ class TelegramInterface(BaseInterface):
                     attempt, SEND_ATTEMPTS, type(e).__name__, chat_id,
                 )
                 await asyncio.sleep(SEND_BACKOFF_SECONDS[attempt - 1])
+                continue
+            # Chaque message envoyé est noté pour recevoir un retour 👍 / 👎 (sprint 67).
+            if msg is not None:
+                await asyncio.to_thread(
+                    write_sent_message, chat_id, msg.message_id, msg.text or msg.caption or "",
+                    "photo" if msg.photo else "text", self.current_request.get(chat_id, ""),
+                )
+            return msg
 
     async def send(self, chat_id: int, message):
         """

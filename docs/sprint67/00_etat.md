@@ -1,8 +1,33 @@
 # Sprint 67 — état du sprint
 
-**Phase** : A (à concevoir). Prochaine étape : `/conception sprint 67`.
-**Sujet** : boucle de rétroaction 👍 / 😢 sur les messages Telegram (66-3).
-**Branche** : à créer depuis `main` au tag `sprint-66`.
+**Phase** : close (run live validé 2026-11-25, tag `sprint-67`). Suite : `docs/sprint68/00_etat.md`.
+**Sujet** : boucle de rétroaction 👍 / 👎 sur les messages Telegram (66-3).
+**Branche** : `feat/sprint67-retroaction` (depuis `main`, tag `sprint-66`).
+
+## Décisions arrêtées (Nico, 2026-11-25)
+
+1. **Chaque message envoyé est noté** dans un wing dédié `aria_feedback` (texte + demande d'origine) ; une réaction met la fiche à jour. Raison : distinguer 👍 / 👎 / aucun, survivre aux redémarrages ; pas dans `aria_episodic` (lue en similarité pour le contexte LLM).
+2. **Périmètre** : toutes les sorties passées par `_send_with_retry` (réponses, photos de miniatures, métacommandes, échiquier) ; exclus : « ⏳ Je travaille dessus », « je reviens », « écrit… ».
+3. **Exploitation** : nouveau skill `/amelioration` qui lit un rapport des retours et propose des axes de travail à lancer en `/conception`. Ne modifie rien.
+4. **Démarrage** : un hook SessionStart (projet aria) lance un script sans LLM qui n'affiche qu'une ligne « N nouveaux retours dont K 👎 → /amelioration », rien s'il n'y a rien.
+5. **Déjà traité** : chaque passage de `/amelioration` écrit `docs/amelioration/AAAA-MM-JJ.md` ; le suivant repart de la date du dernier rapport. Claude Code ne fait que **lire** le palace (pas d'écriture hors du service : risque de corruption à deux process).
+6. **Commentaire** dans ce sprint : répondre (« Répondre » Telegram) à un message d'ARIA par un texte qui commence par 👍 ou 👎 enregistre réaction + commentaire sur ce message, au lieu de partir dans la conversation.
+7. **👎 au lieu de 😢** (Nico, 2026-11-25, pendant le run live) : 😢 absent des réactions proposées par Telegram.
+
+## Tronçons
+
+| # | Kickoff | Objet | État |
+|---|---|---|---|
+| 01 | `01_reactions.md` | Réactions reçues, chaque envoi noté dans `aria_feedback`, commentaire par réponse 👍/👎, `/status` || ✅ (644 tests ; écart : `MessageReactionHandler` exige `message_reaction_types=MESSAGE_REACTION_UPDATED` avec `user_id` ; commandes notées par un `MessageHandler` COMMAND en groupe -1) |
+| 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ✅ (647 tests ; `.claude/settings.json` + `.claude/skills/amelioration/SKILL.md` présents, non versionnés ; sans rapport antérieur, l'alerte dit « depuis le début ») |
+| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ✅ 2026-11-25 : réactions reçues en privé (👎, ❤, retrait), commentaire par « Répondre » + `👎 trop long` → « 📝 Retour noté. », `/status`, alerte de démarrage, `/amelioration` (`docs/amelioration/2026-11-25.md`), plus d'alerte ensuite |
+
+Dettes : 66-3 fermée par ce sprint (run live validé). Nouvelle dette possible :
+`.claude/` gitignoré en entier (skills et hooks non versionnés) — à arbitrer si Nico veut les versionner.
+
+## Questions ouvertes
+
+(aucune)
 
 ## Contexte hérité
 
@@ -22,7 +47,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 3. ~~64 : `/parties` sans échiquier (62-4, 62-5, 62-6)~~ : fait au sprint 64, run live validé.
 4. ~~65 : `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7)~~ : fait au sprint 65, run live validé.
 5. ~~66 : miniatures jouables dans l'échiquier (62-8)~~ : fait au sprint 66, run live validé.
-6. **67 (ajouté par Nico, 2026-11-25) :** boucle de rétroaction (66-3) : réactions 👍 / 😢 sur
+6. **67 (ajouté par Nico, 2026-11-25) :** boucle de rétroaction (66-3) : réactions 👍 / 👎 sur
    les messages Telegram, enregistrées dans le palace, traitées ensemble en conception.
 7. Échiquier centré joueur du bas + réponses adverses (61-4 + 62-9).
 8. Répertoire connu d'ARIA (61-5 + 61-10).
@@ -55,12 +80,13 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
 | 65-2 | « partie introuvable » effacé | Échiquier : le message sur la ligne d'état est remplacé par l'analyse live après ~1 s (comme « PGN illisible ») | Garder le message affiché si Nico le veut |
 | 65-3 | Échiquier inaccessible hors tailnet | Tailscale Serve « tailnet only » : seul le téléphone ouvre la Mini App, pas l'ordi de Nico | Tailscale sur l'ordi ; Funnel (public) seulement après arbitrage |
-| 66-3 | Boucle de rétroaction | Nico, 2026-11-25 : 👍 = j'aime, 😢 = je n'aime pas, sur **chaque** message Telegram (échecs ou non ; miniature = son Pourquoi, texte final = bilan). Retours positif / aucun / négatif enregistrés dans le palace, traités ensemble en conception. But final : ARIA s'auto-améliore à chaque message (réécrit ses prompts, modifie son code si possible) ; système cognitif pas encore prêt. Constats : `run_polling` sans `allowed_updates` (réactions non reçues) ; une réaction ne porte que l'id du message → mémoriser à l'envoi message → réponse ; le résultat du router ne porte pas l'id de la fiche | **Sprint 67** ; mode de traitement à décider en conception |
+| 66-3 | Boucle de rétroaction | Nico, 2026-11-25 : 👍 = j'aime, 👎 = je n'aime pas, sur **chaque** message Telegram (échecs ou non ; miniature = son Pourquoi, texte final = bilan). Retours positif / aucun / négatif enregistrés dans le palace, traités ensemble en conception. But final : ARIA s'auto-améliore à chaque message (réécrit ses prompts, modifie son code si possible) ; système cognitif pas encore prêt. Constats : `run_polling` sans `allowed_updates` (réactions non reçues) ; une réaction ne porte que l'id du message → mémoriser à l'envoi message → réponse ; le résultat du router ne porte pas l'id de la fiche | **Sprint 67** ; mode de traitement à décider en conception |
 | 66-4 | « Envoyer à ARIA » depuis une FEN | Le PGN exporté porte `SetUp`/`FEN` ; lecture côté serveur non vérifiée | Vérifier si Nico envoie une position collée |
 | 66-5 | ▶ du haut sur PC vide la suite d'une miniature | ▶ de `#nav` fait `goTo` (partie) ; la suite se joue par → ou la molette | Faire jouer `ahead` à ▶ si Nico le veut |
 | 66-6 | Miniatures perdues au rechargement hors Telegram | Rechargement : partie relue par `/game`, sans `minis` | Rouvrir par `/stored` si Nico le veut |
+| 67-1 | Demande de recettes routée vers l'image | Run live 2026-11-25 : « donne 3 idées de dîner d'automne hiver rapide gourmand genereux et gras pour 7 » → une image générée, légende = la demande ; 👎 de Nico (fiche `tg_6895898630_6816`) | Premier cas pour `/amelioration` ; audit du classifier en conception |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier (dette 66-3), puis `/conception sprint 67`.
+Sprint clos. Reprendre dans `docs/sprint68/00_etat.md`.
