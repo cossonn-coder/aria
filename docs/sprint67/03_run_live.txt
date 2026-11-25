@@ -1,0 +1,40 @@
+SPRINT 67 — RUN LIVE (Nico) : boucle de rétroaction 👍 / 😢
+
+Avant : sudo systemctl restart aria.service
+Logs dans un terminal : sudo journalctl -u aria -f -o cat | grep -E "feedback_|telegram error"
+
+1. Réaction sur une réponse texte
+   Envoyer à ARIA :
+   Donne-moi trois idées de dîner rapide
+   Mettre 👍 sur sa réponse.
+   Attendu journalctl : feedback_reaction chat_id=… message_id=… reaction=👍
+   (RIEN dans les logs = Telegram n'envoie pas les réactions au bot en privé : s'arrêter et le signaler.)
+
+2. Retrait
+   Retirer le 👍.
+   Attendu : feedback_reaction … reaction=   (vide)
+
+3. Réaction sur une miniature
+   Envoyer une partie (PGN) qui produit des miniatures, mettre 😢 sur la photo d'une miniature.
+   Attendu : feedback_reaction … reaction=😢
+
+4. Commentaire par réponse
+   Sur le bilan texte de la partie : appui long → Répondre, puis envoyer :
+   😢 trop long
+   Attendu Telegram : « 📝 Retour noté. », et AUCUNE réponse d'ARIA au contenu.
+   Attendu journalctl : feedback_comment … reaction=😢
+
+5. Réponse sans emoji (non-régression)
+   Répondre à un message d'ARIA par :
+   et pour le dessert ?
+   Attendu : ARIA répond normalement.
+
+6. /status
+   Attendu : une ligne « aria_feedback : N » (N > 0).
+
+7. Côté Claude Code
+   Ouvrir une nouvelle session claude dans ~/Nextcloud/projects/aria.
+   Attendu : Claude signale « ARIA : N nouveaux retours dont K 😢 … → lance /amelioration ».
+   Lancer /amelioration.
+   Attendu : 😢 de la miniature et « trop long » listés, axes proposés, fichier docs/amelioration/AAAA-MM-JJ.md écrit.
+   Rouvrir une session : plus d'alerte (sauf nouveaux retours).

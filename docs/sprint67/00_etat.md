@@ -1,8 +1,32 @@
 # Sprint 67 — état du sprint
 
-**Phase** : A (à concevoir). Prochaine étape : `/conception sprint 67`.
+**Phase** : B figée (OK Nico 2026-11-25). Prochaine étape : `/sprint-auto sprint 67`.
 **Sujet** : boucle de rétroaction 👍 / 😢 sur les messages Telegram (66-3).
-**Branche** : à créer depuis `main` au tag `sprint-66`.
+**Branche** : `feat/sprint67-retroaction` (depuis `main`, tag `sprint-66`).
+
+## Décisions arrêtées (Nico, 2026-11-25)
+
+1. **Chaque message envoyé est noté** dans un wing dédié `aria_feedback` (texte + demande d'origine) ; une réaction met la fiche à jour. Raison : distinguer 👍 / 😢 / aucun, survivre aux redémarrages ; pas dans `aria_episodic` (lue en similarité pour le contexte LLM).
+2. **Périmètre** : toutes les sorties passées par `_send_with_retry` (réponses, photos de miniatures, métacommandes, échiquier) ; exclus : « ⏳ Je travaille dessus », « je reviens », « écrit… ».
+3. **Exploitation** : nouveau skill `/amelioration` qui lit un rapport des retours et propose des axes de travail à lancer en `/conception`. Ne modifie rien.
+4. **Démarrage** : un hook SessionStart (projet aria) lance un script sans LLM qui n'affiche qu'une ligne « N nouveaux retours dont K 😢 → /amelioration », rien s'il n'y a rien.
+5. **Déjà traité** : chaque passage de `/amelioration` écrit `docs/amelioration/AAAA-MM-JJ.md` ; le suivant repart de la date du dernier rapport. Claude Code ne fait que **lire** le palace (pas d'écriture hors du service : risque de corruption à deux process).
+6. **Commentaire** dans ce sprint : répondre (« Répondre » Telegram) à un message d'ARIA par un texte qui commence par 👍 ou 😢 enregistre réaction + commentaire sur ce message, au lieu de partir dans la conversation.
+
+## Tronçons
+
+| # | Kickoff | Objet | État |
+|---|---|---|---|
+| 01 | `01_reactions.md` | Réactions reçues, chaque envoi noté dans `aria_feedback`, commentaire par réponse 👍/😢, `/status` | ⏳ |
+| 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ⏳ |
+| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ⏳ |
+
+Dettes : 66-3 fermée par ce sprint une fois le run live validé. Nouvelle dette possible :
+`.claude/` gitignoré en entier (skills et hooks non versionnés) — à arbitrer si Nico veut les versionner.
+
+## Questions ouvertes
+
+(aucune)
 
 ## Contexte hérité
 
@@ -63,4 +87,4 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier (dette 66-3), puis `/conception sprint 67`.
+Lire `CLAUDE.md`, ce fichier, `audit_retroaction.md`. Conception figée. Prochaine étape : `/sprint-auto sprint 67` (tronçons 01 puis 02), puis run live `03_run_live.txt` par Nico.
