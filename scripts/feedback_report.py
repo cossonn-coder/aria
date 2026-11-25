@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # scripts/feedback_report.py
 #
-# Rapport des retours 👍 / 😢 de Nico sur les messages Telegram d'ARIA (sprint 67).
+# Rapport des retours 👍 / 👎 de Nico sur les messages Telegram d'ARIA (sprint 67).
 # Lecture seule du palace via le bridge (règle 2) : aucune écriture, Claude Code ne
 # doit jamais écrire dans le palace pendant que le service tourne (décision 5).
 #
@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 REPORTS_DIR = ROOT / "docs" / "amelioration"
 SINCE_PREFIX = "Jusqu'au : "
-SAD, THUMB = "😢", "👍"
+SAD, THUMB = "👎", "👍"
 TEXT_LIMIT = 600
 
 
@@ -40,7 +40,7 @@ def last_report_since(reports_dir: Path = REPORTS_DIR) -> str | None:
 
 
 def _reacted(entries: list[dict]) -> list[dict]:
-    """Messages réagis, 😢 d'abord, puis 👍, puis les autres réactions (ordre stable)."""
+    """Messages réagis, 👎 d'abord, puis 👍, puis les autres réactions (ordre stable)."""
     order = {SAD: 0, THUMB: 1}
     reacted = [e for e in entries if e.get("reaction")]
     return sorted(reacted, key=lambda e: order.get(e["reaction"], 2))
@@ -51,7 +51,7 @@ def _since_label(since: str | None) -> str:
 
 
 def build_report(entries: list[dict], since: str | None, now: str | None = None) -> str:
-    """Rapport texte : en-tête de compteurs puis chaque message réagi, 😢 d'abord.
+    """Rapport texte : en-tête de compteurs puis chaque message réagi, 👎 d'abord.
     now (ISO UTC) est injectable pour les tests ; par défaut, l'instant présent."""
     now = now or datetime.now(timezone.utc).isoformat()
     reactions = [e.get("reaction", "") for e in entries]
@@ -101,7 +101,7 @@ def load_entries(since: str | None) -> list[dict]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Rapport des retours 👍 / 😢 sur ARIA.")
+    parser = argparse.ArgumentParser(description="Rapport des retours 👍 / 👎 sur ARIA.")
     parser.add_argument("--since", help="AAAA-MM-JJ, force le point de départ")
     parser.add_argument("--alerte", action="store_true", help="une ligne pour le hook SessionStart")
     args = parser.parse_args()

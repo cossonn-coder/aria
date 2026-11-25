@@ -377,7 +377,7 @@ def test_write_consigne_structural_fields_and_delete(fake_col):
     assert fake_col.calls[-1] == {"ids": [doc_id]}
 
 
-# ── Sprint 67 : messages envoyés et retours 👍 / 😢 ──────────────────────────
+# ── Sprint 67 : messages envoyés et retours 👍 / 👎 ──────────────────────────
 
 def test_write_sent_message_in_feedback_wing(fake_col):
     w.write_sent_message(42, 7, "ok", "text", "salut")
@@ -388,7 +388,7 @@ def test_write_sent_message_in_feedback_wing(fake_col):
 
 
 def test_update_message_feedback_sets_reaction_and_comment(fake_col):
-    w.update_message_feedback(42, 7, "😢", comment="trop long")
+    w.update_message_feedback(42, 7, "👎", comment="trop long")
     assert fake_col.last_id == "tg_42_7"
-    assert fake_col.last_meta["reaction"] == "😢"
+    assert fake_col.last_meta["reaction"] == "👎"
     assert fake_col.last_meta["comment"] == "trop long"

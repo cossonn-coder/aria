@@ -316,7 +316,7 @@ def delete_consigne(doc_id: str) -> None:
     col.delete(ids=[doc_id])
 
 
-# ── Retours 👍 / 😢 sur les messages envoyés (sprint 67) ─────────────────────
+# ── Retours 👍 / 👎 sur les messages envoyés (sprint 67) ─────────────────────
 
 def write_sent_message(chat_id: int, message_id: int, text: str, kind: str, request: str) -> None:
     """

@@ -13,7 +13,7 @@ def test_load_feedback_filters_since_and_sorts():
             "documents": ["récent", "vieux réagi", "vieux"],
             "metadatas": [
                 {"timestamp": "2026-11-25T10:00", "reaction": ""},
-                {"timestamp": "2026-11-01T10:00", "reaction": "😢", "reacted_at": "2026-11-25T09:00"},
+                {"timestamp": "2026-11-01T10:00", "reaction": "👎", "reacted_at": "2026-11-25T09:00"},
                 {"timestamp": "2026-11-02T10:00", "reaction": ""},
             ],
         }

@@ -469,7 +469,7 @@ async def test_parties_details_sends_html_with_mini_app_links():
     assert '<a href="https://t.me/aria_bot?startapp=0123456789abcdef">' in kwargs["text"]
 
 
-# ── Sprint 67 : retours 👍 / 😢 sur les messages envoyés ─────────────────────
+# ── Sprint 67 : retours 👍 / 👎 sur les messages envoyés ─────────────────────
 
 @pytest.mark.asyncio
 async def test_sent_text_is_noted_with_its_request(feedback_writer):
@@ -492,11 +492,11 @@ async def test_reaction_updates_feedback(feedback_writer):
     update = MagicMock()
     update.message_reaction.chat.id = 42
     update.message_reaction.message_id = 7
-    update.message_reaction.new_reaction = (ReactionTypeEmoji("😢"),)
+    update.message_reaction.new_reaction = (ReactionTypeEmoji("👎"),)
 
     await iface._handle_reaction(update, None)
 
-    feedback.assert_called_once_with(42, 7, "😢")
+    feedback.assert_called_once_with(42, 7, "👎")
 
 
 @pytest.mark.asyncio
@@ -509,12 +509,12 @@ async def test_reply_with_emoji_notes_comment_not_kernel(feedback_writer):
     iface.app.bot.send_message = AsyncMock()
     context = MagicMock()
     context.bot.id = 999
-    update = _text_update("😢 trop long", 3)
+    update = _text_update("👎 trop long", 3)
     update.message.reply_to_message.from_user.id = 999
     update.message.reply_to_message.message_id = 7
 
     await iface._handle_message(update, context)
 
-    feedback.assert_called_once_with(42, 7, "😢", comment="trop long")
+    feedback.assert_called_once_with(42, 7, "👎", comment="trop long")
     kernel.handle_event.assert_not_called()
     iface.app.bot.send_message.assert_awaited_once_with(chat_id=42, text=telegram_interface.FEEDBACK_ACK)

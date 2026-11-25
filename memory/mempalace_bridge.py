@@ -392,7 +392,7 @@ class MempalaceBridge:
 
     def load_feedback(self, since: str | None = None) -> list[dict]:
         """
-        Messages envoyés par ARIA et leurs retours 👍 / 😢 (sprint 67), triés
+        Messages envoyés par ARIA et leurs retours 👍 / 👎 (sprint 67), triés
         par timestamp croissant. Lecture non-vectorielle par filtre wing + type,
         comme load_consignes.
 

@@ -110,7 +110,7 @@ REBOOT_MARKER = Path.home() / ".aria" / "reboot_pending"
 
 # Retour par réponse (sprint 67) : une réponse à un message d'ARIA qui commence
 # par l'un de ces emojis note réaction + commentaire au lieu de partir au kernel.
-FEEDBACK_EMOJIS = ("👍", "😢")
+FEEDBACK_EMOJIS = ("👍", "👎")
 FEEDBACK_ACK = "📝 Retour noté."
 
 
@@ -189,7 +189,7 @@ class TelegramInterface(BaseInterface):
                 CommandHandler(name, getattr(self, f"_cmd_{name}"), filters=only_nico)
             )
 
-        # Réactions 👍 / 😢 de Nico sur les messages d'ARIA (sprint 67).
+        # Réactions 👍 / 👎 de Nico sur les messages d'ARIA (sprint 67).
         self.app.add_handler(
             MessageReactionHandler(
                 self._handle_reaction, user_id=config.allowed_user_id,
@@ -250,7 +250,7 @@ class TelegramInterface(BaseInterface):
         user_id, chat_id = str(update.effective_user.id), update.effective_chat.id
         text = update.message.text
 
-        # Réponse 👍 / 😢 à un message d'ARIA : retour noté, pas de conversation (sprint 67).
+        # Réponse 👍 / 👎 à un message d'ARIA : retour noté, pas de conversation (sprint 67).
         replied = update.message.reply_to_message
         if (text.startswith(FEEDBACK_EMOJIS) and replied is not None
                 and replied.from_user is not None and replied.from_user.id == context.bot.id):
@@ -668,7 +668,7 @@ class TelegramInterface(BaseInterface):
                 )
                 await asyncio.sleep(SEND_BACKOFF_SECONDS[attempt - 1])
                 continue
-            # Chaque message envoyé est noté pour recevoir un retour 👍 / 😢 (sprint 67).
+            # Chaque message envoyé est noté pour recevoir un retour 👍 / 👎 (sprint 67).
             if msg is not None:
                 await asyncio.to_thread(
                     write_sent_message, chat_id, msg.message_id, msg.text or msg.caption or "",
