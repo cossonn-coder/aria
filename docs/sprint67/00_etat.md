@@ -18,7 +18,7 @@
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_reactions.md` | Réactions reçues, chaque envoi noté dans `aria_feedback`, commentaire par réponse 👍/😢, `/status` || ✅ (644 tests ; écart : `MessageReactionHandler` exige `message_reaction_types=MESSAGE_REACTION_UPDATED` avec `user_id` ; commandes notées par un `MessageHandler` COMMAND en groupe -1) |
-| 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ⏳ |
+| 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ✅ (647 tests ; `.claude/settings.json` + `.claude/skills/amelioration/SKILL.md` présents, non versionnés ; sans rapport antérieur, l'alerte dit « depuis le début ») |
 | 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ⏳ |
 
 Dettes : 66-3 fermée par ce sprint une fois le run live validé. Nouvelle dette possible :
@@ -87,4 +87,4 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_retroaction.md`. Conception figée. Tronçon 01 fait (non commité à sa sortie de sous-agent). Prochaine étape : tronçon 02 (`02_amelioration.md`, `bridge.load_feedback(since)` disponible), puis run live `03_run_live.txt` par Nico.
+Lire `CLAUDE.md`, ce fichier, `audit_retroaction.md`. Conception figée. Tronçons 01 et 02 faits (02 non commité à sa sortie de sous-agent ; hook et skill sous `.claude/`, gitignoré). Prochaine étape : run live `03_run_live.txt` par Nico (réactions reçues, alerte au démarrage de Claude Code, `/amelioration`).
