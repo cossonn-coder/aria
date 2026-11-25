@@ -36,7 +36,9 @@
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
   .move { cursor: pointer; padding: 0 1px; border-radius: 3px; }
   .move:hover { background: #6a4a1c; }
-  #pgn { width: 100%; box-sizing: border-box; height: 90px; }
+  /* flex-shrink: 0 : dans le menu ☰ du téléphone (colonne flex de hauteur fixe qui déborde),
+     le champ était écrasé à une ligne ; police lisible pour une FEN ou un PGN collé. */
+  #pgn { width: 100%; box-sizing: border-box; height: 90px; flex-shrink: 0; font-size: 1em; }
   #nav { display: flex; gap: 6px; }
   #played { margin-top: 8px; font-size: 1.1em; }
   #history { white-space: pre-line; }
@@ -45,6 +47,16 @@
   #moves { width: 560px; margin-top: 8px; line-height: 1.6; }
   #moves .current { background: #6a4a1c; border-radius: 3px; outline: 2px solid #e8b23a; }
   #moves .error-move { padding: 0 3px; border-radius: 3px; box-shadow: 0 0 0 1px #ccc; }
+  /* Miniatures (sprint 66) : liste de l'onglet, zone d'exercice et de solution sous l'échiquier. */
+  #minis, #exercise { width: 560px; margin-top: 8px; }
+  /* Glissement horizontal réservé au changement de miniature (le défilement vertical reste). */
+  #exercise { touch-action: pan-y; }
+  #exercise { white-space: pre-line; }
+  #exercise:empty { display: none; }
+  /* Exercice « 2e chance » : tout ce qui donne la réponse est masqué. */
+  body.exercise #played, body.exercise #accuracy, body.exercise #analysis,
+  body.exercise #graph, body.exercise #columns { display: none !important; }
+  body.exercise #evalbar { visibility: hidden; }
   #mini { position: fixed; width: 220px; height: 220px; visibility: hidden; z-index: 10;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; }
   /* Éléments propres au téléphone (sprint 41) : masqués sur PC. */
@@ -67,7 +79,8 @@
     #evalbar-white { height: 50%; background: #eee; }
     /* Carré : largeur d'écran moins les marges (16 px) et la barre d'évaluation (10 + 4 px). */
     #board { width: calc(100vw - 30px); height: calc(100vw - 30px); }
-    #analysis { order: 2; }
+    #analysis, #exercise { order: 2; }
+    #exercise { width: auto; }
     /* Hauteur fixe de deux lignes : le statut d'analyse qui apparaît, change ou s'efface
        ne décale plus rien (clignotement de l'échiquier). */
     #status { width: auto; margin-top: 0; cursor: pointer; height: 2.6em; line-height: 1.3;
@@ -79,7 +92,8 @@
     #tabs button { flex: 1; padding: 8px 0; }
     #tabs button.active { background: #6a4a1c; }
     #tabs .dot { margin: 0; }
-    #moves, #graph, #columns { order: 6; }
+    #moves, #graph, #columns, #minis { order: 6; }
+    #minis { width: auto; margin-top: 0; }
     #moves { width: auto; margin-top: 0; }
     #graph { width: 100%; height: auto; margin-top: 0; }
     #columns { display: block; }
@@ -87,7 +101,7 @@
     /* Téléphone : seulement le coup proposé pour la position affichée. */
     .column .entry.other { display: none; }
     /* Un seul panneau visible : celui de l'onglet actif. */
-    #moves:not(.shown), #graph:not(.shown), .column:not(.shown) { display: none; }
+    #moves:not(.shown), #graph:not(.shown), .column:not(.shown), #minis:not(.shown) { display: none; }
     #controls, #nav { display: none; }
     body.menu-open #controls { display: flex; position: fixed; inset: 0 0 56px 0; z-index: 20;
                                overflow-y: auto; padding: 16px; background: #1b1c1f; min-width: 0; }
@@ -106,6 +120,7 @@
       <div id="evalbar"><div id="evalbar-white"></div></div>
       <div id="board"></div>
     </div>
+    <div id="exercise"></div>
     <div id="played"></div>
     <div id="accuracy"></div>
     <div id="history"></div>
@@ -114,9 +129,11 @@
       <button data-panel="saved-explosive"><span class="dot" style="background: #ff7f00"></span></button>
       <button data-panel="saved-trap"><span class="dot" style="background: #00e5ff"></span></button>
       <button data-panel="saved-strategy"><span class="dot" style="background: #ffe100"></span></button>
+      <button data-panel="minis">Miniatures</button>
     </nav>
     <svg id="graph" width="560" height="200" viewBox="0 0 560 200"></svg>
     <div id="moves"></div>
+    <div id="minis"></div>
     <div id="analysis">
       <div id="status"></div>
       <div id="replies"></div>
@@ -148,6 +165,8 @@
     <label>Erreurs <input id="show-errors" type="checkbox" checked></label>
     <label>Piège <input id="show-trap" type="checkbox" checked></label>
     <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
+    <label><span>Seuil 2e chance : <span id="threshold-value">10</span> pts</span>
+      <input id="threshold" type="range" min="1" max="30" value="10"></label>
   </div>
   <div id="columns">
     <section class="column" id="saved-explosive"><h3><span class="dot" style="background: #ff7f00"></span>Coups explosifs</h3></section>
@@ -169,7 +188,7 @@
 <div id="mini"></div>
 <script type="module">
 import { Chessground } from "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm";
-import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
+import { Chess, validateFen } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
 
 const $ = (id) => document.getElementById(id);
 const chess = new Chess();
@@ -201,6 +220,10 @@ const accuracies = new Map();
 // Dernière précision reçue, affichée pendant qu'une nouvelle est en route : sans elle la
 // ligne s'efface à chaque nouvelle évaluation et tout ce qui est dessous saute (sprint 41).
 let lastAccuracy = null;
+// Exercice « 2e chance » en cours (sprint 66) : miniature de game.minis, null hors exercice.
+let exercise = null;
+// Dernière miniature ouverte en exercice : point de départ du glissement suivante / précédente.
+let lastMini = null;
 // Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
 const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
@@ -235,7 +258,12 @@ for (let pts = 10; pts <= 50; pts++) {
 
 const ground = Chessground($("board"), {
   movable: { free: false, color: "both", showDests: true,
-             events: { after: (from, to) => { playedOnBoard(chess.move({ from, to, promotion: "q" })); newPosition(); } } },
+             events: { after: (from, to) => {
+               const move = chess.move({ from, to, promotion: "q" });
+               playedOnBoard(move);
+               newPosition();
+               if (exercise) judgeExercise(move);
+             } } },
   // Vert et bleu éclaircis pour rester lisibles sur l'échiquier sombre.
   drawable: { brushes: { orange: { key: "o", color: "#ff7f00", opacity: 0.9, lineWidth: 10 },
                          cyan: { key: "c", color: "#00e5ff", opacity: 0.9, lineWidth: 10 },
@@ -293,6 +321,8 @@ function bestMove() {
 // (orange) > piège (cyan) > stratégie (jaune), un coup déjà dessiné étant sauté. Le bleu
 // remplace donc la flèche du même coup, sauf le seul coup affiché, qui reste vert.
 function drawShapes() {
+  // Exercice « 2e chance » : aucune flèche, elles donneraient la réponse.
+  if (exercise) { ground.setAutoShapes([]); return; }
   const shapes = [];
   const layers = [[state && state.forced, "show-forced", "green"], [bestMove(), "show-best", "blue"],
                   [state && state.explosive, "show-explosive", "orange"],
@@ -553,6 +583,7 @@ function playedOnBoard(move) {
 
 // ← : défait le dernier coup et l'empile devant (rien au départ de la ligne).
 function stepBack() {
+  endExercise();
   if (!chess.history().length) return;
   ahead.push(chess.undo().san);
   newPosition();
@@ -561,6 +592,7 @@ function stepBack() {
 // → : rejoue le coup suivant de la pile ; pile vide, en partie chargée sur la ligne de la
 // partie, joue le coup suivant de la partie (comme ▶).
 function stepForward() {
+  endExercise();
   const shown = chess.history().length;
   if (ahead.length) chess.move(ahead.pop());
   else if (game && anchor() === null && shown < game.sans.length) chess.move(game.sans[shown]);
@@ -571,6 +603,7 @@ function stepForward() {
 // ⏮ de la barre du bas (sprint 41) : partie chargée hors variante → départ de la partie ;
 // sinon tous les coups défaits vers les coups devant, un seul newPosition à la fin.
 function toStart() {
+  endExercise();
   if (game && !inVariant()) { goTo(0); return; }
   if (!chess.history().length) return;
   let move;
@@ -581,6 +614,7 @@ function toStart() {
 // ⏭ de la barre du bas : partie chargée hors variante → fin de la partie ; sinon tous les
 // coups devant rejoués, un seul newPosition à la fin.
 function toEnd() {
+  endExercise();
   if (game && !inVariant()) { goTo(game.sans.length); return; }
   if (!ahead.length) return;
   while (ahead.length) chess.move(ahead.pop());
@@ -591,6 +625,7 @@ function toEnd() {
 // soit la suite de la partie (rationnement du bleu), puis les coups line d'une variante
 // (tronçon 08, clic dans la liste) ; sans line, quitte la variante. Vide les coups devant.
 function goTo(n, line = []) {
+  endExercise();
   if (!game) return;
   ahead.length = 0;
   chess.load(game.start);
@@ -601,6 +636,7 @@ function goTo(n, line = []) {
 
 // Jeu libre : va à la position n de la ligne affichée, sans perdre les coups devant.
 function goToLine(n) {
+  endExercise();
   while (chess.history().length > n) ahead.push(chess.undo().san);
   while (chess.history().length < n) chess.move(ahead.pop());
   newPosition();
@@ -947,7 +983,8 @@ function drawGraph() {
 // des champs (nom vide → "?" : White / Black toujours présents, exigés par detect_pgn).
 function exportPgn() {
   const whole = game && anchor() === null;
-  const board = new Chess(game ? game.start : undefined);
+  // Jeu libre depuis une FEN (sprint 66) : départ de la ligne ; chess.js pose alors SetUp / FEN.
+  const board = new Chess(game ? game.start : lineFens()[0]);
   for (const san of whole ? game.sans : displayedLine()) board.move(san);
   const headers = whole ? { ...game.headers } : { Event: "Échiquier ARIA" };
   if (!headers.Result || headers.Result === "*") {
@@ -965,13 +1002,115 @@ function exportPgn() {
   return board.pgn();
 }
 
+// Onglet « Miniatures » (sprint 66) : une entrée par miniature de la fiche, libellé neutre
+// (numéro de coup et camp tirés du FEN de la position) ; tap → exercice « 2e chance ».
+function renderMinis() {
+  const box = $("minis");
+  box.replaceChildren();
+  if (!game || !game.minis.length) { box.textContent = "Pas de miniatures pour cette partie."; return; }
+  let n = 0;
+  for (const mini of game.minis) {
+    const [, turn, , , , number] = game.fens[mini.ply].split(" ");
+    const name = mini.kind === "conversion" ? "Conversion" : `Position ${++n}`;
+    const entry = document.createElement("div");
+    entry.className = "move";
+    entry.textContent = `${name} — coup ${number} (${turn === "w" ? "blancs" : "noirs"})`;
+    entry.addEventListener("click", () => startExercise(mini));
+    box.append(entry);
+  }
+}
+
+// Exercice : position de la miniature sans indice (body.exercise masque évaluation, analyse,
+// courbe, colonnes ; drawShapes n'y dessine rien). verdict remplace la consigne après un raté.
+function startExercise(mini, verdict = "À toi de jouer : trouve le meilleur coup.") {
+  goTo(mini.ply);
+  exercise = mini;
+  lastMini = mini;
+  document.body.classList.add("exercise");
+  drawShapes();
+  const button = document.createElement("button");
+  button.textContent = "Voir la solution";
+  button.addEventListener("click", () => showSolution(mini));
+  $("exercise").replaceChildren(`${verdict} `, button);
+}
+
+// Fin du mode exercice : tout réapparaît. La solution déjà affichée reste (ses suites se
+// rejouent en naviguant) ; la consigne d'un exercice abandonné est effacée.
+function endExercise() {
+  if (!exercise) return;
+  exercise = null;
+  document.body.classList.remove("exercise");
+  $("exercise").replaceChildren();
+  drawShapes();
+}
+
+// Coup de Nico pendant l'exercice : réussi si c'est le meilleur coup, un coup de also, ou si
+// sa perte (pts de % de gain du camp au trait, valeur d'après le coup par POST /eval) est sous
+// le seuil ; raté → retour à la position. L'adversaire ne répond pas : échiquier figé pendant
+// le jugement.
+async function judgeExercise(move) {
+  const mini = exercise;
+  ground.set({ movable: { dests: new Map() } });
+  if (move.san === mini.best || mini.also.includes(move.san)) { showSolution(mini, "✔ Trouvé"); return; }
+  const response = await fetch("/eval", { method: "POST", body: JSON.stringify({ fen: move.after }) });
+  const after = await response.json();
+  if (exercise !== mini || chess.fen() !== move.after) return;
+  const fen = game.fens[mini.ply];
+  const lost = Math.max(0, Math.round(loss(fen, evals.get(fen), after)));
+  if (lost < Number($("threshold").value)) showSolution(mini, `✔ Bon coup, −${lost} pts`);
+  else startExercise(mini, `✘ −${lost} pts, réessaie`);
+}
+
+// Solution (réussite ou bouton) : verdict, légende Telegram (retours à la ligne conservés),
+// puis une ligne cliquable par suite jouable de la miniature.
+function showSolution(mini, verdict = "") {
+  endExercise();
+  syncBoard();
+  const parts = [];
+  if (verdict) parts.push(Object.assign(document.createElement("div"), { textContent: verdict }));
+  parts.push(Object.assign(document.createElement("div"), { textContent: mini.caption }));
+  for (const { label, sans } of mini.lines) {
+    const line = document.createElement("div");
+    line.className = "move";
+    line.textContent = `${label} : ${sans.join(" ")}`;
+    line.addEventListener("click", () => playLine(mini.ply, sans));
+    parts.push(line);
+  }
+  $("exercise").replaceChildren(...parts);
+}
+
+// Suite d'une miniature : échiquier à sa position, coups de la suite devant (sommet = 1er
+// coup), joués coup par coup par → / ▶ de la barre du bas.
+function playLine(ply, sans) {
+  goTo(ply);
+  ahead.push(...[...sans].reverse());
+  refreshGame();
+}
+
+// Glissement horizontal sur la zone sous l'échiquier (consigne ou solution) : vers la gauche
+// → exercice de la miniature suivante, vers la droite → précédente (bornes : rien).
+let swipeStart = null;
+$("exercise").addEventListener("touchstart", (event) => {
+  swipeStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+});
+$("exercise").addEventListener("touchend", (event) => {
+  if (!swipeStart || !game || !lastMini) return;
+  const dx = event.changedTouches[0].clientX - swipeStart.x;
+  const dy = event.changedTouches[0].clientY - swipeStart.y;
+  swipeStart = null;
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+  const next = game.minis[game.minis.indexOf(lastMini) + (dx < 0 ? 1 : -1)];
+  if (next) startExercise(next);
+});
+
 // Conservation au rechargement : PGN chargé et position de la partie, ou ligne libre affichée
-// entière ; Elo, « Je joue » et noms.
+// entière avec sa position de départ (FEN collée, sprint 66) ; Elo, « Je joue » et noms.
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     pgn: game ? game.pgn : null, cursor: game ? gameCursor() : 0, line: game ? [] : displayedLine(),
+    start: game ? null : lineFens()[0],
     eloWhite: $("elo-white").value, eloBlack: $("elo-black").value, playing: $("playing").value,
-    nameWhite: $("name-white").value, nameBlack: $("name-black").value,
+    nameWhite: $("name-white").value, nameBlack: $("name-black").value, threshold: $("threshold").value,
   }));
 }
 
@@ -986,6 +1125,7 @@ function restoreState() {
     $("pgn").value = stored.pgn;
     loadGame(stored.cursor);
   } else {
+    if (stored.start) chess.load(stored.start);
     for (const san of stored.line) chess.move(san);
   }
   $("elo-white").value = stored.eloWhite;
@@ -1036,9 +1176,13 @@ async function loadGame(cursor = 0, curve = null) {
   $("name-black").value = headers.Black && headers.Black !== "?" ? headers.Black : "";
   evals.clear();
   evalAsked.clear();
-  game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…" };
+  // Miniatures : seulement pour une fiche stockée (curve de /stored), sprint 66.
+  game = { start, sans, fens, played, headers, pgn, wins: null, message: "courbe en calcul…",
+           minis: (curve && curve.minis) || [] };
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
   goTo(cursor);
+  $("exercise").replaceChildren();
+  renderMinis();
   if (!curve) {
     const loaded = game;
     const response = await fetch("/game", { method: "POST", body: JSON.stringify({ pgn, playing: $("playing").value }) });
@@ -1073,6 +1217,8 @@ if (TOUCH) {
 }
 
 $("new").addEventListener("click", () => {
+  endExercise();
+  $("exercise").replaceChildren();
   $("pgn").value = "";
   chess.reset();
   game = null;
@@ -1081,18 +1227,40 @@ $("new").addEventListener("click", () => {
   evalAsked.clear();
   refreshGame();
   for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
+  renderMinis();
   newPosition();
 });
 // Annuler : vide les coups devant ; sur la partie chargée, équivaut à ◀ ; en variante, annule
 // le dernier coup de la variante (revenu à l'ancrage → fin de la variante).
 $("undo").addEventListener("click", () => {
+  endExercise();
   ahead.length = 0;
   if (game && !inVariant()) { goTo(gameCursor() - 1); return; }
   if (!chess.undo()) return;
   refreshGame();
   newPosition();
 });
-$("load").addEventListener("click", () => loadGame());
+// Position FEN collée (sprint 66, dette 65-1) : jeu libre depuis cette position, comme
+// « Nouvelle partie » (le champ garde la FEN) ; analyse live, /eval et courbe de la ligne libre.
+function loadFen(fen) {
+  endExercise();
+  $("exercise").replaceChildren();
+  chess.load(fen);
+  game = null;
+  ahead.length = 0;
+  evals.clear();
+  evalAsked.clear();
+  refreshGame();
+  for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
+  renderMinis();
+  newPosition();
+  $("status").textContent = "position chargée";
+}
+$("load").addEventListener("click", () => {
+  const fen = $("pgn").value.trim();
+  if (validateFen(fen).ok) loadFen(fen);
+  else loadGame();
+});
 $("first").addEventListener("click", () => goTo(0));
 $("prev").addEventListener("click", () => goTo(gameCursor() - 1));
 $("next").addEventListener("click", () => goTo(gameCursor() + 1));
@@ -1134,6 +1302,10 @@ $("show-best").addEventListener("change", () => { drawShapes(); refreshGame(); }
 $("show-trap").addEventListener("change", drawShapes);
 $("show-errors").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
+$("threshold").addEventListener("input", () => {
+  $("threshold-value").textContent = $("threshold").value;
+  saveState();
+});
 // « Je joue » écrit le nom de Nico dans le champ du camp choisi et l'ôte de l'autre ; « aucun »
 // ne touche pas aux noms.
 $("playing").addEventListener("change", () => {
@@ -1201,6 +1373,12 @@ if (telegram?.initData) {
   telegram.disableVerticalSwipes();
 }
 
+// Seuil 2e chance (sprint 66) : rétabli avant toute ouverture, fiche Telegram comprise
+// (openStored ne passe pas par restoreState, et saveState l'écraserait).
+const threshold = JSON.parse(localStorage.getItem(STORAGE_KEY))?.threshold;
+if (threshold) $("threshold").value = threshold;
+$("threshold-value").textContent = $("threshold").value;
+renderMinis();
 const storedId = telegram?.initDataUnsafe?.start_param
   || new URLSearchParams(location.search).get("tgWebAppStartParam");
 if (storedId) openStored(storedId);

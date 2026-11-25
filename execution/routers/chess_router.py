@@ -45,7 +45,7 @@ from cognition.cognitive_classifier import MOVE_CITE_RE, POSITION_CITE_RE, _SAN_
 from cognition.cognitive_context import CHESS_ANALYSIS_MARKER, CognitiveOperation
 from execution.routers.execution_base import BaseRouter
 from logger import get_logger
-from memory.writer import delete_chess_games, write_chess_game
+from memory.writer import delete_chess_games, update_chess_game_minis, write_chess_game
 
 log = get_logger(__name__)
 
@@ -919,6 +919,37 @@ def _conversion_caption(idea) -> str:
             f"joué {_played_mark(p)} {_move_label(p.move_number, p.color, p.san)}")
 
 
+def _mini(p, kind: str, lines: list, also: list = ()) -> dict:
+    """Miniature rejouable dans l'échiquier (sprint 66) : position avant le coup p, coups qui
+    réussissent l'exercice, suites jouables en SAN depuis cette position (vides omises).
+    La légende est recopiée de l'image Telegram après le découpage des entrées du LLM."""
+    return {"ply": p.ply, "kind": kind, "best": p.best_san, "also": list(also), "caption": "",
+            "lines": [{"label": label, "sans": sans} for label, sans in lines if sans]}
+
+
+def _critical_mini(critical) -> dict:
+    """Miniature d'une position critique : mêmes suites que la ligne « Variante » de sa légende."""
+    p = critical.ply
+    if critical.best_line_san:
+        lines = [("Meilleur coup", critical.best_line_san), ("Ton coup", critical.played_line_san)]
+        if critical.point and critical.defenses:
+            # La défense suit le coup préparatoire de la pointe (voir _point_text).
+            head = critical.best_line_san[:critical.point["prep"] + 1]
+            lines += [(f"Si {d['san']}", head + d["line_san"]) for d in critical.defenses]
+        return _mini(p, critical.kind, lines)
+    if critical.kind in ("c", "e"):
+        return _mini(p, critical.kind, [("Variante", critical.line_san)])
+    if critical.kind == "d":
+        explosive = critical.explosive
+        lines = [("Coup explosif", [explosive.san] + explosive.trap_line_san)]
+        trapping = _trap_replies(critical)
+        if trapping:
+            lines.append(("Piège", [explosive.san] + trapping[0]["line_san"]))
+        lines.append(("Meilleur coup", p.pv_san))
+        return _mini(p, "d", lines, also=[explosive.san])
+    return _mini(p, critical.kind, [("Meilleur coup", p.pv_san)])
+
+
 # Début d'entrée « Position N — » en début de ligne (gras Markdown toléré) ;
 # une ligne « Bilan : » clôt la dernière entrée.
 _ENTRY_RE = re.compile(r"^\**Position (\d+)\**\s*[—–-]\**\s*", re.MULTILINE)
@@ -1336,6 +1367,8 @@ class ChessExecutionRouter(BaseRouter):
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)
         images = []
+        # Sprint 66 : une miniature rejouable par image (même indice), courbe exceptée.
+        minis = []
         # Sprint 51 : réflexions longues de Nico (PGN avec horloges), verdict écrit par le code.
         times = move_times(analysis.plies, analysis.headers.get("TimeControl"))
         elo = analysis.headers.get("WhiteElo" if analysis.nico_color == "white" else "BlackElo", "")
@@ -1364,6 +1397,7 @@ class ChessExecutionRouter(BaseRouter):
                 seconds, think_verdict = think_of[critical.ply.ply]
                 caption += f"\n⏱️ réfléchi {seconds:.0f} s" + (f" · {think_verdict}" if think_verdict else "")
             images.append({"path": str(out_path), "caption": caption})
+            minis.append(_critical_mini(critical))
         # Autres réflexions longues : positions numérotées à la suite des critiques ;
         # elles reçoivent une entrée LLM « Pour jouer vite : » (avant _split_entries).
         critical_plies = {c.ply.ply for c in analysis.critical}
@@ -1374,14 +1408,17 @@ class ChessExecutionRouter(BaseRouter):
             render_position(p.fen_before, analysis.nico_color, p.best_uci, str(out_path),
                             played_uci=p.uci, best_line_uci=p.pv_uci[:3])
             images.append({"path": str(out_path), "caption": _think_caption(index, p, seconds, think_verdict)})
+            minis.append(_mini(p, "think", [("Meilleur coup", p.pv_san)]))
 
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
         game_hash = _game_hash(p.uci for p in analysis.plies)
         summary = summarize(analysis)
+        written = False
         try:
             write_chess_game(summary_text(analysis, summary), game_hash, extra=summary,
                              room=opening_room(summary["opening_group"]), timestamp=timestamp)
             log.info("chess_game_write OK hash=%s plies=%d", game_hash, len(analysis.plies))
+            written = True
             # Supprimée avant le calcul de la progression : sinon la partie compterait
             # deux fois dans « avant ».
             if replaces:
@@ -1440,6 +1477,17 @@ class ChessExecutionRouter(BaseRouter):
             render_position(p.fen_before, analysis.nico_color, p.best_uci, str(mini_path),
                             played_uci=p.uci, best_line_uci=p.pv_uci[:3])
             images.append({"path": str(mini_path), "caption": _conversion_caption(ideas[0])})
+            minis.append(_mini(p, "conversion", [("Meilleur coup", p.pv_san)]))
+        # Légendes finales (entrées du LLM comprises) recopiées dans les miniatures, puis
+        # posées sur la fiche (non bloquant) : seulement si la fiche est en base.
+        for mini, image in zip(minis, images):
+            mini["caption"] = image["caption"]
+        if written:
+            try:
+                update_chess_game_minis(f"chess_game_{game_hash}", json.dumps(minis, ensure_ascii=False))
+                log.info("chess_minis_write OK hash=%s minis=%d", game_hash, len(minis))
+            except Exception:
+                log.exception("chess_minis_write ERROR hash=%s", game_hash)
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
         render_curve(nico_wins(analysis.plies, analysis.nico_color),

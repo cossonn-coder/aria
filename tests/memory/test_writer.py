@@ -354,6 +354,11 @@ def test_update_chess_game_accuracy_passes_only_accuracy(fake_col):
     assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{"accuracy": 92.7}]}]
 
 
+def test_update_chess_game_minis_passes_only_minis_json(fake_col):
+    w.update_chess_game_minis("chess_game_x", '[{"ply": 3}]')
+    assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{"minis_json": '[{"ply": 3}]'}]}]
+
+
 def test_update_chess_game_result_passes_only_result_and_outcome(fake_col):
     w.update_chess_game_result("chess_game_x", "0-1", "win")
     assert fake_col.calls == [{"ids": ["chess_game_x"], "metadatas": [{"result": "0-1", "outcome": "win"}]}]

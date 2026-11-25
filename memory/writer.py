@@ -192,6 +192,16 @@ def update_chess_game_accuracy(doc_id: str, accuracy: float) -> None:
     col.update(ids=[doc_id], metadatas=[{"accuracy": accuracy}])
 
 
+def update_chess_game_minis(doc_id: str, minis_json: str) -> None:
+    """
+    Pose les miniatures rejouables sur la fiche d'une partie (sprint 66), après le LLM
+    dont elles portent le Pourquoi. ChromaDB fusionne les métadonnées : le reste de la
+    fiche est intact, sans ré-embedding.
+    """
+    col = get_collection(config.mempalace_path)
+    col.update(ids=[doc_id], metadatas=[{"minis_json": minis_json}])
+
+
 def update_chess_game_result(doc_id: str, result: str, outcome: str) -> None:
     """
     Corrige l'issue d'une fiche existante (/issue, sprint 56). ChromaDB fusionne
