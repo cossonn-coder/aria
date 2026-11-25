@@ -52,7 +52,7 @@ class LLMResponse:
 
 def _text_chain(deepseek_model: str) -> list[dict]:
     """Chaîne de fallback texte commune aux 4 rôles (sprint 18) :
-    groq ×3 (même modèle, 3 clés) → DeepSeek → Anthropic.
+    groq ×3 (même modèle, 3 clés) → Anthropic → DeepSeek (dernier depuis le 2026-11-25).
     Seul le modèle DeepSeek varie selon le rôle. L'entrée `extra` est
     fusionnée dans le payload par `_call` : on y coupe le raisonnement
     DeepSeek, qui sinon consomme le budget de tokens et renvoie ''."""
@@ -76,17 +76,18 @@ def _text_chain(deepseek_model: str) -> list[dict]:
             "api_key": lambda: config.groq_api_key_3,
         },
         {
+            "provider": "anthropic",
+            "model": "claude-haiku-5-5",
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key": lambda: config.anthropic_api_key,
+        },
+        # DeepSeek en dernier (2026-11-25) : crédit épuisé, il ne doit plus retarder la réponse.
+        {
             "provider": "deepseek",
             "model": deepseek_model,
             "base_url": "https://api.deepseek.com",
             "api_key": lambda: config.deepseek_api_key,
             "extra": {"thinking": {"type": "disabled"}},
-        },
-        {
-            "provider": "anthropic",
-            "model": "claude-haiku-5-5",
-            "base_url": "https://api.anthropic.com/v1",
-            "api_key": lambda: config.anthropic_api_key,
         },
     ]
 

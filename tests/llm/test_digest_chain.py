@@ -6,7 +6,7 @@ from llm.llm_router import ROUTING_TABLE
 
 def test_digest_chain_has_no_groq():
     providers = [e["provider"] for e in ROUTING_TABLE[LLMRole.DIGEST]]
-    assert providers == ["deepseek", "anthropic"]
+    assert providers == ["anthropic", "deepseek"]
 
 
 def test_reasoning_chain_has_no_groq():

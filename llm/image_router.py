@@ -30,20 +30,7 @@ log = get_logger(__name__)
 # et passe au suivant en cas d'exception (rate limit, timeout, etc.).
 
 VISION_ROUTING_TABLE = [
-    # DeepSeek en premier (sprint 19) : descriptions plus justes que groq
-    # qwen3.8, qui décrit souvent une photo unique comme plusieurs vues.
-    # API compatible OpenAI, donc le client générique GroqVisionClient
-    # suffit. Le raisonnement est coupé : sans ça, deepseek-flash consomme
-    # ~900 tokens à réfléchir et la réponse visible est tronquée.
-    {
-        "provider": "deepseek",
-        "client": GroqVisionClient,
-        "model": config.deepseek_model,
-        "base_url": "https://api.deepseek.com/chat/completions",
-        "api_key": lambda: config.deepseek_api_key,
-        "extra": {"thinking": {"type": "disabled"}},
-    },
-    # groq ×3 en secours.
+    # groq ×3 d'abord.
     {
         "provider": "groq1",
         "client": GroqVisionClient,
@@ -64,6 +51,20 @@ VISION_ROUTING_TABLE = [
         "model": config.groq_vision_model,
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "api_key": lambda: config.groq_api_key_3,
+    },
+    # DeepSeek en dernier depuis le 2026-11-25 (crédit épuisé) ; il était en premier
+    # depuis le sprint 19 : descriptions plus justes que groq
+    # qwen3.8, qui décrit souvent une photo unique comme plusieurs vues.
+    # API compatible OpenAI, donc le client générique GroqVisionClient
+    # suffit. Le raisonnement est coupé : sans ça, deepseek-flash consomme
+    # ~900 tokens à réfléchir et la réponse visible est tronquée.
+    {
+        "provider": "deepseek",
+        "client": GroqVisionClient,
+        "model": config.deepseek_model,
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "api_key": lambda: config.deepseek_api_key,
+        "extra": {"thinking": {"type": "disabled"}},
     },
 ]
 

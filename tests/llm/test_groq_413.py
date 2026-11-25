@@ -44,7 +44,7 @@ def test_groq_413_skips_other_groq(monkeypatch, no_sleep):
     result = router.complete("test", role=LLMRole.CHAT)
 
     assert [c for c in calls if c.startswith("groq")] == ["groq"]
-    assert result.metadata["provider"] == "deepseek"
+    assert result.metadata["provider"] == "anthropic"
     assert router._negative_cache == {}
 
 
@@ -67,7 +67,7 @@ def test_large_payload_skips_groq_without_call(monkeypatch):
     result = router.complete(messages=messages, role=LLMRole.CHAT)
 
     assert not any(c.startswith("groq") for c in calls)
-    assert result.metadata["provider"] == "deepseek"
+    assert result.metadata["provider"] == "anthropic"
     assert sleeps == []
 
 
