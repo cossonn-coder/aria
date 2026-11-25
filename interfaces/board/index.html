@@ -36,7 +36,9 @@
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
   .move { cursor: pointer; padding: 0 1px; border-radius: 3px; }
   .move:hover { background: #6a4a1c; }
-  #pgn { width: 100%; box-sizing: border-box; height: 90px; }
+  /* flex-shrink: 0 : dans le menu ☰ du téléphone (colonne flex de hauteur fixe qui déborde),
+     le champ était écrasé à une ligne ; police lisible pour une FEN ou un PGN collé. */
+  #pgn { width: 100%; box-sizing: border-box; height: 90px; flex-shrink: 0; font-size: 1em; }
   #nav { display: flex; gap: 6px; }
   #played { margin-top: 8px; font-size: 1.1em; }
   #history { white-space: pre-line; }
