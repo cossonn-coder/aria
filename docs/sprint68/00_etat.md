@@ -1,8 +1,9 @@
 # Sprint 68 — état du sprint
 
 **Phase** : A (à concevoir). Prochaine étape : `/conception sprint 68`.
-**Sujet** : à choisir par Nico — étape 7 de la feuille de route, ou un axe de
-`docs/amelioration/2026-11-25.md` (67-2 pointe, 67-3 bilan, 67-1 « genereux », 67-4 commentaire).
+**Sujet** : étape 7 de la feuille de route, échiquier centré sur le joueur du bas + réponses
+adverses (61-4 + 62-9). Nico, 2026-11-25 : on suit la feuille de route ; les axes de
+`/amelioration` restent en dettes (67-1 à 67-5).
 **Branche** : à créer depuis `main` au tag `sprint-67`.
 
 ## Contexte hérité

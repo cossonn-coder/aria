@@ -158,8 +158,8 @@ Sprint 67 clos (tag `sprint-67`) : boucle de rétroaction 👍 / 👎 (wing `ari
 commentaire par « Répondre », alerte de démarrage, skill `/amelioration`). Sprint 63 : live
 `docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
-Prochain : **sprint 68**, sujet à choisir (feuille de route étape 7 ou axes de
-`docs/amelioration/2026-11-25.md`), dans `docs/sprint68/00_etat.md`. Prochaine étape : `/conception sprint 68`.
+Prochain : **sprint 68**, étape 7 de la feuille de route (échiquier centré joueur du bas +
+réponses adverses, 61-4 + 62-9), dans `docs/sprint68/00_etat.md` ; axes `/amelioration` en dettes 67-1 à 67-5. Prochaine étape : `/conception sprint 68`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
