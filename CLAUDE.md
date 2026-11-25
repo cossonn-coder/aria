@@ -122,6 +122,8 @@ voir `docs/architecture/memory_layers.md`) :
 - `aria_semantic` : faits stables utilisateur. Seul caller prod : consignes `/consigne` (room `consignes`, sprint 56) ; reste de #17 ouvert.
 - `aria_classifier` : cache classifier d'opérations. Actif (réparé sprint 5).
 - `aria_conversation` : historique user/assistant par `chat_id`. Actif (sprint 17).
+- `aria_feedback` : un message envoyé par ARIA par fiche, réaction 👍 / 👎 et commentaire (sprint 67).
+  Lu par `scripts/feedback_report.py` (lecture seule depuis Claude Code).
 - `aria_documents` : texte intégral des documents lus, lu par source (relecture). Actif (sprint 43) ;
   la fiche du document est dans `aria_episodic`, room `documents`.
 - `aria_intentual` : intents sérialisés. Pas implémenté.
@@ -152,12 +154,12 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 66 clos (tag `sprint-66`) : miniatures enregistrées dans la fiche et jouables dans
-l'échiquier (onglet Miniatures, exercice « 2e chance »), FEN collée. Sprint 63 : live
+Sprint 67 clos (tag `sprint-67`) : boucle de rétroaction 👍 / 👎 (wing `aria_feedback`,
+commentaire par « Répondre », alerte de démarrage, skill `/amelioration`). Sprint 63 : live
 `docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
-Prochain : **sprint 67**, boucle de rétroaction 👍 / 😢 (66-3), feuille de route dans
-`docs/sprint67/00_etat.md`. Prochaine étape : `/conception sprint 67`.
+Prochain : **sprint 68**, sujet à choisir (feuille de route étape 7 ou axes de
+`docs/amelioration/2026-11-25.md`), dans `docs/sprint68/00_etat.md`. Prochaine étape : `/conception sprint 68`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 

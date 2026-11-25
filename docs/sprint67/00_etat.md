@@ -1,6 +1,6 @@
 # Sprint 67 — état du sprint
 
-**Phase** : B figée (OK Nico 2026-11-25). Prochaine étape : `/sprint-auto sprint 67`.
+**Phase** : close (run live validé 2026-11-25, tag `sprint-67`). Suite : `docs/sprint68/00_etat.md`.
 **Sujet** : boucle de rétroaction 👍 / 👎 sur les messages Telegram (66-3).
 **Branche** : `feat/sprint67-retroaction` (depuis `main`, tag `sprint-66`).
 
@@ -20,9 +20,9 @@
 |---|---|---|---|
 | 01 | `01_reactions.md` | Réactions reçues, chaque envoi noté dans `aria_feedback`, commentaire par réponse 👍/👎, `/status` || ✅ (644 tests ; écart : `MessageReactionHandler` exige `message_reaction_types=MESSAGE_REACTION_UPDATED` avec `user_id` ; commandes notées par un `MessageHandler` COMMAND en groupe -1) |
 | 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ✅ (647 tests ; `.claude/settings.json` + `.claude/skills/amelioration/SKILL.md` présents, non versionnés ; sans rapport antérieur, l'alerte dit « depuis le début ») |
-| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ⏳ 2026-11-25 : étapes 1-3, 5-7 OK (réactions reçues en privé, retrait et ❤ notés, alerte puis `/amelioration` puis plus d'alerte) ; étape 4 (« Répondre » avec « 👎 trop long ») non jouée |
+| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ✅ 2026-11-25 : réactions reçues en privé (👎, ❤, retrait), commentaire par « Répondre » + `👎 trop long` → « 📝 Retour noté. », `/status`, alerte de démarrage, `/amelioration` (`docs/amelioration/2026-11-25.md`), plus d'alerte ensuite |
 
-Dettes : 66-3 fermée par ce sprint une fois le run live validé. Nouvelle dette possible :
+Dettes : 66-3 fermée par ce sprint (run live validé). Nouvelle dette possible :
 `.claude/` gitignoré en entier (skills et hooks non versionnés) — à arbitrer si Nico veut les versionner.
 
 ## Questions ouvertes
@@ -89,4 +89,4 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `audit_retroaction.md`. Conception figée. Tronçons 01 et 02 faits (02 non commité à sa sortie de sous-agent ; hook et skill sous `.claude/`, gitignoré). Prochaine étape : run live `03_run_live.txt` par Nico (réactions reçues, alerte au démarrage de Claude Code, `/amelioration`).
+Sprint clos. Reprendre dans `docs/sprint68/00_etat.md`.
