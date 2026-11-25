@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 01 | `01_reactions.md` | Réactions reçues, chaque envoi noté dans `aria_feedback`, commentaire par réponse 👍/👎, `/status` || ✅ (644 tests ; écart : `MessageReactionHandler` exige `message_reaction_types=MESSAGE_REACTION_UPDATED` avec `user_id` ; commandes notées par un `MessageHandler` COMMAND en groupe -1) |
 | 02 | `02_amelioration.md` | `scripts/feedback_report.py`, hook SessionStart, skill `/amelioration` (ces deux derniers locaux : `.claude/` gitignoré) | ✅ (647 tests ; `.claude/settings.json` + `.claude/skills/amelioration/SKILL.md` présents, non versionnés ; sans rapport antérieur, l'alerte dit « depuis le début ») |
-| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ⏳ |
+| 03 | `03_run_live.txt` | Run live par Nico (risque n°1 : réactions reçues en chat privé ?) | ⏳ 2026-11-25 : étapes 1-3, 5-7 OK (réactions reçues en privé, retrait et ❤ notés, alerte puis `/amelioration` puis plus d'alerte) ; étape 4 (« Répondre » avec « 👎 trop long ») non jouée |
 
 Dettes : 66-3 fermée par ce sprint une fois le run live validé. Nouvelle dette possible :
 `.claude/` gitignoré en entier (skills et hooks non versionnés) — à arbitrer si Nico veut les versionner.
