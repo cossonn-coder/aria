@@ -1,6 +1,7 @@
 #!/home/nico/Nextcloud/projects/aria/venv/bin/python3
 """
-write-deepseek — Génère du code boilerplate ou de la prose via DeepSeek V4 Flash.
+write-deepseek — Génère du code boilerplate ou de la prose via Claude Haiku 5.5
+(Anthropic depuis le 2026-11-25 ; le nom de l'outil est resté).
 Usage:
   write-deepseek --spec "pytest pour le parser MAVLink" \
                  --context src/mavlink_parser.py \
@@ -22,32 +23,43 @@ import argparse
 import os
 import pathlib
 import sys
+import anthropic
 from dotenv import load_dotenv
-from openai import OpenAI
 
-load_dotenv(pathlib.Path(__file__).resolve().parent.parent / ".env")
+# Clé Anthropic : celle d'ARIA (même venv, même compte, même crédit).
+load_dotenv("/home/nico/Nextcloud/projects/aria/.env")
 
 # ── Config ───────────────────────────────────────────────────────────────────
-BASE_URL = "https://api.deepseek.com"
-MODEL_FAST = "deepseek-v4-flash"
+MODEL = "claude-haiku-5-5"
 
-# Tarifs DeepSeek ($/M tokens) — la clé est plafonnée, on affiche le coût réel.
-PRIX_IN_MISS = 0.14
-PRIX_IN_HIT = 0.014
-PRIX_OUT = 0.28
+# Tarifs Claude Haiku 5.5 ($/M tokens), carte « prompt ≤ 100K tokens » ; au-delà, entrée
+# 0,50 et sortie 2,50. Cache : lecture 0,1x l'entrée, écriture 1,25x.
+PRIX_IN = 0.10
+PRIX_OUT = 0.50
+PRIX_IN_LONG = 0.50
+PRIX_OUT_LONG = 2.50
 
 # Langages qui produisent de la PROSE et non du code : le prompt système change
 # du tout au tout (« pas de markdown », « directement importable » n'ont aucun
 # sens pour une note de synthèse).
 LANGS_PROSE = {"markdown", "md", "text", "txt", "rst", "prose"}
 
-client = OpenAI(
-    api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
-    base_url=BASE_URL,
-)
+client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+def cout_usd(usage) -> tuple[int, int, int, float]:
+    """(tokens entrée, dont lus en cache, sortie, coût estimé $) d'une réponse Anthropic."""
+    plain = usage.input_tokens or 0
+    hits = usage.cache_read_input_tokens or 0
+    writes = usage.cache_creation_input_tokens or 0
+    tok_in = plain + hits + writes
+    prix_in, prix_out = (PRIX_IN, PRIX_OUT) if tok_in <= 100_000 else (PRIX_IN_LONG, PRIX_OUT_LONG)
+    cout = (plain * prix_in + hits * prix_in * 0.1 + writes * prix_in * 1.25
+            + usage.output_tokens * prix_out) / 1e6
+    return tok_in, hits, usage.output_tokens, cout
+
 
 # ── Args ──────────────────────────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="Génération via DeepSeek V4 Flash")
+parser = argparse.ArgumentParser(description="Génération via Claude Haiku 5.5")
 parser.add_argument("--spec", required=True,
                     help="Description de ce qu'il faut générer")
 parser.add_argument("--context", nargs="+", default=[],
@@ -57,7 +69,7 @@ parser.add_argument("--target", required=True,
 parser.add_argument("--lang", default="python",
                     help="Langage cible (défaut: python ; markdown/text = prose)")
 parser.add_argument("--think", action="store_true",
-                    help="Active le mode thinking pour les générations complexes")
+                    help="Active la réflexion adaptative, effort high, pour les générations complexes")
 parser.add_argument("--allow-missing", action="store_true",
                     help="Tolère un fichier de contexte introuvable (défaut : fatal)")
 parser.add_argument("--force", action="store_true",
@@ -67,9 +79,9 @@ parser.add_argument("--mkdir", action="store_true",
 args = parser.parse_args()
 
 # ── Validation ────────────────────────────────────────────────────────────────
-api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 if not api_key:
-    print("[write-deepseek] ERREUR: variable DEEPSEEK_API_KEY non définie", file=sys.stderr)
+    print("[write-deepseek] ERREUR: ANTHROPIC_API_KEY absente (ni environnement, ni .env d'ARIA)", file=sys.stderr)
     sys.exit(1)
 
 # ── Vérification de la cible AVANT de payer un appel API ─────────────────────
@@ -173,51 +185,39 @@ Fichier cible : {args.target}
 
 Génère le contenu complet du fichier cible. Contenu brut uniquement."""
 
-messages = [
-    {"role": "system", "content": system_prompt},
-    {"role": "user", "content": user_prompt},
-]
+messages = [{"role": "user", "content": user_prompt}]
 
 # ── Appel API ─────────────────────────────────────────────────────────────────
-extra_params = {}
-if not args.think:
-    extra_params["extra_body"] = {"thinking": {"type": "disabled"}}
-    max_tokens = 16384   # génération de fichiers complets
+# Sans --think : réflexion coupée (Haiku 5.5 réfléchit par défaut). Avec : adaptative,
+# ses tokens comptent dans max_tokens. Streaming : requis par le SDK pour ces plafonds.
+if args.think:
+    params = {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}}
+    max_tokens = 32768   # réflexion + génération longue
 else:
-    max_tokens = 32768   # thinking + génération longue
+    params = {"thinking": {"type": "disabled"}}
+    max_tokens = 16384   # génération de fichiers complets
 
 try:
-    response = client.chat.completions.create(
-        model=MODEL_FAST,
-        messages=messages,
-        max_tokens=max_tokens,
-        **extra_params,
-    )
-    choix = response.choices[0]
-    generated = choix.message.content.strip()
-except Exception as e:
+    with client.messages.stream(model=MODEL, max_tokens=max_tokens, system=system_prompt,
+                                messages=messages, **params) as stream:
+        response = stream.get_final_message()
+except anthropic.APIError as e:
     print(f"[write-deepseek] ERREUR API: {e}", file=sys.stderr)
     sys.exit(1)
+generated = "".join(block.text for block in response.content if block.type == "text").strip()
 
 # ── Consommation réelle ───────────────────────────────────────────────────────
-usage = getattr(response, "usage", None)
-if usage:
-    tok_in = getattr(usage, "prompt_tokens", 0) or 0
-    tok_out = getattr(usage, "completion_tokens", 0) or 0
-    hits = getattr(usage, "prompt_cache_hit_tokens", 0) or 0
-    miss = getattr(usage, "prompt_cache_miss_tokens", None)
-    if miss is None:
-        miss = max(tok_in - hits, 0)
-    cout = (miss * PRIX_IN_MISS + hits * PRIX_IN_HIT + tok_out * PRIX_OUT) / 1e6
-    print(f"[write-deepseek] usage : {tok_in} in ({hits} en cache) + {tok_out} out "
-          f"→ ~${cout:.4f}", file=sys.stderr)
+tok_in, hits, tok_out, cout = cout_usd(response.usage)
+print(f"[write-deepseek] usage : {tok_in} in ({hits} en cache) + {tok_out} out "
+      f"→ ~${cout:.4f} ({MODEL})", file=sys.stderr)
 
-# ── Troncature : on n'écrit PAS un fichier amputé ────────────────────────────
+# ── Troncature ou refus : on n'écrit PAS un fichier amputé ───────────────────
 # Règle « zéro perte » : un fichier coupé en plein milieu, annoncé « ✓ écrit »,
 # est pire que pas de fichier du tout — surtout sur une cible versionnée.
-if getattr(choix, "finish_reason", None) == "length":
-    print(f"[write-deepseek] ERREUR: génération TRONQUÉE (limite {max_tokens} tokens "
-          f"atteinte) — fichier NON écrit.\n"
+if response.stop_reason in ("max_tokens", "refusal"):
+    raison = (f"génération TRONQUÉE (limite {max_tokens} tokens atteinte)"
+              if response.stop_reason == "max_tokens" else "REFUS du modèle (stop_reason=refusal)")
+    print(f"[write-deepseek] ERREUR: {raison} — fichier NON écrit.\n"
           f"                 Découpe la tâche, ou relance avec --think.", file=sys.stderr)
     print("─" * 60, file=sys.stderr)
     print(generated, file=sys.stderr)   # sur stderr : à inspecter, pas à réutiliser

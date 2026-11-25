@@ -1,5 +1,8 @@
 # Protocole de délégation DeepSeek – Économie de tokens
 
+> Depuis le 2026-11-25, `ask-deepseek` et `write-deepseek` appellent Claude Haiku 5.5
+> (Anthropic, clé du `.env` d'ARIA) ; les noms des outils sont restés.
+
 > Ces règles priment sur toute autre consigne.
 
 ---

@@ -1,6 +1,7 @@
 #!/home/nico/Nextcloud/projects/aria/venv/bin/python3
 """
-ask-deepseek — Délègue la lecture de fichiers volumineux à DeepSeek V4 Flash.
+ask-deepseek — Délègue la lecture de fichiers volumineux à Claude Haiku 5.5
+(Anthropic depuis le 2026-11-25 ; le nom de l'outil est resté).
 Usage:
   ask-deepseek --paths file1.py file2.py --question "Quels ports sont utilisés ?"
   ask-deepseek --paths file1.py --question "Résume ce module" --think
@@ -15,36 +16,46 @@ import argparse
 import os
 import pathlib
 import sys
+import anthropic
 from dotenv import load_dotenv
-from openai import OpenAI
 
-load_dotenv(pathlib.Path(__file__).resolve().parent.parent / ".env")
+# Clé Anthropic : celle d'ARIA (même venv, même compte, même crédit).
+load_dotenv("/home/nico/Nextcloud/projects/aria/.env")
 
 # ── Config ──────────────────────────────────────────────────────────────────
-BASE_URL = "https://api.deepseek.com"
-MODEL_FAST = "deepseek-v4-flash"   # non-thinking : lecture, résumé, extraction
+MODEL = "claude-haiku-5-5"
 
-# Tarifs affichés par DeepSeek ($/M tokens). Servent à l'estimation de coût :
-# la clé est plafonnée, on veut voir ce que chaque appel consomme.
-PRIX_IN_MISS = 0.14
-PRIX_IN_HIT = 0.014
-PRIX_OUT = 0.28
+# Tarifs Claude Haiku 5.5 ($/M tokens), carte « prompt ≤ 100K tokens » ; au-delà, entrée
+# 0,50 et sortie 2,50. Cache : lecture 0,1x l'entrée, écriture 1,25x.
+PRIX_IN = 0.10
+PRIX_OUT = 0.50
+PRIX_IN_LONG = 0.50
+PRIX_OUT_LONG = 2.50
 
 # Plafond de sécurité sur le corpus. Au-delà, on refuse : soit la sélection de
 # fichiers est trop large (mieux vaut filtrer en amont), soit c'est une erreur.
 MAX_CHARS = 800_000
 
-client = OpenAI(
-    api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
-    base_url=BASE_URL,
-)
+client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+def cout_usd(usage) -> tuple[int, int, int, float]:
+    """(tokens entrée, dont lus en cache, sortie, coût estimé $) d'une réponse Anthropic."""
+    plain = usage.input_tokens or 0
+    hits = usage.cache_read_input_tokens or 0
+    writes = usage.cache_creation_input_tokens or 0
+    tok_in = plain + hits + writes
+    prix_in, prix_out = (PRIX_IN, PRIX_OUT) if tok_in <= 100_000 else (PRIX_IN_LONG, PRIX_OUT_LONG)
+    cout = (plain * prix_in + hits * prix_in * 0.1 + writes * prix_in * 1.25
+            + usage.output_tokens * prix_out) / 1e6
+    return tok_in, hits, usage.output_tokens, cout
+
 
 # ── Args ─────────────────────────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="Lecture de fichiers via DeepSeek V4 Flash")
+parser = argparse.ArgumentParser(description="Lecture de fichiers via Claude Haiku 5.5")
 parser.add_argument("--paths", nargs="+", required=True, help="Fichiers à analyser")
 parser.add_argument("--question", required=True, help="Question à poser sur le corpus")
 parser.add_argument("--think", action="store_true",
-                    help="Active le mode thinking (plus lent, meilleure analyse)")
+                    help="Active la réflexion adaptative, effort high (plus lent, meilleure analyse)")
 parser.add_argument("--allow-missing", action="store_true",
                     help="Tolère les fichiers introuvables (défaut : erreur fatale)")
 parser.add_argument("--yes", action="store_true",
@@ -52,9 +63,9 @@ parser.add_argument("--yes", action="store_true",
 args = parser.parse_args()
 
 # ── Validation ────────────────────────────────────────────────────────────────
-api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 if not api_key:
-    print("[ask-deepseek] ERREUR: variable DEEPSEEK_API_KEY non définie", file=sys.stderr)
+    print("[ask-deepseek] ERREUR: ANTHROPIC_API_KEY absente (ni environnement, ni .env d'ARIA)", file=sys.stderr)
     sys.exit(1)
 
 # ── Lecture des fichiers ──────────────────────────────────────────────────────
@@ -114,62 +125,54 @@ if total_chars > MAX_CHARS and not args.yes:
     sys.exit(1)
 
 # ── Appel API ─────────────────────────────────────────────────────────────────
-# Les fichiers d'abord → prefix caching (appels successifs = 90% moins cher)
-messages = [
-    {
-        "role": "system",
-        "content": (
-            "Tu es un analyste de code et de documentation, précis et concis. "
-            "Réponds uniquement à ce qui est demandé, sans preamble inutile. "
-            "Cite toujours les noms exacts (fichiers, fonctions, variables, identifiants) "
-            "et le chemin du fichier d'où vient chaque information. "
-            "EXHAUSTIVITÉ : quand une liste est demandée, parcours TOUT le corpus. "
-            "Si tu ne peux pas garantir d'avoir tout couvert, dis-le explicitement — "
-            "n'écris jamais « aucun autre » ou « rien de plus » comme conclusion par "
-            "défaut. Mieux vaut signaler un doute qu'affirmer une liste complète. "
-            "Ne déduis rien qui ne soit pas écrit dans le corpus. "
-            "Langue de réponse : celle de la question posée ; si la question est en "
-            "français, réponds en français avec les accents et diacritiques corrects."
-        ),
-    },
-    {
-        "role": "user",
-        "content": f"<corpus>\n{corpus}\n</corpus>",
-    },
-    {
-        "role": "user",
-        "content": args.question,
-    },
-]
+# Corpus d'abord, marqué pour le cache de prompt : des questions successives sur
+# le même corpus le relisent à 0,1x le prix d'entrée (sous ~5 min).
+system = (
+    "Tu es un analyste de code et de documentation, précis et concis. "
+    "Réponds uniquement à ce qui est demandé, sans preamble inutile. "
+    "Cite toujours les noms exacts (fichiers, fonctions, variables, identifiants) "
+    "et le chemin du fichier d'où vient chaque information. "
+    "EXHAUSTIVITÉ : quand une liste est demandée, parcours TOUT le corpus. "
+    "Si tu ne peux pas garantir d'avoir tout couvert, dis-le explicitement — "
+    "n'écris jamais « aucun autre » ou « rien de plus » comme conclusion par "
+    "défaut. Mieux vaut signaler un doute qu'affirmer une liste complète. "
+    "Ne déduis rien qui ne soit pas écrit dans le corpus. "
+    "Langue de réponse : celle de la question posée ; si la question est en "
+    "français, réponds en français avec les accents et diacritiques corrects."
+)
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": f"<corpus>\n{corpus}\n</corpus>", "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": args.question},
+    ],
+}]
 
-# Thinking mode : on/off selon le flag --think
-# En non-thinking, DeepSeek V4 Flash coûte $0.14/1M input, $0.28/1M output
-# En thinking, les tokens de raisonnement sont comptés dans l'output (prévoir large)
-extra_params = {}
-if not args.think:
-    extra_params["extra_body"] = {"thinking": {"type": "disabled"}}
-    max_tokens = 4096
+# Sans --think : réflexion coupée (Haiku 5.5 réfléchit par défaut). Avec : adaptative,
+# ses tokens comptent dans max_tokens (prévoir large).
+if args.think:
+    params = {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}}
+    max_tokens = 16384
 else:
-    max_tokens = 16384  # thinking tokens + réponse
+    params = {"thinking": {"type": "disabled"}}
+    max_tokens = 4096
 
 try:
-    response = client.chat.completions.create(
-        model=MODEL_FAST,
-        messages=messages,
-        max_tokens=max_tokens,
-        **extra_params,
-    )
-except Exception as e:
+    with client.messages.stream(model=MODEL, max_tokens=max_tokens, system=system,
+                                messages=messages, **params) as stream:
+        response = stream.get_final_message()
+except anthropic.APIError as e:
     print(f"[ask-deepseek] ERREUR API: {e}", file=sys.stderr)
     sys.exit(1)
 
-choix = response.choices[0]
-print(choix.message.content)
+print("".join(block.text for block in response.content if block.type == "text"))
+if response.stop_reason == "refusal":
+    print("\n⚠️  REFUS du modèle (stop_reason=refusal) : réponse vide ou partielle.")
 
 # ── Troncature ────────────────────────────────────────────────────────────────
 # Le bandeau va sur STDOUT : un avertissement stderr se noie dans un `| tail`,
 # et une réponse coupée en plein inventaire ressemble à une réponse finie.
-tronquee = getattr(choix, "finish_reason", None) == "length"
+tronquee = response.stop_reason == "max_tokens"
 if tronquee:
     print(f"\n{'=' * 60}\n"
           f"⚠️  RÉPONSE TRONQUÉE — la limite de {max_tokens} tokens de sortie a été\n"
@@ -178,16 +181,8 @@ if tronquee:
           f"{'=' * 60}")
 
 # ── Consommation réelle ───────────────────────────────────────────────────────
-usage = getattr(response, "usage", None)
-if usage:
-    tok_in = getattr(usage, "prompt_tokens", 0) or 0
-    tok_out = getattr(usage, "completion_tokens", 0) or 0
-    hits = getattr(usage, "prompt_cache_hit_tokens", 0) or 0
-    miss = getattr(usage, "prompt_cache_miss_tokens", None)
-    if miss is None:
-        miss = max(tok_in - hits, 0)
-    cout = (miss * PRIX_IN_MISS + hits * PRIX_IN_HIT + tok_out * PRIX_OUT) / 1e6
-    print(f"[ask-deepseek] usage : {tok_in} in ({hits} en cache) + {tok_out} out "
-          f"→ ~${cout:.4f}", file=sys.stderr)
+tok_in, hits, tok_out, cout = cout_usd(response.usage)
+print(f"[ask-deepseek] usage : {tok_in} in ({hits} en cache) + {tok_out} out "
+      f"→ ~${cout:.4f} ({MODEL})", file=sys.stderr)
 
 sys.exit(2 if tronquee else 0)
