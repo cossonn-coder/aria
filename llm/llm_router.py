@@ -84,7 +84,7 @@ def _text_chain(deepseek_model: str) -> list[dict]:
         },
         {
             "provider": "anthropic",
-            "model": "claude-haiku-4-5",
+            "model": "claude-haiku-5-5",
             "base_url": "https://api.anthropic.com/v1",
             "api_key": lambda: config.anthropic_api_key,
         },
@@ -360,11 +360,13 @@ class LLMRouter:
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             }
+            # Haiku 5.5 : temperature ≠ 1 renvoie une 400 (on ne l'envoie plus) ; réflexion
+            # désactivée, comme Haiku 4.5, pour ne pas allonger la réponse ni manger max_tokens.
             payload = {
                 "model": provider_cfg["model"],
                 "max_tokens": max_tokens,
                 "messages": anthropic_messages,
-                "temperature": temperature,
+                "thinking": {"type": "disabled"},
             }
             if anthropic_system:
                 payload["system"] = anthropic_system
@@ -372,7 +374,8 @@ class LLMRouter:
             response = httpx.post(url, json=payload, headers=headers, timeout=30.0)
             response.raise_for_status()
             data = response.json()
-            content = data["content"][0]["text"]
+            # Premier bloc de texte : la réponse peut commencer par un bloc thinking.
+            content = next((b["text"] for b in data["content"] if b["type"] == "text"), None)
             # Réponse vide = échec : on lève pour que complete() passe au
             # provider suivant au lieu de renvoyer '' au caller.
             if content is None or not content.strip():

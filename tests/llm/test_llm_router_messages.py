@@ -31,7 +31,7 @@ def _install_capturing_post(monkeypatch, captured: dict, *, anthropic_format: bo
         captured["json"] = json
         captured["headers"] = headers
         body = (
-            {"content": [{"text": "ok"}], "usage": {}}
+            {"content": [{"type": "text", "text": "ok"}], "usage": {}}
             if anthropic_format
             else {"choices": [{"message": {"content": "ok"}}], "usage": {}}
         )
@@ -201,3 +201,24 @@ def test_complete_rejects_missing_keys():
         router.complete(messages=[{"role": "user"}])
     with pytest.raises(ValueError):
         router.complete(messages=[{"content": "x"}])
+
+
+# ── Haiku 5.5 : payload sans temperature, réponse lue au premier bloc texte ──
+
+def test_anthropic_payload_haiku55_and_text_after_thinking(monkeypatch, force_anthropic_chain):
+    """Haiku 5.5 refuse temperature ≠ 1 : elle n'est pas envoyée, la réflexion est
+    désactivée, et la réponse est le premier bloc texte même après un bloc thinking."""
+    captured: dict = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured["json"] = json
+        body = {"content": [{"type": "thinking", "thinking": "", "signature": "s"},
+                            {"type": "text", "text": "réponse"}], "usage": {}}
+        return httpx.Response(status_code=200, json=body, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("httpx.post", fake_post)
+    result = LLMRouter().complete(prompt="hi", role=LLMRole.CHAT, temperature=0.2)
+
+    assert result.content == "réponse"
+    assert "temperature" not in captured["json"]
+    assert captured["json"]["thinking"] == {"type": "disabled"}
