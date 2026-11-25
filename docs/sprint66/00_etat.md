@@ -85,12 +85,15 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | État |
 |---|---|---|
-| 01 | `01_miniatures_fiche.md` : `minis_json` écrit après le LLM, servi par `/stored` | ⏳ |
+| 01 | `01_miniatures_fiche.md` : `minis_json` écrit après le LLM, servi par `/stored` | ✅ (pytest 638 verts) |
 | 02 | `02_onglet_miniatures.md` : onglet Miniatures, exercice 2e chance, solution, curseur | ⏳ |
 | 03 | `03_fen.md` : FEN collée dans l'échiquier (65-1) | ⏳ |
 | 04 | `04_run_live.txt` : run live (Nico, partie neuve) | ⏳ |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Prochaine étape :
-`/sprint-auto sprint 66`.
+Tronçon 01 fait (non commité) : `writer.update_chess_game_minis`, `chess_router._mini` /
+`_critical_mini` (miniatures construites avec les images, légendes finales recopiées après
+`_split_entries` et la conversion, écrites si `write_chess_game` a réussi), clé `minis` de
+`/stored`. Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳ (02).
+Prochaine étape : `/sprint-auto sprint 66`.

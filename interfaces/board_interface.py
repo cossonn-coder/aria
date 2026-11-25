@@ -223,6 +223,7 @@ def stored_game(fiche: dict, games: list) -> dict:
     Mêmes clés que /game, plus pgn (coups uci de plies_json rejoués depuis la position
     initiale, en-têtes depuis les métadonnées) et playing (camp de Nico). mates : None
     partout, la fiche ne stocke pas d'eval_*_cp. games : fiches lues pour l'historique.
+    minis : miniatures rejouables de la fiche (sprint 66), [] pour les fiches antérieures.
     """
     plies = [SimpleNamespace(**p) for p in json.loads(fiche["plies_json"])]
     color = fiche["nico_color"]
@@ -246,7 +247,8 @@ def stored_game(fiche: dict, games: list) -> dict:
     wins.append(last.win_after if last.color == "white" else 100 - last.win_after)
     return {"pgn": str(game), "playing": color, "wins": [round(w, 1) for w in wins],
             "mates": [None] * len(wins), "best": [p.best_san for p in plies] + [None],
-            "history": game_history(game, plies, color, games)}
+            "history": game_history(game, plies, color, games),
+            "minis": json.loads(fiche.get("minis_json") or "[]")}
 
 
 def position_eval(fen: str) -> dict:
@@ -359,7 +361,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, json.dumps({"error": "partie introuvable"}).encode(), "application/json")
             return
         result = stored_game(fiche, games)
-        log.info(f"board_stored id={game_hash} plies={len(result['wins']) - 1}")
+        log.info(f"board_stored id={game_hash} plies={len(result['wins']) - 1} minis={len(result['minis'])}")
         self._json(result)
 
     def _history(self, game, plies: list, playing: str) -> list[str]:

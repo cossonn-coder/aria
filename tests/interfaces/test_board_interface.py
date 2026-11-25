@@ -330,6 +330,8 @@ def test_stored_serves_fiche_without_analysis(monkeypatch):
         assert data["mates"] == [None] * 4
         assert data["playing"] == "black"
         assert data["history"][0].startswith("Précision")
+        # Sprint 66 : fiche d'avant les miniatures, liste vide.
+        assert data["minis"] == []
 
         with pytest.raises(urllib.error.HTTPError) as missing:
             _request(base, "/stored", {"id": "ffffffffffffffff"})
@@ -337,3 +339,16 @@ def test_stored_serves_fiche_without_analysis(monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_stored_game_serves_minis():
+    # Sprint 66, tronçon 01 : miniatures de la fiche renvoyées telles quelles à la page.
+    from interfaces.board_interface import stored_game
+
+    plies = [{"color": "white", "uci": "e2e4", "win_before": 50, "win_after": 52, "loss": 0,
+              "quality": "best", "best_san": "e4"}]
+    minis = [{"ply": 0, "kind": "a", "best": "e4", "also": [], "caption": "Position 1",
+              "lines": [{"label": "Meilleur coup", "sans": ["e4", "e5"]}]}]
+    fiche = {"id": "chess_game_x", "plies_json": json.dumps(plies), "nico_color": "white",
+             "minis_json": json.dumps(minis)}
+    assert stored_game(fiche, [])["minis"] == minis

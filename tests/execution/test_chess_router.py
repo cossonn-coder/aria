@@ -66,6 +66,8 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     monkeypatch.setattr(chess_router_mod.config, "image_output_dir", str(tmp_path))
     write_game = MagicMock()
     monkeypatch.setattr(chess_router_mod, "write_chess_game", write_game)
+    write_minis = MagicMock()
+    monkeypatch.setattr(chess_router_mod, "update_chess_game_minis", write_minis)
     llm_exec = MagicMock()
     llm_exec.execute.return_value = {"text": "explication"}
     # Deux fiches saison 1 : une ancienne, puis la partie courante (même doc_id).
@@ -122,6 +124,14 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert "idées classiques de cette ouverture" not in delegated["content"]
     write_game.assert_called_once()
     assert write_game.call_args.kwargs["extra"]["nico_color"] == "black"
+    # Sprint 66 : miniatures posées sur la fiche, 1re entrée = 1re image (courbe exclue).
+    doc_id, minis_json = write_minis.call_args.args
+    minis = json.loads(minis_json)
+    assert doc_id == current
+    assert len(minis) == 2
+    assert (minis[0]["ply"], minis[0]["best"]) == (1, "d6")
+    assert minis[0]["caption"] == result["images"][0]["caption"]
+    assert minis[0]["lines"] == [{"label": "Meilleur coup", "sans": ["d6", "Nf3"]}]
 
 
 def test_explosive_position_caption_arrow_and_enriched(monkeypatch, tmp_path):
