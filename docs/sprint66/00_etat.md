@@ -1,6 +1,6 @@
 # Sprint 66 — état du sprint
 
-**Phase** : B figée (Nico, 2026-11-25 : « ok je valide »). Prochaine étape : `/sprint-auto sprint 66`.
+**Phase** : close (Nico, 2026-11-25 : « ok c bon » après le run live sur téléphone). Tag `sprint-66`.
 **Audit** : `audit_miniatures_echiquier.md`.
 **Sujet** : miniatures jouables dans l'échiquier ARIA (62-8).
 **Branche** : `feat/sprint66-miniatures-echiquier`, depuis `main` @ `ea193c5`.
@@ -47,7 +47,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 61-11 | Texte LLM inventé | « pion d7 passé », « Be7!? sacrifie 3 pions » | Faits plus contraints |
 | 62-2 | Suivi Telegram invente la position | « j'avais mat en 2 » → « 9...Qh4+ 10.g3 Qxg3# » : mauvais camp | Code livré au sprint 63 ; reste ouverte jusqu'au run live `docs/sprint63/02_run_live.txt` |
 | 63-1 | Revendication sans position citée | « j'avais mat en 2 » seul reste au LLM sans moteur (décision 1a) | Balayage des coups de Nico si un cas réel le demande |
-| 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | **Sprint 66** (tronçons 01-02) |
+| 62-8 | Miniatures dans l'échiquier ARIA | Jouer la variante depuis la position, explications comme dans les miniatures | **Fermée** (sprint 66, run live validé) |
 | 66-1 | Miniatures d'un PGN collé | `/game` ne refait pas l'analyse complète : pas de miniatures hors fiche | Retrouver la fiche par le hash des coups si Nico le veut |
 | 66-2 | Miniatures des fiches anciennes | Fiches d'avant le sprint 66 sans `minis_json` | Réanalyse ~1 min/partie [6 runs] si Nico le veut |
 | 62-9 | Anticiper les réponses adverses | Échiquier ARIA : coups logiques de l'adversaire + variante pour chacun (recoupe 61-4) | — |
@@ -55,10 +55,13 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 62-10 | Accès Iona | Note de Nico 2026-11-20 : « accès Iona à faire », contenu à préciser | — |
 | 64-1 | Deux règles de cadence | `chess_coach/level._cadence` (Lichess, blitz < 480 s) ≠ `meta_commands.game_cadence` (chess.com, < 600 s) : 480–599 s classé différemment | Aligner si Nico le veut |
 | 64-2 | « 1 dernières » | Bilan court de `/parties` avec une seule fiche : libellé au pluriel | Accorder au singulier |
-| 65-1 | Charger une position FEN (**sprint 66, tronçon 03**) dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | Champ ou collage FEN qui place la position et lance l'analyse live |
+| 65-1 | Charger une position FEN dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | **Fermée** (sprint 66, run live validé) |
 | 65-2 | « partie introuvable » effacé | Échiquier : le message sur la ligne d'état est remplacé par l'analyse live après ~1 s (comme « PGN illisible ») | Garder le message affiché si Nico le veut |
 | 65-3 | Échiquier inaccessible hors tailnet | Tailscale Serve « tailnet only » : seul le téléphone ouvre la Mini App, pas l'ordi de Nico | Tailscale sur l'ordi ; Funnel (public) seulement après arbitrage |
 | 66-3 | Boucle de rétroaction | Nico, 2026-11-25 : 👍 = j'aime, 😢 = je n'aime pas, sur **chaque** message Telegram (échecs ou non ; miniature = son Pourquoi, texte final = bilan). Retours positif / aucun / négatif enregistrés dans le palace, traités ensemble en conception. But final : ARIA s'auto-améliore à chaque message (réécrit ses prompts, modifie son code si possible) ; système cognitif pas encore prêt. Constats : `run_polling` sans `allowed_updates` (réactions non reçues) ; une réaction ne porte que l'id du message → mémoriser à l'envoi message → réponse ; le résultat du router ne porte pas l'id de la fiche | **Sprint 67** ; mode de traitement en conception à décider au sprint 67 |
+| 66-4 | « Envoyer à ARIA » depuis une FEN | Le PGN exporté porte `SetUp`/`FEN` ; lecture côté serveur non vérifiée | Vérifier si Nico envoie une position collée |
+| 66-5 | ▶ du haut sur PC vide la suite d'une miniature | ▶ de `#nav` fait `goTo` (partie) ; la suite se joue par → ou la molette | Faire jouer `ahead` à ▶ si Nico le veut |
+| 66-6 | Miniatures perdues au rechargement hors Telegram | Rechargement : partie relue par `/game`, sans `minis` | Rouvrir par `/stored` si Nico le veut |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 
@@ -88,15 +91,11 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 01 | `01_miniatures_fiche.md` : `minis_json` écrit après le LLM, servi par `/stored` | ✅ (pytest 638 verts) |
 | 02 | `02_onglet_miniatures.md` : onglet Miniatures, exercice 2e chance, solution, curseur | ✅ (pytest 638 verts) |
 | 03 | `03_fen.md` : FEN collée dans l'échiquier (65-1) | ✅ (pytest 638 verts) |
-| 04 | `04_run_live.txt` : run live (Nico, partie neuve) | ⏳ |
+| 04 | `04_run_live.txt` : run live (Nico, partie neuve) | ✅ (validé 2026-11-25 sur téléphone : `chess_minis_write OK hash=4f6decf74e903905 minis=4`, `board_stored … minis=4`, FEN chargée) |
+
+Ajouts pendant le run live (Nico, 2026-11-25) : champ PGN/FEN lisible dans le menu ☰ (`e691f33`) ;
+glissement horizontal sous l'échiquier = miniature suivante / précédente en exercice (`c36a4dd`).
 
 ## §REPRISE
 
-Tronçons 01 (`c74b61c`), 02 (`7171a81`) et 03 faits. Tronçon 03 (non commité),
-`interfaces/board/index.html` seul : « Charger la partie » teste d'abord le champ avec
-`validateFen` (import chess.js) ; FEN valide → `loadFen` (jeu libre depuis la position, comme
-« Nouvelle partie », champ conservé, ligne d'état « position chargée », écrasée par l'analyse
-live comme 65-2) ; sinon `loadGame`. `saveState` garde `start` (= `lineFens()[0]`, départ de la
-ligne libre), `restoreState` le recharge avant de rejouer la ligne ; `exportPgn` part de ce même
-départ, chess.js pose alors `SetUp`/`FEN` (vérifié sous node). Reste : tronçon 04, run live par
-Nico (`04_run_live.txt`).
+Sprint clos (tag `sprint-66`). Suite : `docs/sprint67/00_etat.md`.
