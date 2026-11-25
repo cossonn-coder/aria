@@ -1,0 +1,42 @@
+Sprint 66 — run live (Nico) : miniatures jouables dans l'échiquier + FEN
+
+PRÉREQUIS
+sudo systemctl restart aria.service
+Une partie NEUVE (jouée après le déploiement) : les fiches anciennes n'ont pas de miniatures.
+(La même partie peut servir au run live du sprint 63 : docs/sprint63/02_run_live.txt.)
+
+TERMINAL (à laisser ouvert)
+sudo journalctl -u aria -f -o cat | grep -E "chess_minis_write|chess_game_write|board_stored|board_game"
+
+1. TELEGRAM : envoyer le PGN de la partie neuve à ARIA
+  → analyse habituelle, miniatures Telegram inchangées
+  → journalctl : chess_game_write OK …   puis   chess_minis_write OK hash=… minis=K
+    (K = nombre d'images Telegram sans la courbe)
+
+2. TELEGRAM : /parties details
+  → toucher la ligne de cette partie : l'échiquier s'ouvre
+  → journalctl : board_stored id=… plies=… minis=K, aucune ligne board_game
+
+3. ÉCHIQUIER : onglet « Miniatures »
+  → K entrées, libellés sans la réponse (« Position 1 — coup 12 (blancs) »)
+  → toucher une entrée : position de la miniature, AUCUN indice (pas de flèche, pas de barre
+    d'évaluation, pas de « meilleur : … »), « À toi de jouer »
+  → jouer un mauvais coup : « ✘ −X pts, réessaie », retour à la position
+  → jouer le meilleur coup (celui de la miniature Telegram) : « ✔ Trouvé », la légende
+    Telegram (avec le Pourquoi) s'affiche, puis les lignes Meilleur coup / Ton coup / …
+  → toucher « Meilleur coup » : ▶ joue la suite coup par coup
+  → sur une autre entrée : « Voir la solution » sans jouer → même affichage
+
+4. ÉCHIQUIER : menu ☰ → curseur « Seuil 2e chance » à 30
+  → un coup moyen (perte < 30 pts) est accepté « ✔ Bon coup, −X pts »
+  → recharger la Mini App : le curseur est resté à 30
+
+5. ÉCHIQUIER : menu ☰ → coller dans le champ PGN :
+r7/P4rbk/8/8/8/8/6PP/R5K1 w - - 2 25
+  → « Charger la partie » : la position s'affiche, l'analyse live tourne (flèches)
+  → fermer / rouvrir la Mini App : la position est toujours là
+
+SUCCÈS
+- chess_minis_write OK puis board_stored … minis=K (K > 0).
+- Exercice sans indice, jugement juste, solution = légende Telegram + suites jouables.
+- FEN chargée et conservée.
