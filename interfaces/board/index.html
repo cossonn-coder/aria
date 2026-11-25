@@ -184,7 +184,7 @@
 <div id="mini"></div>
 <script type="module">
 import { Chessground } from "https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm";
-import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
+import { Chess, validateFen } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/+esm";
 
 const $ = (id) => document.getElementById(id);
 const chess = new Chess();
@@ -977,7 +977,8 @@ function drawGraph() {
 // des champs (nom vide → "?" : White / Black toujours présents, exigés par detect_pgn).
 function exportPgn() {
   const whole = game && anchor() === null;
-  const board = new Chess(game ? game.start : undefined);
+  // Jeu libre depuis une FEN (sprint 66) : départ de la ligne ; chess.js pose alors SetUp / FEN.
+  const board = new Chess(game ? game.start : lineFens()[0]);
   for (const san of whole ? game.sans : displayedLine()) board.move(san);
   const headers = whole ? { ...game.headers } : { Event: "Échiquier ARIA" };
   if (!headers.Result || headers.Result === "*") {
@@ -1080,10 +1081,11 @@ function playLine(ply, sans) {
 }
 
 // Conservation au rechargement : PGN chargé et position de la partie, ou ligne libre affichée
-// entière ; Elo, « Je joue » et noms.
+// entière avec sa position de départ (FEN collée, sprint 66) ; Elo, « Je joue » et noms.
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     pgn: game ? game.pgn : null, cursor: game ? gameCursor() : 0, line: game ? [] : displayedLine(),
+    start: game ? null : lineFens()[0],
     eloWhite: $("elo-white").value, eloBlack: $("elo-black").value, playing: $("playing").value,
     nameWhite: $("name-white").value, nameBlack: $("name-black").value, threshold: $("threshold").value,
   }));
@@ -1100,6 +1102,7 @@ function restoreState() {
     $("pgn").value = stored.pgn;
     loadGame(stored.cursor);
   } else {
+    if (stored.start) chess.load(stored.start);
     for (const san of stored.line) chess.move(san);
   }
   $("elo-white").value = stored.eloWhite;
@@ -1214,7 +1217,27 @@ $("undo").addEventListener("click", () => {
   refreshGame();
   newPosition();
 });
-$("load").addEventListener("click", () => loadGame());
+// Position FEN collée (sprint 66, dette 65-1) : jeu libre depuis cette position, comme
+// « Nouvelle partie » (le champ garde la FEN) ; analyse live, /eval et courbe de la ligne libre.
+function loadFen(fen) {
+  endExercise();
+  $("exercise").replaceChildren();
+  chess.load(fen);
+  game = null;
+  ahead.length = 0;
+  evals.clear();
+  evalAsked.clear();
+  refreshGame();
+  for (const kind in saved) { saved[kind].clear(); renderSaved(kind); }
+  renderMinis();
+  newPosition();
+  $("status").textContent = "position chargée";
+}
+$("load").addEventListener("click", () => {
+  const fen = $("pgn").value.trim();
+  if (validateFen(fen).ok) loadFen(fen);
+  else loadGame();
+});
 $("first").addEventListener("click", () => goTo(0));
 $("prev").addEventListener("click", () => goTo(gameCursor() - 1));
 $("next").addEventListener("click", () => goTo(gameCursor() + 1));
