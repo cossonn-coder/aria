@@ -23,10 +23,12 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 3. ~~64 : `/parties` sans échiquier (62-4, 62-5, 62-6)~~ : fait au sprint 64, run live validé.
 4. ~~65 : `/parties` → échiquier ARIA avec l'analyse stockée (62-3 + 62-7)~~ : fait au sprint 65, run live validé.
 5. **66 :** Miniatures jouables dans l'échiquier (62-8).
-6. Échiquier centré joueur du bas + réponses adverses (61-4 + 62-9).
-7. Répertoire connu d'ARIA (61-5 + 61-10).
-8. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
-9. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
+6. **67 (ajouté par Nico, 2026-11-25) :** boucle de rétroaction (66-3) : réactions 👍 / 😢 sur
+   les messages Telegram, enregistrées dans le palace, traitées ensemble en conception.
+7. Échiquier centré joueur du bas + réponses adverses (61-4 + 62-9).
+8. Répertoire connu d'ARIA (61-5 + 61-10).
+9. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
+10. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
 ## Dettes
 
@@ -56,6 +58,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 65-1 | Charger une position FEN (**sprint 66, tronçon 03**) dans l'échiquier | Nico, 2026-11-20 : FEN collée (`r7/P4rbk/… w - - 2 25`) → « PGN illisible » ; `loadGame` n'accepte que des coups, pas de champ FEN | Champ ou collage FEN qui place la position et lance l'analyse live |
 | 65-2 | « partie introuvable » effacé | Échiquier : le message sur la ligne d'état est remplacé par l'analyse live après ~1 s (comme « PGN illisible ») | Garder le message affiché si Nico le veut |
 | 65-3 | Échiquier inaccessible hors tailnet | Tailscale Serve « tailnet only » : seul le téléphone ouvre la Mini App, pas l'ordi de Nico | Tailscale sur l'ordi ; Funnel (public) seulement après arbitrage |
+| 66-3 | Boucle de rétroaction | Nico, 2026-11-25 : 👍 = j'aime, 😢 = je n'aime pas, sur **chaque** message Telegram (échecs ou non ; miniature = son Pourquoi, texte final = bilan). Retours positif / aucun / négatif enregistrés dans le palace, traités ensemble en conception. But final : ARIA s'auto-améliore à chaque message (réécrit ses prompts, modifie son code si possible) ; système cognitif pas encore prêt. Constats : `run_polling` sans `allowed_updates` (réactions non reçues) ; une réaction ne porte que l'id du message → mémoriser à l'envoi message → réponse ; le résultat du router ne porte pas l'id de la fiche | **Sprint 67** ; mode de traitement en conception à décider au sprint 67 |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 
