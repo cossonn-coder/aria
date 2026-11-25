@@ -1,10 +1,10 @@
 # Sprint 68 — état du sprint
 
-**Phase** : A (à concevoir). Prochaine étape : `/conception sprint 68`.
+**Phase** : B figée (OK de Nico, 2026-11-25). Prochaine étape : `/sprint-auto sprint 68`.
 **Sujet** : étape 7 de la feuille de route, échiquier centré sur le joueur du bas + réponses
-adverses (61-4 + 62-9). Nico, 2026-11-25 : on suit la feuille de route ; les axes de
+adverses (61-4 + 62-9), élargi à la vitesse de l'échiquier et de l'analyse Telegram. Nico, 2026-11-25 : on suit la feuille de route ; les axes de
 `/amelioration` restent en dettes (67-1 à 67-5).
-**Branche** : à créer depuis `main` au tag `sprint-67`.
+**Branche** : `feat/sprint68-vitesse-anticipation` (depuis `main` à `626ec49`).
 
 ## Contexte hérité
 
@@ -70,8 +70,79 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 67-4 | Commentaire hors « Répondre » perdu | Texte libre après un 👎 part au kernel (suivi « coup 18 » inventé, excuse qui invente encore) | Axe 4 : rappeler le geste ou rattacher au dernier 👎 |
 | 67-5 | Contexte de conversation qui bave | « 👎  trop long » sans « Répondre » → « aucune info sur un dessert » ; « et pour le dessert ? » sans le dîner (réponse image) | À arbitrer |
 | 67-6 | `.claude/` gitignoré | Skill `/amelioration` et hook SessionStart non versionnés | Versionner si Nico le veut |
+| 68-1 | Analyse live trop lente | Nico 2026-11-25 : « tout est trop lent » ; 4 passes ×1/×2/×4/×8 (≈ 75 s cumulées [commentaire de `live.py`, non mesuré]) au tour du joueur du bas | Hors sprint 68 (seul le tour adverse est allégé) ; mesurer puis réduire si Nico le veut |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
+
+## Tronçons
+
+| # | Kickoff | Objet | État |
+|---|---|---|---|
+| 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ⏳ |
+| 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ⏳ |
+| 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ⏳ |
+| 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ⏳ |
+| 05 | `05_echiquier_page.md` | Orientation, retournement, flèches et panneau d'anticipation | ⏳ |
+| 06 | `06_run_live.txt` | Run live (Nico) | ⏳ |
 
 ## §REPRISE
 
-Lire `CLAUDE.md`, ce fichier, `docs/amelioration/2026-11-25.md`. Phase A : choisir le sujet avec Nico.
+Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Exécution : `/sprint-auto
+sprint 68`. Contexte des mesures : `audit_joueur_du_bas.md` §6.
+
+## Décisions arrêtées (lot 1, Nico, 2026-11-25)
+
+- Anticipation : jusqu'à 3 coups adverses (p ≥ 10 %), chacun avec pièce cerclée + flèche grise
+  semi-transparente numérotée 1, 2, 3 ; la réponse du joueur du bas en flèche bleue portant le
+  même numéro. Raison : demande de Nico (« les coups les plus probables et leur réponse »).
+- Orientation automatique sur « Je joue » (fiche ouverte depuis `/parties` comprise) ; ⟲ peut
+  toujours retourner, l'anticipation suit le joueur du bas. Raison : sinon une partie avec les
+  noirs anticipe les coups de Nico lui-même.
+
+- Tour adverse (révisé, Nico 2026-11-25 : « tout est trop lent ») : **aucune analyse live du
+  camp au trait** ; la passe calcule seulement l'anticipation (3 coups Maia les plus probables,
+  p ≥ 10 %, + réponse moteur du joueur du bas, une analyse `root_moves`). Restent les flèches
+  gratuites déjà connues de la page : bleu tiré de `evals` (/game, /eval), flèche d'erreur,
+  cercle du coup joué. Case « Anticipation » dans le menu, cochée par défaut.
+
+- Périmètre (Nico, 2026-11-25, « tout dans le 68 ») : anticipation + vitesse de l'échiquier
+  (évaluation, flèches, PGN collé) + vitesse de l'analyse Telegram. Raison : Nico utilise lichess
+  parce qu'ARIA est trop lent. Mesures : `audit_joueur_du_bas.md` §6.
+
+## Décisions arrêtées (lot 2, Nico, 2026-11-25 : « tout ce qui peut accélérer »)
+
+- Telegram : bilan sans rappels mémoire ; mesurer puis alléger les écritures ; recherche
+  explosive plus courte ; préchargement embedder + Maia au démarrage (ajout, même logique).
+- Échiquier : Stockfish gardé ouvert pour `/eval` ; piège / stratégie publiés dès qu'ils sont
+  prêts, passe ×8 supprimée ; PGN collé déjà en fiche = chargé comme `/stored`.
+- Machine : les deux `cuire_portraits.js` (Symbiose) restent (Nico).
+- Hors sprint, faits le 2026-11-25 : Anthropic en `claude-haiku-5-5` (`5a59749`), DeepSeek en
+  dernier des chaînes (`12b7f4e`).
+
+## Découpage (validé par Nico, 2026-11-25)
+
+1. Bilan Telegram : durées par étape au journal, bilan sans rappels mémoire, préchargement.
+2. Écritures : mesure sur une copie du palace, allègement sans changer ce qui est écrit.
+3. Recherche explosive : réglage plus court retenu seulement s'il retrouve les mêmes coups sur
+   un corpus de fiches.
+4. Échiquier serveur : anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu.
+5. Échiquier page : orientation, retournement, flèches et panneau d'anticipation.
+6. Run live (Nico).
+
+## Questions ouvertes
+
+Aucune pour l'exécution. Contexte LLM (hors sprint, 2026-11-25) : DeepSeek à court de crédit
+(dernier succès vu le 2026-11-20 07:30, premier 402 vu le 2026-11-25 14:49 [journaux collés dans
+les transcripts seulement]) ; recharge ou non : à Nico, d'après le tableau d'usage DeepSeek.
+Anthropic : 18,97 $ restants, ~0,013 $ par analyse sur Haiku 4.5 [n=2]. Faits : Anthropic en
+`claude-haiku-5-5` (`5a59749`), DeepSeek en dernier des chaînes (`12b7f4e`), `ask-deepseek` /
+`write-deepseek` sur Haiku 5.5 (`626ec49`). Prise d'effet côté ARIA au redémarrage du service.
+
+## Défauts retenus (non questionnés, repris dans les kickoffs)
+
+- Coup adverse : pièce cerclée + flèche grise semi-transparente ; réponse : flèche bleue (couleur
+  du meilleur coup) avec pastille.
+- Panneau sous l'échiquier (celui des réponses au coup explosif) : un coup anticipé par ligne,
+  probabilité, variante cliquable (`line_san`).
+- Serveur : `bottom` dans `/position` ; camp au trait ≠ bas → passe `live.anticipate_pass` à la
+  place d'`analyse_pass` (réutilise `reply_distribution` + `_human_replies`, Elo Maia du camp au
+  trait) ; `bottom` dans la clé du cache.
