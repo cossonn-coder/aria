@@ -49,6 +49,8 @@
   #moves .error-move { padding: 0 3px; border-radius: 3px; box-shadow: 0 0 0 1px #ccc; }
   /* Miniatures (sprint 66) : liste de l'onglet, zone d'exercice et de solution sous l'échiquier. */
   #minis, #exercise { width: 560px; margin-top: 8px; }
+  /* Glissement horizontal réservé au changement de miniature (le défilement vertical reste). */
+  #exercise { touch-action: pan-y; }
   #exercise { white-space: pre-line; }
   #exercise:empty { display: none; }
   /* Exercice « 2e chance » : tout ce qui donne la réponse est masqué. */
@@ -220,6 +222,8 @@ const accuracies = new Map();
 let lastAccuracy = null;
 // Exercice « 2e chance » en cours (sprint 66) : miniature de game.minis, null hors exercice.
 let exercise = null;
+// Dernière miniature ouverte en exercice : point de départ du glissement suivante / précédente.
+let lastMini = null;
 // Nom de Nico écrit par « Je joue » dans le camp choisi (export PGN, reconnu par ARIA).
 const NICO_NAME = "Nico";
 // Clé localStorage de la partie conservée au rechargement de la page.
@@ -1021,6 +1025,7 @@ function renderMinis() {
 function startExercise(mini, verdict = "À toi de jouer : trouve le meilleur coup.") {
   goTo(mini.ply);
   exercise = mini;
+  lastMini = mini;
   document.body.classList.add("exercise");
   drawShapes();
   const button = document.createElement("button");
@@ -1081,6 +1086,22 @@ function playLine(ply, sans) {
   ahead.push(...[...sans].reverse());
   refreshGame();
 }
+
+// Glissement horizontal sur la zone sous l'échiquier (consigne ou solution) : vers la gauche
+// → exercice de la miniature suivante, vers la droite → précédente (bornes : rien).
+let swipeStart = null;
+$("exercise").addEventListener("touchstart", (event) => {
+  swipeStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+});
+$("exercise").addEventListener("touchend", (event) => {
+  if (!swipeStart || !game || !lastMini) return;
+  const dx = event.changedTouches[0].clientX - swipeStart.x;
+  const dy = event.changedTouches[0].clientY - swipeStart.y;
+  swipeStart = null;
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+  const next = game.minis[game.minis.indexOf(lastMini) + (dx < 0 ? 1 : -1)];
+  if (next) startExercise(next);
+});
 
 // Conservation au rechargement : PGN chargé et position de la partie, ou ligne libre affichée
 // entière avec sa position de départ (FEN collée, sprint 66) ; Elo, « Je joue » et noms.
