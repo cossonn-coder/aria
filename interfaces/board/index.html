@@ -86,20 +86,23 @@
     #evalbar-white { height: 50%; background: #eee; }
     /* Carré : largeur d'écran moins les marges (16 px) et la barre d'évaluation (10 + 4 px). */
     #board { width: calc(100vw - 30px); height: calc(100vw - 30px); }
-    #analysis, #exercise { order: 2; }
+    /* Run live sprint 68 : onglets et panneau juste sous l'échiquier (courbe visible sans
+       défiler), textes d'analyse ensuite. */
+    #exercise { order: 2; }
+    #analysis { order: 5; }
     #exercise { width: auto; }
     /* Hauteur fixe de deux lignes : le statut d'analyse qui apparaît, change ou s'efface
        ne décale plus rien (clignotement de l'échiquier). */
     #status { width: auto; margin-top: 0; cursor: pointer; height: 2.6em; line-height: 1.3;
               overflow: hidden; }
     #analysis { max-height: none; overflow-y: visible; }
-    #played { order: 3; margin-top: 0; }
-    #accuracy, #history { order: 4; }
-    #tabs { order: 5; display: flex; gap: 4px; }
+    #played { order: 6; margin-top: 0; }
+    #accuracy, #history { order: 7; }
+    #tabs { order: 3; display: flex; gap: 4px; }
     #tabs button { flex: 1; padding: 8px 0; }
     #tabs button.active { background: #6a4a1c; }
     #tabs .dot { margin: 0; }
-    #moves, #graph, #columns, #minis { order: 6; }
+    #moves, #graph, #columns, #minis { order: 4; }
     #minis { width: auto; margin-top: 0; }
     #moves { width: auto; margin-top: 0; }
     #graph { width: 100%; height: auto; margin-top: 0; }
@@ -1410,7 +1413,8 @@ $("send").addEventListener("click", async () => {
 });
 
 // Téléphone (sprint 41) : onglets sous l'échiquier, un seul panneau visible (classe shown,
-// lue seulement sous la media query ; sur PC tous les panneaux restent affichés), Coups par défaut.
+// lue seulement sous la media query ; sur PC tous les panneaux restent affichés), Courbe par
+// défaut (run live sprint 68).
 function showTab(button) {
   for (const tab of $("tabs").children) {
     tab.classList.toggle("active", tab === button);
@@ -1418,7 +1422,7 @@ function showTab(button) {
   }
 }
 for (const tab of $("tabs").children) tab.addEventListener("click", () => showTab(tab));
-showTab($("tabs").firstElementChild);
+showTab($("tabs").querySelector('[data-panel="graph"]'));
 // Barre du bas : menu ☰ (contrôles en panneau), début / coup précédent / suivant / fin de ligne.
 const toggleMenu = () => document.body.classList.toggle("menu-open");
 $("menu").addEventListener("click", toggleMenu);

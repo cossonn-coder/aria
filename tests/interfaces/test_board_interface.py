@@ -162,6 +162,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="show-anticipation" type="checkbox" checked' in page
         # Sprint 68 (run live) : sur PC, l'analyse est à droite de l'échiquier.
         assert "#analysis { grid-column: 2; grid-row: 1;" in page
+        # Téléphone : onglets sous l'échiquier, courbe ouverte par défaut.
+        assert "#tabs { order: 3;" in page and "showTab($(\"tabs\").querySelector('[data-panel=\"graph\"]'))" in page
         assert "bottom: ground.state.orientation" in page
     finally:
         server.shutdown()
