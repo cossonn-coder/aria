@@ -71,6 +71,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 67-5 | Contexte de conversation qui bave | « 👎  trop long » sans « Répondre » → « aucune info sur un dessert » ; « et pour le dessert ? » sans le dîner (réponse image) | À arbitrer |
 | 67-6 | `.claude/` gitignoré | Skill `/amelioration` et hook SessionStart non versionnés | Versionner si Nico le veut |
 | 68-1 | Analyse live trop lente | Nico 2026-11-25 : « tout est trop lent » ; 4 passes ×1/×2/×4/×8 (≈ 75 s cumulées [commentaire de `live.py`, non mesuré]) au tour du joueur du bas | Hors sprint 68 (seul le tour adverse est allégé) ; mesurer puis réduire si Nico le veut |
+| 68-2 | Écritures palace lentes : embedding torch à 16 threads | Tronçon 02 (`mesure_ecritures.txt`) : ~2,2 à 2,6 s par écriture [n=3, machine chargée], dont embedding ~1,8 s ; ~10 `write_sent_message` attendus entre les envois d'un bilan ≈ 25 s [estimation]. À 4 threads : ~1,2 à 1,6 s par écriture [n=3, autre passage]. Réouverture du client : ~0,1 s, sans gain | (a) `torch.set_num_threads(4)` au démarrage (touche aussi Maia) ; (b) `write_sent_message` sans attendre, après l'envoi (nouveau motif dans `telegram_interface`). À arbitrer par Nico |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## Tronçons
@@ -78,7 +79,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | # | Kickoff | Objet | État |
 |---|---|---|---|
 | 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ✅ |
-| 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ⏳ |
+| 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ✅ (mesure seule, dette 68-2) |
 | 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ⏳ |
 | 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ⏳ |
 | 05 | `05_echiquier_page.md` | Orientation, retournement, flèches et panneau d'anticipation | ⏳ |
@@ -93,6 +94,11 @@ Tronçon 01 fait : `chess_timing` (`_execute_game`) et `pipeline_timing` (`_run_
 journal ; drapeau `skip_memory` posé par `_execute_game` (log `memory_recall SKIPPED`) ;
 préchargement embedder + Maia dans un thread daemon de `bot.py` (log `preload OK duration=…`).
 Gain réel à mesurer au run live (tronçon 06).
+
+Tronçon 02 fait, mesure seule : `docs/sprint68/mesure_ecritures.py` (copie du palace dans
+`~/.cache`, `/tmp` plein) et `mesure_ecritures.txt`. Aucune piste admise par le kickoff ne gagne
+(pas de double embedding, pas de relecture, réouverture ~0,1 s) : le coût est l'embedding torch à
+16 threads sur machine chargée, dette 68-2 (arbitrage Nico). Aucun code de prod modifié.
 
 ## Décisions arrêtées (lot 1, Nico, 2026-11-25)
 
