@@ -165,6 +165,7 @@
     <label>Erreurs <input id="show-errors" type="checkbox" checked></label>
     <label>Piège <input id="show-trap" type="checkbox" checked></label>
     <label>Stratégie <input id="show-strategy" type="checkbox" checked></label>
+    <label>Anticipation <input id="show-anticipation" type="checkbox" checked></label>
     <label><span>Seuil 2e chance : <span id="threshold-value">10</span> pts</span>
       <input id="threshold" type="range" min="1" max="30" value="10"></label>
   </div>
@@ -271,6 +272,8 @@ const ground = Chessground($("board"), {
                          green: { key: "g", color: "#2ecc40", opacity: 0.9, lineWidth: 10 },
                          blue: { key: "b", color: "#4d8dff", opacity: 0.9, lineWidth: 10 },
                          white: { key: "w", color: "#ffffff", opacity: 0.9, lineWidth: 6 },
+                         // Coups adverses anticipés (sprint 68) : gris semi-transparent.
+                         grey: { key: "a", color: "#cccccc", opacity: 0.45, lineWidth: 10 },
                          ...errorBrushes } },
 });
 // Mini échiquier du survol d'un coup de variante (lecture seule, même orientation).
@@ -289,6 +292,16 @@ function syncBoard() {
   });
 }
 
+// Joueur du bas = camp de « Je joue » (sprint 68) ; « aucun » : orientation inchangée.
+// Rend vrai si l'orientation a changé (l'analyse en cours suit alors l'ancien camp du bas).
+function orientToPlaying() {
+  const side = $("playing").value;
+  if (!side || side === ground.state.orientation) return false;
+  ground.set({ orientation: side });
+  drawEvalbar();
+  return true;
+}
+
 // Nouvelle position : envoi au serveur, flèches et panneau effacés.
 async function newPosition() {
   syncBoard();
@@ -303,7 +316,8 @@ async function newPosition() {
   const response = await fetch("/position", {
     method: "POST",
     body: JSON.stringify({ fen: chess.fen(), elo_white: Number($("elo-white").value),
-                           elo_black: Number($("elo-black").value) }),
+                           elo_black: Number($("elo-black").value),
+                           bottom: ground.state.orientation }),
   });
   positionId = (await response.json()).id;
 }
@@ -336,6 +350,18 @@ function drawShapes() {
   // Pièce du coup joué dans la partie chargée : cerclée de blanc.
   const played = playedMove();
   if (played) shapes.push({ orig: played.from, brush: "white" });
+  // Tour adverse (sprint 68) : coup adverse k = pièce cerclée + flèche grise numérotée k,
+  // réponse du joueur du bas = flèche bleue portant le même numéro.
+  if (state && state.anticipated && $("show-anticipation").checked) {
+    state.anticipated.forEach((move, i) => {
+      const label = { text: String(i + 1) };
+      shapes.push({ orig: move.uci.slice(0, 2), brush: "grey" });
+      shapes.push({ orig: move.uci.slice(0, 2), dest: move.uci.slice(2, 4), brush: "grey", label });
+      if (move.reply_uci) {
+        shapes.push({ orig: move.reply_uci.slice(0, 2), dest: move.reply_uci.slice(2, 4), brush: "blue", label });
+      }
+    });
+  }
   const error = $("show-errors").checked ? playedError() : null;
   if (error) {
     const pts = Math.min(Math.round(error.lost), 50);
@@ -356,6 +382,9 @@ function statusText() {
     case "none": return state.running
       ? `aucun coup explosif pour l'instant — recherche continue (${pass})`
       : "✔ aucun coup explosif — analyse terminée";
+    case "anticipation": return state.running
+      ? `🔮 coups adverses probables — ${pass}`
+      : "🔮 coups adverses probables — analyse terminée";
     case "decided": return "— position décidée, pas de recherche";
     case "game_over": return "partie terminée";
   }
@@ -422,16 +451,34 @@ function explosiveDetails(fen, explosive) {
 // seulement si le coup change (sinon le coup survolé disparaîtrait à chaque interrogation).
 let shownReplies = null;
 function fillReplies() {
-  const key = JSON.stringify([positionFen, state && state.explosive]);
+  const key = JSON.stringify([positionFen, state && state.explosive, state && state.anticipated]);
   if (key === shownReplies) return;
   shownReplies = key;
   const panel = $("replies");
   panel.replaceChildren();
   $("mini").style.visibility = "hidden";
-  if (!state || !state.explosive) return;
+  if (!hasReplies()) return;
   const title = document.createElement("div");
+  if (!state.explosive) {
+    // Tour adverse (sprint 68) : « k. coup — p % — variante » (coup adverse puis réponse).
+    title.textContent = "Coups adverses probables :";
+    const list = document.createElement("ul");
+    state.anticipated.forEach((move, i) => {
+      const item = document.createElement("li");
+      item.append(`${i + 1}. ${move.san} — ${Math.round(move.p * 100)} % — `,
+                  variation(positionFen, move.line_san));
+      list.append(item);
+    });
+    panel.append(title, list);
+    return;
+  }
   title.textContent = `Réponses humaines probables à ${state.explosive.san} :`;
   panel.append(title, ...explosiveDetails(positionFen, state.explosive));
+}
+
+// Le panneau #replies a un contenu : coup explosif ou coups adverses anticipés (sprint 68).
+function hasReplies() {
+  return Boolean(state && (state.explosive || (state.anticipated && state.anticipated.length)));
 }
 
 // Corps d'un bloc de colonne selon sa couleur (le titre est commun).
@@ -520,7 +567,7 @@ function render() {
   drawShapes();
   $("status").textContent = statusText();
   fillReplies();
-  if (!state || !state.explosive) $("replies").classList.remove("visible");
+  if (!hasReplies()) $("replies").classList.remove("visible");
 }
 
 // Interrogation de l'état toutes les ~1 s ; une réponse d'une autre position est ignorée.
@@ -1121,6 +1168,7 @@ function restoreState() {
   const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
   if (!stored) { newPosition(); return; }
   $("playing").value = stored.playing;
+  orientToPlaying();
   if (stored.pgn) {
     $("pgn").value = stored.pgn;
     loadGame(stored.cursor);
@@ -1147,6 +1195,7 @@ async function openStored(id) {
   }
   const stored = await response.json();
   $("playing").value = stored.playing;
+  orientToPlaying();
   $("pgn").value = stored.pgn;
   loadGame(0, stored);
   newPosition();
@@ -1189,6 +1238,16 @@ async function loadGame(cursor = 0, curve = null) {
     if (loaded !== game) return;
     if (response.ok) curve = await response.json();
     else game.message = "courbe indisponible";
+    // PGN déjà en fiche (sprint 68) : camp de Nico et miniatures de la fiche.
+    if (curve && curve.playing) {
+      $("playing").value = curve.playing;
+      saveState();
+      if (orientToPlaying()) newPosition();
+    }
+    if (curve && curve.minis) {
+      game.minis = curve.minis;
+      renderMinis();
+    }
   }
   if (curve) {
     const { wins, mates, best, history } = curve;
@@ -1205,13 +1264,13 @@ async function loadGame(cursor = 0, curve = null) {
 // (sprint 41) : tap sur la ligne d'état → ouvre / ferme le panneau.
 if (TOUCH) {
   $("status").addEventListener("click", () => {
-    if (state && state.explosive) $("replies").classList.toggle("visible");
+    if (hasReplies()) $("replies").classList.toggle("visible");
   });
   // Tap ailleurs que sur un coup de variante : mini échiquier masqué.
   document.addEventListener("click", () => { $("mini").style.visibility = "hidden"; });
 } else {
   $("status").addEventListener("mouseenter", () => {
-    if (state && state.explosive) $("replies").classList.add("visible");
+    if (hasReplies()) $("replies").classList.add("visible");
   });
   $("analysis").addEventListener("mouseleave", () => $("replies").classList.remove("visible"));
 }
@@ -1290,7 +1349,8 @@ $("graph").addEventListener("click", (event) => {
   const x = (event.clientX - rect.left) * GRAPH_W / rect.width;
   goTo(Math.round(x / (GRAPH_W / Math.max(1, graphLength() - 1))));
 });
-$("flip").addEventListener("click", () => { ground.toggleOrientation(); drawEvalbar(); });
+// Retourner = nouvelle analyse (sprint 68) : le camp du bas change, l'anticipation le suit.
+$("flip").addEventListener("click", () => { ground.toggleOrientation(); drawEvalbar(); newPosition(); });
 $("flip-bar").addEventListener("click", () => $("flip").click());
 $("new-bar").addEventListener("click", () => $("new").click());
 $("elo-white").addEventListener("change", newPosition);
@@ -1302,6 +1362,7 @@ $("show-best").addEventListener("change", () => { drawShapes(); refreshGame(); }
 $("show-trap").addEventListener("change", drawShapes);
 $("show-errors").addEventListener("change", drawShapes);
 $("show-strategy").addEventListener("change", drawShapes);
+$("show-anticipation").addEventListener("change", drawShapes);
 $("threshold").addEventListener("input", () => {
   $("threshold-value").textContent = $("threshold").value;
   saveState();
@@ -1316,6 +1377,7 @@ $("playing").addEventListener("change", () => {
     if ($(other).value === NICO_NAME) $(other).value = "";
   }
   saveState();
+  if (orientToPlaying()) newPosition();
 });
 $("name-white").addEventListener("input", saveState);
 $("name-black").addEventListener("input", saveState);

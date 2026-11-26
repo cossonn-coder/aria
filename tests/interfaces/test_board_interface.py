@@ -157,6 +157,9 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="evalbar"' in page and 'id="tabs"' in page and 'id="bottombar"' in page
         # Sprint 49, tronçon 02 : flèche bleue sans rationnement.
         assert "blueAllowed" not in page
+        # Sprint 68, tronçon 05 : case Anticipation, camp du bas envoyé à /position.
+        assert 'id="show-anticipation" type="checkbox" checked' in page
+        assert "bottom: ground.state.orientation" in page
     finally:
         server.shutdown()
         server.server_close()
