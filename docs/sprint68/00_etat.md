@@ -1,6 +1,6 @@
 # Sprint 68 — état du sprint
 
-**Phase** : B figée (OK de Nico, 2026-11-25). Prochaine étape : `/sprint-auto sprint 68`.
+**Phase** : close (run live validé 2026-11-26, tag `sprint-68`). Suite : `docs/sprint69/00_etat.md`.
 **Sujet** : étape 7 de la feuille de route, échiquier centré sur le joueur du bas + réponses
 adverses (61-4 + 62-9), élargi à la vitesse de l'échiquier et de l'analyse Telegram. Nico, 2026-11-25 : on suit la feuille de route ; les axes de
 `/amelioration` restent en dettes (67-1 à 67-5).
@@ -19,6 +19,18 @@ adverses (61-4 + 62-9), élargi à la vitesse de l'échiquier et de l'analyse Te
   FEN collée dans le champ PGN. Détail : `docs/sprint66/00_etat.md`.
 - Sprint 63 : run live `docs/sprint63/02_run_live.txt` toujours à jouer à la prochaine partie neuve.
 
+Run live (2026-11-26), correctifs commités pendant le live :
+- `9aa29a8` PC : ligne d'état + encart à droite de l'échiquier (grille 560 + 320 px).
+- `796fe0c` NNPACK désactivé dans `difficulty._load` (12 lignes de journal par appel Maia → 0) ;
+  cases de l'échiquier décochées par défaut sauf Anticipation (demande Nico).
+- `66a6541` Téléphone : onglets sous l'échiquier, Courbe par défaut, textes d'analyse dessous.
+- `6bca957` Encart conservé tant que la partie suit l'une de ses variantes (« Ligne suivie : »
+  + analyse de la position dessous), seul le prochain coup de la ligne fléché (choix Nico).
+- `b5c5c23` Téléphone : défilement porté par `body` (la page ne défilait pas dans la Mini App) ;
+  clôture sur OK global de Nico, défilement non confirmé à part.
+- `9dfaca7` Plantage `combination.point_of` (bug du sprint 61) : `is_pinned` sur une case encore
+  vide quand la pièce prise arrive après la préparation → dette 68-4 sur le concept de pointe.
+
 ## Feuille de route (validée par Nico, 2026-11-20, reprise du sprint 66)
 
 Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un sujet par sprint, dans l'ordre :
@@ -30,7 +42,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 5. ~~66 : miniatures jouables dans l'échiquier (62-8)~~ : fait au sprint 66, run live validé.
 6. ~~67 (ajouté par Nico, 2026-11-25) : boucle de rétroaction (66-3) : réactions 👍 / 👎 sur
    les messages Telegram, enregistrées dans le palace, traitées ensemble en conception~~ : fait au sprint 67, run live validé.
-7. Échiquier centré joueur du bas + réponses adverses (61-4 + 62-9).
+7. ~~68 : échiquier centré joueur du bas + réponses adverses (61-4 + 62-9), vitesse~~ : fait au sprint 68, run live validé.
 8. Répertoire connu d'ARIA (61-5 + 61-10).
 9. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 10. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
@@ -84,7 +96,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ✅ (Maia à 1 thread torch ; gain mural incertain) |
 | 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ✅ |
 | 05 | `05_echiquier_page.md` | Orientation, retournement, flèches et panneau d'anticipation | ✅ |
-| 06 | `06_run_live.txt` | Run live (Nico) | ⏳ |
+| 06 | `06_run_live.txt` | Run live (Nico) | ✅ 2026-11-26 : `preload OK 9.3s` ; partie de 94 demi-coups en ~1 min 13 s (vs 2 min 21 s pour 35 le 25) ; anticipation 0,4 / 0,7 / 1,3 s par passe, `/eval` 0,16 s ; orientation, ⟲, case Anticipation, variante, PGN collé OK. Correctifs live ci-dessous |
 
 ## §REPRISE
 
