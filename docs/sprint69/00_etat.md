@@ -1,9 +1,9 @@
 # Sprint 69 — état du sprint
 
-**Phase** : A (à concevoir). Prochaine étape : `/conception sprint 69`.
-**Sujet proposé** : étape 8 de la feuille de route, répertoire connu d'ARIA (61-5 + 61-10). À confirmer
-par Nico (axes `/amelioration` et dette 68-4 possibles).
-**Branche** : à créer depuis `main` (tag `sprint-68`).
+**Phase** : B figée (OK Nico 2026-11-26). Prochaine étape : `/sprint-auto sprint 69`.
+**Sujet** : étape 8 de la feuille de route, répertoire connu d'ARIA (61-5 + 61-10). Confirmé par Nico
+le 2026-11-26 (les 3 👎 en attente restent pour `/amelioration` après ce sprint).
+**Branche** : `feat/sprint69-repertoire` (depuis `main`, tag `sprint-68`).
 
 ## Contexte hérité
 
@@ -71,6 +71,42 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 68-4 | Pointe réduite à « gain matériel + clouage absolu » | `combination.point_of` (sprint 61) : la pointe = première prise qui fixe un gain de matériel, clouage absolu en option. Manque : pointe qui mate, qui ne prend rien tout de suite, fourchette, déviation, coup intermédiaire, clouage relatif. Nico 2026-11-26 : « la pointe ne vient pas toujours d'un clouage » | Reconnaître la pointe par son effet ; regroupe 61-3 et 67-2. Étape 9 (texte du coach) ou avant si Nico le veut |
 | 68-5 | Défilement de l'échiquier sur téléphone | Correctif `b5c5c23` (défilement porté par `body`) non confirmé à part au run live | Vérifier à la prochaine ouverture sur téléphone |
 
+## Décisions arrêtées
+
+- 2026-11-26 : sujet = étape 8 (répertoire), pas les 👎 ni 68-4. Raison : feuille de route validée.
+- Lot 1 (Nico, 2026-11-26) : le bilan Telegram signale les trois événements : Nico dévie de son coup
+  habituel ; l'adversaire sort Nico de sa ligne ; le coup habituel joué perd ≥ 10 pts en moyenne
+  (61-10). Raison : demande 61-5 au complet.
+- Gambits choisis (Blackmar-Diemer 2.d4, 3.b4 contre 2...Bc5, Göring) : pas d'avertissement ⚠️,
+  liste courte de gambits assumés. Raison : choix assumé, comme la consigne Göring existante.
+- Lot 2 (Nico, 2026-11-26) : gambits assumés = 2.d4 contre 1...d5 (Blackmar-Diemer), 3.b4 contre
+  2...Bc5, 4.f3 de 1.e4 e6 2.d4 d5 3.Be3 Nf6, 2...f5 noir (letton, Colorado) + les gambits nommés
+  par Nico : Portsmouth, von Hennig, Rousseau, Göring, Scotch, Icelandic, Busch-Gass, Benko.
+  Règle retenue : coup assumé si la position après le coup porte un nom contenant « Gambit » dans
+  `data/openings.tsv`, plus deux positions sans nom (3.b4 contre 2...Bc5, 4.f3 Française). Seul le
+  coup qui atteint la position nommée est assumé : la suite est jugée (5.d5 du Portsmouth signalé).
+- Run live : prochaines vraies parties de Nico (pas de partie trafiquée ni de réanalyse).
+- Coup habituel mauvais : ligne de texte écrite par le code seule, pas de miniature. Raison : budget
+  de 4 miniatures réservé au hors-répertoire, tronçon plus petit.
+
+## Questions ouvertes
+
+- Aucune.
+
+- Perte d'un coup habituel lue sur la partie courante (`p.loss`), pas de moyenne sur le palace.
+  Raison : même position + même coup = même évaluation ; aucune lecture palace en plus.
+- Symbole ❗ pour le coup habituel mauvais (⚠️ déjà pris par « Précision adverse »).
+
 ## Tronçons
 
-À définir en conception.
+| # | Tronçon | Kickoff | État |
+|---|---|---|---|
+| 01 | Répertoire : calcul (`chess_coach/analysis.py`) + lignes 📚 / ❗ (`chess_router._moves_line`) | `01_repertoire.md` | ⏳ |
+| 02 | Run live (Nico, prochaines vraies parties) | `02_run_live.txt` | ⏳ |
+
+Dettes visées : 61-5, 61-10 (fermées au run live validé).
+
+## §REPRISE
+
+Lire `audit_repertoire.md` ; lot 1 tranché. Lots 1 et 2 tranchés. Prochaine étape : OK de Nico sur la
+proposition (1 tronçon + run live), puis phase B.
