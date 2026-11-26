@@ -101,12 +101,15 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
-| 01 | Répertoire : calcul (`chess_coach/analysis.py`) + lignes 📚 / ❗ (`chess_router._moves_line`) | `01_repertoire.md` | ⏳ |
+| 01 | Répertoire : calcul (`chess_coach/analysis.py`) + lignes 📚 / ❗ (`chess_router._moves_line`) | `01_repertoire.md` | ✅ (pytest 660 verts) |
 | 02 | Run live (Nico, prochaines vraies parties) | `02_run_live.txt` | ⏳ |
 
 Dettes visées : 61-5, 61-10 (fermées au run live validé).
 
 ## §REPRISE
 
-Lire `audit_repertoire.md` ; lot 1 tranché. Lots 1 et 2 tranchés. Prochaine étape : OK de Nico sur la
-proposition (1 tronçon + run live), puis phase B.
+Tronçon 01 livré (2026-11-26) : `repertoire_facts` + `RepertoireFacts` dans `chess_coach/analysis.py`
+(champ `GameAnalysis.repertoire`), `_repertoire_lines` dans `chess_router.py` appelé par `_moves_line`
+après la ligne 🔎. Choix d'implémentation : le « coup habituel » d'une sortie par Nico exclut le coup
+qu'il vient de jouer ; sans autre coup aux parties passées, la ligne 📚 omet « au lieu de ».
+Prochaine étape : run live `02_run_live.txt` (Nico, prochaines vraies parties).

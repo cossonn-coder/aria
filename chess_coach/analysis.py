@@ -12,6 +12,7 @@ import math
 import queue
 import re
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -20,6 +21,7 @@ import chess.engine
 import chess.pgn
 
 from chess_coach.motifs import tag_motifs
+from chess_coach.openings import _table
 from config import config
 from logger import get_logger
 
@@ -72,6 +74,11 @@ _CRITICAL_BUDGET = 4
 _GAIN_MIN = 5
 # Un coup est une habitude de répertoire dès 2 parties précédentes avec les mêmes coups.
 _KNOWN_MOVE_GAMES = 2
+# Coup habituel signalé ❗ dès cette perte (pts, seuil d'imprécision de _quality) ; sprint 69.
+_BAD_HABIT_LOSS = 10
+# Gambits assumés sans nom « Gambit » dans la table Lichess (choix de Nico, sprint 69) :
+# position atteinte par le dernier coup de chaque suite, comparée par EPD.
+_ASSUMED_LINES = ("e4 e5 Nf3 Bc5 b4", "e4 e6 d4 d5 Be3 Nf6 f3")
 _COLOR_RE = re.compile(r"je joue (?:avec )?(?:les )?(noirs|blancs)", re.IGNORECASE)
 
 
@@ -145,6 +152,26 @@ class GameAnalysis:
     critical: list = field(default_factory=list)
     # Toutes les occasions explosives trouvées, retenues ou non (couleur des points de la courbe).
     explosive: list = field(default_factory=list)
+    # Répertoire suivi et coups habituels mauvais (sprint 69, voir repertoire_facts).
+    repertoire: object | None = None
+
+
+@dataclass
+class RepertoireFacts:
+    """Répertoire d'une partie (sprint 69) : de quoi écrire les lignes 📚 et ❗ du bilan."""
+    # Dernier demi-coup suivi (n'importe quel camp) et nombre de parties passées jusqu'à lui ;
+    # None si la partie sort dès le 1er demi-coup.
+    last: PlyAnalysis | None
+    last_games: int
+    # Demi-coup qui sort du répertoire ; None : partie entièrement dans le répertoire.
+    exit: PlyAnalysis | None
+    # Parties passées qui avaient joué le coup de sortie (0 ou 1).
+    exit_games: int
+    # Sortie par Nico : son coup habituel au même endroit (SAN) et son nombre de parties.
+    usual_san: str | None
+    usual_games: int
+    # Coups habituels de Nico qui perdent ≥ _BAD_HABIT_LOSS, hors gambit assumé : (demi-coup, parties).
+    bad: list = field(default_factory=list)
 
 
 def parse_pgn(text: str) -> chess.pgn.Game | None:
@@ -522,6 +549,57 @@ def first_shown_move(plies: list, nico_color: str, past_games=()) -> int:
     )
 
 
+def _epd_after(sans: str) -> str:
+    board = chess.Board()
+    for san in sans.split():
+        board.push_san(san)
+    return board.epd()
+
+
+_ASSUMED_EPDS = {_epd_after(line) for line in _ASSUMED_LINES}
+
+
+def _assumed(p) -> bool:
+    """Gambit assumé : la position après le coup porte un nom « Gambit » dans la table
+    Lichess, ou c'est l'une des positions de _ASSUMED_LINES. Seul ce coup est assumé."""
+    board = chess.Board(p.fen_before)
+    board.push_uci(p.uci)
+    epd = board.epd()
+    return epd in _ASSUMED_EPDS or "Gambit" in _table().get(epd, ("", ""))[1]
+
+
+def repertoire_facts(plies: list, nico_color: str, past_games=()) -> RepertoireFacts | None:
+    """Répertoire suivi par la partie (sprint 69), mêmes parties passées que first_shown_move.
+
+    Sortie : premier demi-coup k (n'importe quel camp) que moins de _KNOWN_MOVE_GAMES parties
+    passées partagent ; le nœud d'avant est atteint par ≥ _KNOWN_MOVE_GAMES parties. Coup
+    habituel : coup de Nico partagé par ≥ _KNOWN_MOVE_GAMES parties ; sa perte est celle de
+    la partie courante. None : aucun demi-coup suivi (donc aucun coup habituel).
+    """
+    ucis = [p.uci for p in plies]
+    known_lines = [line for color, line in past_games if color == nico_color and line != ucis]
+
+    def sharing(k: int) -> list:
+        return [line for line in known_lines if line[:k] == ucis[:k]]
+
+    k = next((i for i in range(len(plies)) if len(sharing(i + 1)) < _KNOWN_MOVE_GAMES), len(plies))
+    if k == 0:
+        return None
+    exit_ply = plies[k] if k < len(plies) else None
+    usual_san, usual_games = None, 0
+    if exit_ply is not None and exit_ply.color == nico_color:
+        # Coup habituel : le plus fréquent des parties passées à ce nœud, autre que le coup joué.
+        counts = Counter(line[k] for line in sharing(k) if len(line) > k and line[k] != exit_ply.uci)
+        if counts:
+            uci, usual_games = counts.most_common(1)[0]
+            usual_san = chess.Board(exit_ply.fen_before).san(chess.Move.from_uci(uci))
+    bad = [(p, len(sharing(p.ply + 1))) for p in plies[:k]
+           if p.color == nico_color and p.loss >= _BAD_HABIT_LOSS and not _assumed(p)]
+    return RepertoireFacts(last=plies[k - 1], last_games=len(sharing(k)), exit=exit_ply,
+                           exit_games=len(sharing(k + 1)) if exit_ply is not None else 0,
+                           usual_san=usual_san, usual_games=usual_games, bad=bad)
+
+
 def is_gamble(explosive) -> bool:
     """Vrai si le coup explosif (ExplosiveMove) n'a été admis que comme sacrifice ou
     piège : face à un humain, son espérance n'est pas meilleure que le meilleur coup."""
@@ -846,4 +924,5 @@ def analyze(text: str, message: str, engine_path: str,
         time.monotonic() - started,
     )
     return GameAnalysis(headers=headers, nico_color=nico_color, color_source=source,
-                        plies=plies, critical=critical, explosive=explosive)
+                        plies=plies, critical=critical, explosive=explosive,
+                        repertoire=repertoire_facts(plies, nico_color, past_games))

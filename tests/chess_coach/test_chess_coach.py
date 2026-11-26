@@ -10,7 +10,7 @@ import chess
 import pytest
 from PIL import Image
 
-from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect_color, first_shown_move,
+from chess_coach.analysis import (CriticalPosition, PlyAnalysis, analyze, detect_color, first_shown_move, repertoire_facts,
                                   parse_pgn, select_critical)
 from chess_coach.analysis import split_pgn
 from chess_coach.analysis import clear_advantage
@@ -235,8 +235,8 @@ def _line_plies(sans: str) -> list:
     board, plies = chess.Board(), []
     for i, san in enumerate(sans.split()):
         move = board.parse_san(san)
-        plies.append(_ply(i, 0))
-        plies[-1].uci = move.uci()
+        plies.append(_ply(i, 0, fen_before=board.fen()))
+        plies[-1].uci, plies[-1].san = move.uci(), san
         board.push(move)
     return plies
 
@@ -267,6 +267,35 @@ def test_first_shown_move_repertoire_until_novelty():
     # Le renvoi de la même partie ne compte pas ; tout connu → aucune miniature.
     assert first_shown_move(plies, "white", [("white", ucis)] * 2) == 1
     assert first_shown_move(plies, "white", [("white", ucis + ["a2a3"])] * 2) == 7
+
+
+def test_repertoire_facts_nico_leaves():
+    # Sprint 69 : 2 parties passées jouent 5.d4 après 8 demi-coups communs ; Nico joue 5.d3.
+    other = _ucis("e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4 exd4")
+    rep = repertoire_facts(_line_plies(ITALIAN), "white", [("white", other)] * 2)
+    assert (rep.last.san, rep.last_games) == ("Nf6", 2)
+    assert (rep.exit.san, rep.exit.color, rep.usual_san, rep.usual_games) == ("d3", "white", "d4", 2)
+    assert rep.bad == []
+
+
+def test_repertoire_facts_opponent_leaves():
+    # L'adversaire répond 4...Nf6 là où les 2 parties passées avaient 4...Bc5.
+    other = _ucis("e4 e5 Nf3 Nc6 Bc4 Bc5 c3")
+    rep = repertoire_facts(_line_plies("e4 e5 Nf3 Nc6 Bc4 Nf6 d3"), "white", [("white", other)] * 2)
+    assert (rep.last.san, rep.exit.san, rep.exit.color, rep.exit_games) == ("Bc4", "Nf6", "black", 0)
+    assert rep.usual_san is None
+
+
+@pytest.mark.parametrize("sans, index, flagged", [
+    ("e4 e5 Nf3 Nc6 Bc4 Bc5 c3", 4, True),   # 3.Bc4 habituel qui perd 16 pts : signalé
+    ("e4 d5 d4 dxe4 Nc3", 2, False),          # 2.d4 Blackmar-Diemer, gambit nommé : assumé
+])
+def test_repertoire_facts_bad_habit(sans, index, flagged):
+    plies = _line_plies(sans)
+    plies[index].loss = 16
+    rep = repertoire_facts(plies, "white", [("white", _ucis(sans) + ["a2a3"])] * 2)
+    assert rep.exit is None and rep.last_games == 2
+    assert [(p.ply, games) for p, games in rep.bad] == ([(index, 2)] if flagged else [])
 
 
 def test_select_critical_respects_first_move():
