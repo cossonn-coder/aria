@@ -1,0 +1,91 @@
+=== 2026-11-26 01:41 réglages=['ref', 'torch1', 'torch2', 'deep2', 'time02'] charge=21.9 torch par défaut=16 threads
+  ref chess_game_7f0bb3ce5dc2869a 110.4 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'c8b7'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  ref chess_game_fef931ec30e48ce7 52.1 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  ref chess_game_c40c22d5285a377a 120.6 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (22, 'c1f4'), (42, 'a2a4'), (54, 'c7b8'), (80, 'a7g1')]
+  ref chess_game_81c43d63757694e6 70.9 s found=[(34, 'h6f4')]
+  ref chess_game_6b870f037c62f2bf 49.9 s found=[(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'b6d8'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  ref chess_game_3d89b609cac35187 58.6 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (33, 'd6c5')]
+  ref chess_game_a0a3be8feee04358 84.0 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  ref chess_game_6023dc723255ce10 48.8 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+  torch1 chess_game_7f0bb3ce5dc2869a 80.3 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'c8b7'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  torch1 chess_game_fef931ec30e48ce7 40.2 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  torch1 chess_game_c40c22d5285a377a 101.2 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (22, 'c1f4'), (42, 'a2a4'), (54, 'c7b8'), (80, 'a7g1')]
+  torch1 chess_game_81c43d63757694e6 74.9 s found=[(34, 'h6f4')]
+  torch1 chess_game_6b870f037c62f2bf 47.1 s found=[(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'b6d8'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  torch1 chess_game_3d89b609cac35187 50.4 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (33, 'd6c5')]
+  torch1 chess_game_a0a3be8feee04358 64.5 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  torch1 chess_game_6023dc723255ce10 47.3 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+  torch2 chess_game_7f0bb3ce5dc2869a 93.2 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'c8b7'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  torch2 chess_game_fef931ec30e48ce7 50.0 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  torch2 chess_game_c40c22d5285a377a 102.6 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (22, 'c1f4'), (42, 'a2a4'), (54, 'c7b8'), (80, 'a7g1')]
+  torch2 chess_game_81c43d63757694e6 67.5 s found=[(34, 'h6f4')]
+  torch2 chess_game_6b870f037c62f2bf 49.1 s found=[(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'b6d8'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  torch2 chess_game_3d89b609cac35187 68.9 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (33, 'd6c5')]
+  torch2 chess_game_a0a3be8feee04358 88.8 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  torch2 chess_game_6023dc723255ce10 59.0 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+  deep2 chess_game_7f0bb3ce5dc2869a 81.1 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'b5b4'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  deep2 chess_game_fef931ec30e48ce7 43.0 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  deep2 chess_game_c40c22d5285a377a 111.3 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (42, 'a2a4')]
+  deep2 chess_game_81c43d63757694e6 75.6 s found=[(34, 'h6f4')]
+  deep2 chess_game_6b870f037c62f2bf 63.5 s found=[(1, 'f7f5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'd4e6'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  deep2 chess_game_3d89b609cac35187 56.8 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'h7h6'), (27, 'e7g6'), (33, 'd6c5')]
+  deep2 chess_game_a0a3be8feee04358 55.3 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'b2b4'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'f1f6'), (32, 'f7h6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  deep2 chess_game_6023dc723255ce10 41.7 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+  time02 chess_game_7f0bb3ce5dc2869a 75.4 s found=[(1, 'd7d5'), (15, 'h7h6'), (25, 'e6e5'), (31, 'd7d5'), (33, 'b5b4'), (35, 'c6c7')]
+  time02 chess_game_fef931ec30e48ce7 37.2 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  time02 chess_game_c40c22d5285a377a 90.4 s found=[(2, 'd2d4'), (8, 'f1b5'), (22, 'c1f4'), (30, 'b5d6'), (42, 'b2b4'), (48, 'c7a5'), (54, 'c7b8'), (78, 'f3f4'), (80, 'a7g1')]
+  time02 chess_game_81c43d63757694e6 59.6 s found=[]
+  time02 chess_game_6b870f037c62f2bf 45.3 s found=[(15, 'f8e7'), (17, 'd7d5'), (27, 'd4e6'), (31, 'b6c6'), (43, 'c5c4')]
+  time02 chess_game_3d89b609cac35187 40.4 s found=[(9, 'd8d7'), (19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (31, 'f6f3'), (33, 'd6c5')]
+  time02 chess_game_a0a3be8feee04358 58.2 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'a2a4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  time02 chess_game_6023dc723255ce10 44.0 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+
+| Réglage | Durée totale [8 parties] | CPU (Maia + Stockfish) | Coups trouvés | Écart (ply, uci) vs ref | Réponses Maia identiques |
+|---|---|---|---|---|---|
+| ref | 595.3 s | 4070 s | 50 | aucun | oui |
+| torch1 | 505.9 s | 3472 s | 50 | aucun | oui |
+| torch2 | 579.1 s | 4095 s | 50 | aucun | non |
+| deep2 | 528.4 s | 3961 s | 47 | [('chess_game_7f0bb3ce5dc2869a', [(19, 'b5b4'), (19, 'c8b7')]), ('chess_game_c40c22d5285a377a', [(22, 'c1f4'), (54, 'c7b8'), (80, 'a7g1')]), ('chess_game_6b870f037c62f2bf', [(1, 'd7d5'), (1, 'f7f5'), (27, 'b6d8'), (27, 'd4e6')]), ('chess_game_3d89b609cac35187', [(25, 'e5e4'), (25, 'h7h6'), (27, 'e5e4'), (27, 'e7g6')]), ('chess_game_a0a3be8feee04358', [(20, 'b2b4'), (20, 'c1d2'), (30, 'f1f6'), (30, 'g5e4'), (32, 'd3g6'), (32, 'f7h6')])] | non |
+| time02 | 450.4 s | 3291 s | 49 | [('chess_game_7f0bb3ce5dc2869a', [(1, 'd7d5'), (1, 'f7f5'), (19, 'c8b7'), (33, 'b5b4')]), ('chess_game_c40c22d5285a377a', [(12, 'c1g5'), (16, 'c1f4'), (30, 'b5d6'), (42, 'a2a4'), (42, 'b2b4'), (48, 'c7a5'), (78, 'f3f4')]), ('chess_game_81c43d63757694e6', [(34, 'h6f4')]), ('chess_game_6b870f037c62f2bf', [(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (15, 'f8e7'), (27, 'b6d8'), (27, 'd4e6'), (31, 'b6c6'), (31, 'b6c7'), (41, 'c5c4')]), ('chess_game_3d89b609cac35187', [(9, 'd8d7'), (31, 'f6f3')]), ('chess_game_a0a3be8feee04358', [(18, 'a2a4'), (18, 'b2b4')])] | oui |
+charge en fin=15.0
+
+=== 2026-11-26 02:26 réglages=['torch1', 'ref'] charge=10.9 torch par défaut=16 threads
+  torch1 chess_game_7f0bb3ce5dc2869a 82.9 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'c8b7'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  torch1 chess_game_fef931ec30e48ce7 42.3 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  torch1 chess_game_c40c22d5285a377a 110.2 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (22, 'c1f4'), (42, 'a2a4'), (54, 'c7b8'), (80, 'a7g1')]
+  torch1 chess_game_81c43d63757694e6 87.0 s found=[(34, 'h6f4')]
+  torch1 chess_game_6b870f037c62f2bf 58.1 s found=[(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'b6d8'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  torch1 chess_game_3d89b609cac35187 47.6 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (33, 'd6c5')]
+  torch1 chess_game_a0a3be8feee04358 60.3 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  torch1 chess_game_6023dc723255ce10 42.4 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+  ref chess_game_7f0bb3ce5dc2869a 73.6 s found=[(1, 'f7f5'), (15, 'h7h6'), (19, 'c8b7'), (25, 'e6e5'), (31, 'd7d5'), (35, 'c6c7')]
+  ref chess_game_fef931ec30e48ce7 44.7 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4')]
+  ref chess_game_c40c22d5285a377a 111.4 s found=[(2, 'd2d4'), (8, 'f1b5'), (12, 'c1g5'), (16, 'c1f4'), (22, 'c1f4'), (42, 'a2a4'), (54, 'c7b8'), (80, 'a7g1')]
+  ref chess_game_81c43d63757694e6 72.3 s found=[(34, 'h6f4')]
+  ref chess_game_6b870f037c62f2bf 52.4 s found=[(1, 'd7d5'), (3, 'd7d5'), (15, 'd7d5'), (17, 'd7d5'), (27, 'b6d8'), (31, 'b6c7'), (41, 'c5c4'), (43, 'c5c4')]
+  ref chess_game_3d89b609cac35187 50.1 s found=[(19, 'e5e4'), (21, 'a7a5'), (25, 'e5e4'), (27, 'e5e4'), (33, 'd6c5')]
+  ref chess_game_a0a3be8feee04358 68.4 s found=[(4, 'h2h3'), (6, 'f2f3'), (12, 'g2g4'), (18, 'b2b4'), (20, 'c1d2'), (22, 'c1g5'), (24, 'f3g5'), (28, 'f1f3'), (30, 'g5e4'), (32, 'd3g6'), (36, 'c4a5'), (54, 'a2a4'), (56, 'c2c4')]
+  ref chess_game_6023dc723255ce10 51.1 s found=[(2, 'd2d4'), (8, 'f1d3'), (20, 'c4b5'), (22, 'c4b5'), (24, 'e4e5'), (26, 'b2b4')]
+
+| Réglage | Durée totale [8 parties] | CPU (Maia + Stockfish) | Coups trouvés | Écart (ply, uci) vs torch1 | Réponses Maia identiques |
+|---|---|---|---|---|---|
+| torch1 | 530.8 s | 3550 s | 50 | aucun | oui |
+| ref | 524.0 s | 3768 s | 50 | aucun | oui |
+charge en fin=13.4
+
+=== Synthèse (tronçon 03, 2026-11-26)
+Corpus : 8 fiches les plus récentes avec une miniature d dans plies_json (minis_json n'existe
+que sur 2 fiches). analyze_game fait une fois, plies en cache ; find_explosive(first_move=1).
+Machine partagée avec des cuissons Symbiose et un dotnet build : charge 11 à 22 pendant les
+mesures, durées murales bruitées. CPU = Maia (processus) + Stockfish (enfants fermés).
+
+| Réglage | Coups | Durée murale | CPU | Verdict |
+|---|---|---|---|---|
+| torch1 (Maia à 1 thread torch) | 50/50 identiques, réponses Maia identiques [2 passages] | −15 % puis +1 % (moyenne −7 %) [2 passages appariés, charge 11-22] | −15 % puis −6 % [2 passages] | retenu : aucun coup changé, CPU toujours plus bas |
+| torch2 | 50/50 identiques, probabilités Maia différentes à 1e-4 | −3 % [1 passage] | +1 % [1 passage] | non retenu (pas de gain) |
+| deep2 (_MAX_DEEP 2) | 47, 5 parties touchées | −11 % [1 passage] | −3 % [1 passage] | rejeté : perd des coups |
+| time02 (_DEEP_TIME 0.2) | 49, 6 parties touchées | −24 % [1 passage] | −19 % [1 passage] | rejeté : coups différents |
+
+Cumuls non mesurés : torch1 ne change aucune sortie, donc torch1 + deep2 ou + time02 donne
+les mêmes écarts que deep2 / time02 seuls.
+Gain mural de torch1 non établi sous cette charge : à lire au run live (chess_explosive duration).

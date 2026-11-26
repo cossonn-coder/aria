@@ -514,6 +514,22 @@ def test_find_explosive_starts_at_first_move(monkeypatch):
     assert searched == [4, 5, 6]
 
 
+def test_find_explosive_runs_maia_on_one_torch_thread(monkeypatch):
+    """Recherche à 1 thread torch, réglage rétabli ensuite (sprint 68, tronçon 03)."""
+    import torch
+
+    from chess_coach import explosive
+
+    before = torch.get_num_threads()
+    seen = []
+    monkeypatch.setattr(explosive, "_load", lambda models_dir: None)
+    monkeypatch.setattr(explosive, "run_on_engines",
+                        lambda path, work, items: seen.append(torch.get_num_threads()) or [None] * len(items))
+    explosive.find_explosive([_ply(0, 0)], "white", "stockfish", 1500, "maia")
+    assert seen == [1]
+    assert torch.get_num_threads() == before
+
+
 def test_render_curve(tmp_path):
     """La courbe suit le % de gain : haut au début, bas à la fin."""
     out = tmp_path / "curve.png"

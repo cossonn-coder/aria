@@ -72,6 +72,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 67-6 | `.claude/` gitignoré | Skill `/amelioration` et hook SessionStart non versionnés | Versionner si Nico le veut |
 | 68-1 | Analyse live trop lente | Nico 2026-11-25 : « tout est trop lent » ; 4 passes ×1/×2/×4/×8 (≈ 75 s cumulées [commentaire de `live.py`, non mesuré]) au tour du joueur du bas | Hors sprint 68 (seul le tour adverse est allégé) ; mesurer puis réduire si Nico le veut |
 | 68-2 | Écritures palace lentes : embedding torch à 16 threads | Tronçon 02 (`mesure_ecritures.txt`) : ~2,2 à 2,6 s par écriture [n=3, machine chargée], dont embedding ~1,8 s ; ~10 `write_sent_message` attendus entre les envois d'un bilan ≈ 25 s [estimation]. À 4 threads : ~1,2 à 1,6 s par écriture [n=3, autre passage]. Réouverture du client : ~0,1 s, sans gain | (a) `torch.set_num_threads(4)` au démarrage (touche aussi Maia) ; (b) `write_sent_message` sans attendre, après l'envoi (nouveau motif dans `telegram_interface`). À arbitrer par Nico |
+| 68-3 | Recherche explosive toujours ~45 à 110 s par partie | Tronçon 03 : seul le réglage torch passe le corpus ; `_MAX_DEEP` 2 et `_DEEP_TIME` 0.2 changent les coups (`mesure_explosive.txt`). Durées murales bruitées par la charge (11-22) | Remesurer machine au calme si Nico le veut ; pas d'autre réglage sans perte de coups dans le périmètre |
 | 60 | Lecture d'échiquier en image | Lecteur local chess.com faux, quota Gemini, correction | `docs/sprint60/00_etat.md` |
 
 ## Tronçons
@@ -80,7 +81,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 |---|---|---|---|
 | 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ✅ |
 | 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ✅ (mesure seule, dette 68-2) |
-| 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ⏳ |
+| 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ✅ (Maia à 1 thread torch ; gain mural incertain) |
 | 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ⏳ |
 | 05 | `05_echiquier_page.md` | Orientation, retournement, flèches et panneau d'anticipation | ⏳ |
 | 06 | `06_run_live.txt` | Run live (Nico) | ⏳ |
@@ -99,6 +100,14 @@ Tronçon 02 fait, mesure seule : `docs/sprint68/mesure_ecritures.py` (copie du p
 `~/.cache`, `/tmp` plein) et `mesure_ecritures.txt`. Aucune piste admise par le kickoff ne gagne
 (pas de double embedding, pas de relecture, réouverture ~0,1 s) : le coût est l'embedding torch à
 16 threads sur machine chargée, dette 68-2 (arbitrage Nico). Aucun code de prod modifié.
+
+Tronçon 03 fait : `docs/sprint68/mesure_explosive.py` + `mesure_explosive.txt`. Corpus = 8 fiches
+récentes avec une miniature d dans `plies_json` (`minis_json` n'existe que sur 2 fiches). Retenu :
+`find_explosive` met Maia à 1 thread torch pendant `run_on_engines`, rétabli après : 50 coups sur
+50 identiques et réponses Maia identiques [2 passages], CPU −15 % puis −6 %, durée murale −15 %
+puis +1 % [2 passages appariés, charge 11-22]. Rejetés : `_MAX_DEEP` 2 (perd 3 coups),
+`_DEEP_TIME` 0.2 (coups différents dans 6 parties). Gain réel à lire au run live
+(`chess_explosive … duration=`). Test : `test_find_explosive_runs_maia_on_one_torch_thread`.
 
 ## Décisions arrêtées (lot 1, Nico, 2026-11-25)
 
