@@ -499,3 +499,23 @@ def test_skip_history_skips_games(mock_store):
     router._run_pipeline("mes parties", CognitiveOperation.MEMORY_QUERY, {"skip_history": True})
 
     bridge.load_chess_games.assert_not_called()
+
+
+@patch("execution.routers.llm_router.write_conversation_turn")
+@patch("execution.routers.llm_router.write_interaction")
+def test_skip_memory_skips_all_recalls(mock_store, mock_conv):
+    """Sprint 68 : skip_memory → aucune recherche mémoire, LLM appelé, règles gardées."""
+    router, _, _, fake_intent, bridge = make_router()
+    bridge.load_consignes.return_value = []
+    router.controller.run = MagicMock(return_value=_fake_ctx(fake_intent, result="bilan"))
+    router._run_pipeline("partie", CognitiveOperation.REASONING,
+                         {"skip_history": True, "skip_memory": True,
+                          "forced_intent_name": "analyse_echecs"})
+
+    bridge.retrieve_memories.assert_not_called()
+    bridge.retrieve_by_intent.assert_not_called()
+    bridge.retrieve_semantic.assert_not_called()
+    bridge.find_documents.assert_not_called()
+    router.controller.run.assert_called_once()
+    bridge.load_consignes.assert_called_once()
+    mock_store.assert_called_once()

@@ -44,10 +44,12 @@ def test_position_then_state_replaces_previous():
     try:
         first = _request(base, "/position", {"fen": chess.STARTING_FEN, "elo_white": 1200, "elo_black": 1800})
         state = _wait_done(base, first["id"])
-        assert state["result"] == "none" and state["pass"] == state["passes"] == 4
+        assert state["result"] == "none" and state["pass"] == state["passes"] == 3
         assert state["forced"]["san"] == "w"
 
-        second = _request(base, "/position", {"fen": _AFTER_E4, "elo_white": 1200, "elo_black": 1800})
+        # Sprint 68 : trait au camp du bas (bottom) → analyse_pass, comme avant.
+        second = _request(base, "/position", {"fen": _AFTER_E4, "elo_white": 1200, "elo_black": 1800,
+                                              "bottom": "black"})
         assert second["id"] == first["id"] + 1
         state = _wait_done(base, second["id"])
         assert state["forced"]["san"] == "b"
@@ -89,7 +91,7 @@ def test_head_visible_before_end_of_pass():
     assert state["best"]["uci"] == "e2e4"
 
     # Nouvelle position pendant que l'ancienne passe tourne : son état reste vierge.
-    worker.submit(_AFTER_E4, 1200, 1800)
+    worker.submit(_AFTER_E4, 1200, 1800, "black")
     release.set()
     assert stale_written.wait(5)
     assert worker.state()["best"] is None
@@ -107,7 +109,7 @@ def test_return_to_finished_position_keeps_result():
     threading.Thread(target=worker.run, daemon=True).start()
     first_id = worker.submit(chess.STARTING_FEN, 1200, 1800)
     final = _wait_state(worker, lambda s: s["id"] == first_id and not s["running"])
-    other_id = worker.submit(_AFTER_E4, 1200, 1800)
+    other_id = worker.submit(_AFTER_E4, 1200, 1800, "black")
     _wait_state(worker, lambda s: s["id"] == other_id and not s["running"])
     count = len(calls)
 
@@ -115,7 +117,7 @@ def test_return_to_finished_position_keeps_result():
     # L'état reprend le résultat dès le retour, sans passer par « pending ».
     state = worker.state()
     assert state["best"] == final["best"] and state["result"] == "none"
-    assert state["pass"] == 4 and not state["running"]
+    assert state["pass"] == 3 and not state["running"]
     time.sleep(0.05)
     assert len(calls) == count
 
@@ -133,9 +135,10 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (blanc).
         assert "show-trap" in page and "show-strategy" in page
         assert 'strategy: { key: "s", color: "#ffe100"' in page and "#ff5fb0\"></span>" not in page
-        # Sprint 50 : flèches d'erreur cochables, meilleur coup coché, bouton + de la barre mobile.
-        assert 'id="show-errors" type="checkbox" checked' in page
-        assert 'id="show-best" type="checkbox" checked' in page
+        # Sprint 50 : flèches d'erreur cochables, bouton + de la barre mobile. Sprint 68 (run
+        # live) : toutes les cases décochées par défaut, sauf Anticipation.
+        assert 'id="show-errors" type="checkbox">' in page
+        assert 'id="show-best" type="checkbox">' in page
         assert page.index('id="menu"') < page.index('id="new-bar"') < page.index('id="flip-bar"')
         assert "function pointColor(" in page and "<circle cx=" in page
         assert "paintMove(span, color)" in page
@@ -155,6 +158,17 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert 'id="evalbar"' in page and 'id="tabs"' in page and 'id="bottombar"' in page
         # Sprint 49, tronçon 02 : flèche bleue sans rationnement.
         assert "blueAllowed" not in page
+        # Sprint 68, tronçon 05 : case Anticipation, camp du bas envoyé à /position.
+        assert 'id="show-anticipation" type="checkbox" checked' in page
+        # Sprint 68 (run live) : sur PC, l'analyse est à droite de l'échiquier.
+        assert "#analysis { grid-column: 2; grid-row: 1;" in page
+        # Encart conservé tant que la partie suit sa ligne, prochain coup fléché.
+        assert "function followedLines()" in page and "const next = nextLineMove();" in page
+        # Téléphone : défilement porté par body (Mini App Telegram).
+        assert "html { height: 100%; overflow: hidden; }" in page
+        # Téléphone : onglets sous l'échiquier, courbe ouverte par défaut.
+        assert "#tabs { order: 3;" in page and "showTab($(\"tabs\").querySelector('[data-panel=\"graph\"]'))" in page
+        assert "bottom: ground.state.orientation" in page
     finally:
         server.shutdown()
         server.server_close()
@@ -352,3 +366,62 @@ def test_stored_game_serves_minis():
     fiche = {"id": "chess_game_x", "plies_json": json.dumps(plies), "nico_color": "white",
              "minis_json": json.dumps(minis)}
     assert stored_game(fiche, [])["minis"] == minis
+
+
+def test_opponent_turn_runs_anticipation(monkeypatch, caplog):
+    # Sprint 68, tronçon 04 : trait au camp du haut → anticipation, Elo Maia du camp au trait.
+    import logging
+
+    calls = []
+
+    def no_pass(*args):
+        raise AssertionError("run_pass appelée")
+
+    def fake_anticipation(proxy, fen, elo, models_dir):
+        calls.append(elo)
+        return {"result": "anticipation", "anticipated": [{"uci": "e7e5"}], "explosive": None}
+
+    worker = BoardWorker(lambda: object(), "", run_pass=no_pass, run_anticipation=fake_anticipation)
+    threading.Thread(target=worker.run, daemon=True).start()
+    with caplog.at_level(logging.INFO, logger="interfaces.board_interface"):
+        position_id = worker.submit(_AFTER_E4, 1200, 1800, "white")
+        state = _wait_state(worker, lambda s: s["id"] == position_id and not s["running"])
+    assert state["result"] == "anticipation" and state["anticipated"] == [{"uci": "e7e5"}]
+    assert set(calls) == {1800}
+    assert "result=anticipation" in caplog.text
+
+
+def test_game_hash_matches_chess_router():
+    # Sprint 68 : formule dupliquée, même hash que chess_router._game_hash.
+    from execution.routers.chess_router import _game_hash as router_hash
+    from interfaces.board_interface import _game_hash
+
+    ucis = ["e2e4", "e7e5", "g1f3"]
+    assert _game_hash(ucis) == router_hash(ucis)
+
+
+def test_game_with_known_hash_serves_stored(monkeypatch):
+    # Sprint 68, tronçon 04 : PGN collé déjà en fiche → réponse de /stored, pas d'analyse.
+    import interfaces.board_interface as board_interface
+
+    def no_analysis(*args):
+        raise AssertionError("analyze_game appelé")
+
+    monkeypatch.setattr(board_interface, "analyze_game", no_analysis)
+    plies = [{"color": "white", "uci": "e2e4", "win_before": 50, "win_after": 52, "loss": 0,
+              "quality": "best", "best_san": "e4"},
+             {"color": "black", "uci": "e7e5", "win_before": 48, "win_after": 47, "loss": 1,
+              "quality": "good", "best_san": "e5"}]
+    fiche = {"id": "chess_game_" + board_interface._game_hash(["e2e4", "e7e5"]),
+             "plies_json": json.dumps(plies), "nico_color": "white", "opponent": "Bob",
+             "minis_json": json.dumps([{"ply": 1}])}
+    server = make_server(0, BoardWorker(lambda: object(), ""), load_games=lambda: [fiche])
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        data = _request(base, "/game", {"pgn": "1. e4 e5"})
+        assert data["playing"] == "white" and data["minis"] == [{"ply": 1}]
+        assert data["wins"] == [50, 52, 53]
+    finally:
+        server.shutdown()
+        server.server_close()

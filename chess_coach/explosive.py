@@ -427,7 +427,18 @@ def find_explosive(plies: list, nico_color: str, engine_path: str,
     def search(engine, p):
         return _search_position(engine, chess.Board(p.fen_before), p.uci, p.best_uci, elo, models_dir)
 
-    results = run_on_engines(engine_path, search, eligible)
+    # Maia à 1 thread torch pendant la recherche (sprint 68, tronçon 03) : appelée depuis
+    # les 8 threads de run_on_engines, elle sursouscrivait les 16 cœurs. Mêmes coups et
+    # mêmes réponses Maia sur 8 parties, CPU −6 à −15 % [2 passages, machine chargée] ;
+    # gain mural non établi (docs/sprint68/mesure_explosive.txt).
+    # Réglage global au processus : rétabli à la sortie.
+    import torch
+    threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        results = run_on_engines(engine_path, search, eligible)
+    finally:
+        torch.set_num_threads(threads)
     found = [CriticalPosition(kind="d", ply=p, score=explosive.score, explosive=explosive)
              for p, explosive in zip(eligible, results) if explosive is not None]
     log.info(

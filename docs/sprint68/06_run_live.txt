@@ -1,0 +1,54 @@
+SPRINT 68 — RUN LIVE (Nico)
+
+Avant : sudo systemctl restart aria.service
+Journal dans un 2e terminal : sudo journalctl -u aria -f -o cat
+
+────────────────────────────────────────
+ÉTAPE 1 — Démarrage
+────────────────────────────────────────
+Attendre ~30 s après le redémarrage.
+Journal attendu : une ligne de préchargement (embedder + Maia) avec sa durée.
+
+────────────────────────────────────────
+ÉTAPE 2 — Une partie neuve sur Telegram
+────────────────────────────────────────
+Coller le PGN de ta prochaine partie chess.com (jamais envoyée).
+Journal attendu :
+  - memory_recall SKIPPED reason=skip_memory
+  - chess_explosive positions=… duration=…
+  - chess_timing … (durée de chaque étape)
+  - [LLM] Anthropic (claude-haiku-5-5) a répondu
+  - aucune ligne « deepseek failed » avant
+Succès : temps total (réception → dernier message) nettement sous les 2 min 21 s
+de la partie de 35 demi-coups du 2026-11-25 ; même nature d'analyse (positions,
+coups explosifs, pointe). Noter le temps total et la ligne chess_timing.
+
+────────────────────────────────────────
+ÉTAPE 3 — Échiquier : fiche jouée avec les noirs
+────────────────────────────────────────
+Envoyer sur Telegram :
+/parties details
+Ouvrir une partie jouée AVEC LES NOIRS.
+Succès :
+  a. l'échiquier s'ouvre vu des noirs ;
+  b. position où c'est à toi : flèches habituelles (bleu, orange, cyan, jaune) ;
+     cyan / jaune apparaissent avant la fin de la recherche orange ;
+  c. position où c'est à l'adversaire : jusqu'à 3 pièces cerclées, flèches grises
+     numérotées 1-2-3, ta réponse en flèche bleue avec le même numéro ; tap sur la
+     ligne d'état → liste des coups avec leur % et leur variante ;
+  d. ⟲ (retourner) : les rôles s'inversent sur la position affichée ;
+  e. case « Anticipation » décochée dans ☰ : les flèches grises disparaissent.
+Journal attendu : board_analysis … result=anticipation sur les positions de l'adversaire.
+
+────────────────────────────────────────
+ÉTAPE 4 — Échiquier : variante et PGN collé
+────────────────────────────────────────
+a. Dans la partie ouverte, jouer 3 coups d'une variante à la main.
+   Succès : score, courbe et ligne « joué » se mettent à jour en ~1 s par coup
+   (avant : ~1,6 s par position, une à la fois).
+b. ☰ → coller dans le champ PGN le PGN complet de la partie envoyée à l'étape 2
+   → « Charger la partie ».
+   Succès : courbe et onglet « Miniatures » immédiats (pas « courbe en calcul… »).
+   Journal attendu : board_game stored id=…
+
+Rapporter : temps total étape 2, ligne chess_timing, et a-e / a-b OK ou non.

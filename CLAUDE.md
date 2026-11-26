@@ -154,12 +154,13 @@ techniques se lisent via `git log <tag>~..<tag>` ou `git log
 <tag_précédent>..<tag>`.
 
 ## Backlog en cours
-Sprint 67 clos (tag `sprint-67`) : boucle de rétroaction 👍 / 👎 (wing `aria_feedback`,
-commentaire par « Répondre », alerte de démarrage, skill `/amelioration`). Sprint 63 : live
-`docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
+Sprint 68 clos (tag `sprint-68`) : anticipation des coups adverses sur l'échiquier (orientation
+« Je joue », encart conservé le long de sa ligne), échiquier et bilan Telegram plus rapides.
+Sprint 63 : live `docs/sprint63/02_run_live.txt` à jouer à la prochaine partie neuve.
 Sprint 60 (lecture d'échiquier en image) suspendu : dettes dans `docs/sprint60/00_etat.md`.
-Prochain : **sprint 68**, étape 7 de la feuille de route (échiquier centré joueur du bas +
-réponses adverses, 61-4 + 62-9), dans `docs/sprint68/00_etat.md` ; axes `/amelioration` en dettes 67-1 à 67-5. Prochaine étape : `/conception sprint 68`.
+Prochain : **sprint 69**, étape 8 de la feuille de route (répertoire connu d'ARIA, 61-5 + 61-10)
+à confirmer, dans `docs/sprint69/00_etat.md` ; pointe réduite au clouage en dette 68-4.
+Prochaine étape : `/conception sprint 69`.
 État vivant du sprint : `docs/sprintN/00_etat.md` (dès qu'il existe),
 sinon le dernier kickoff. Tableau des dettes : dernier kickoff en date.
 
