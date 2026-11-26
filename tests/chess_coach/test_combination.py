@@ -44,3 +44,10 @@ def test_assign_defenses_records_refutation_and_recapture(monkeypatch):
     assert error.point["prep"] == 4
     assert error.defenses == [{"san": "a5", "p": 0.93, "line_san": ["a5", "Bxb4+", "Kd8"],
                                "recapture": ("axb4", "Rxa8")}]
+
+
+def test_point_of_piece_arriving_after_prep():
+    """Run live sprint 68 : la pièce prise arrive sur la case après la préparation
+    (interposition sur l'échec) ; case vide au moment du clouage → pas de plantage."""
+    point = point_of("4k3/7p/2n5/8/8/8/8/R6K w - - 0 1", ["Re1+", "Ne5", "Rxe5+"], "white")
+    assert point["won"] == "Ne5" and point["pin"] is None

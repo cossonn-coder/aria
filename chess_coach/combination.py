@@ -59,7 +59,9 @@ def point_of(fen: str, line_san: list, nico_color: str) -> dict | None:
     pin = brought = None
     if prep is not None:
         after_prep = boards[prep + 1]
-        if after_prep.is_pinned(not nico, won_square):
+        # La pièce prise peut n'arriver sur la case qu'après la préparation (interposition
+        # sur un échec) : case vide, pas de clouage (run live sprint 68, plantage).
+        if after_prep.color_at(won_square) == (not nico) and after_prep.is_pinned(not nico, won_square):
             king = after_prep.king(not nico)
             pin = (_label(after_prep, won_square), _label(after_prep, king))
             # Coup adverse, avant la préparation, qui a amené le roi sur sa case.
