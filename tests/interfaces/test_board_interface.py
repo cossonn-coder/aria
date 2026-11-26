@@ -164,6 +164,8 @@ def test_index_serves_chessboard_page(monkeypatch):
         assert "#analysis { grid-column: 2; grid-row: 1;" in page
         # Encart conservé tant que la partie suit sa ligne, prochain coup fléché.
         assert "function followedLines()" in page and "const next = nextLineMove();" in page
+        # Téléphone : défilement porté par body (Mini App Telegram).
+        assert "html { height: 100%; overflow: hidden; }" in page
         # Téléphone : onglets sous l'échiquier, courbe ouverte par défaut.
         assert "#tabs { order: 3;" in page and "showTab($(\"tabs\").querySelector('[data-panel=\"graph\"]'))" in page
         assert "bottom: ground.state.orientation" in page
