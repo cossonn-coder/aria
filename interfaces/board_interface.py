@@ -4,12 +4,13 @@
 #
 # Sert la page de l'échiquier, reçoit la position affichée et expose le
 # résultat courant de l'analyse live (chess_coach.live). Un worker unique
-# enchaîne les passes ×1, ×2, ×4, ×8 sur la dernière position reçue ; une
+# enchaîne les passes ×1, ×2, ×4 sur la dernière position reçue ; une
 # nouvelle position abandonne la passe en cours. Le résultat de chaque position
 # est gardé : y revenir le rend aussitôt et reprend aux passes restantes (sprint 49).
 # Hors kernel : aucune écriture mémoire, aucun router, aucun LLM. Sprint 52 : lecture
 # seule des fiches chess_game par une méthode du bridge injectée (historique /game).
 
+import hashlib
 import json
 import threading
 import time
@@ -25,7 +26,7 @@ import chess.pgn
 from chess_coach import difficulty
 from chess_coach.analysis import ENGINE_OPTIONS, _win, analyze_game, detect_color, parse_pgn
 from chess_coach.level import accuracy_rank, performance
-from chess_coach.live import FACTORS, EngineProxy, Superseded, analyse_pass
+from chess_coach.live import FACTORS, EngineProxy, Superseded, analyse_pass, anticipate_pass
 from chess_coach.openings import detect_opening, opening_group
 from chess_coach.player_model import game_opening_group
 from chess_coach.summary import _COLOR_FR, _effective_loss, _game_accuracy, _move_accuracy
@@ -43,18 +44,21 @@ class BoardWorker:
 
     État : id (numéro de position), pass (passe en cours, ou dernière passe
     quand running est faux), passes, running, result (dernière passe terminée),
-    explosive, forced, best, trap (piège cyan), strategy (stratégie rose), error.
+    explosive, forced, best, trap (piège cyan), strategy (stratégie rose),
+    anticipated (coups adverses probables, sprint 68), error.
     best et forced arrivent dès l'analyse de tête de la première passe.
+    Sprint 68 : camp au trait ≠ camp du bas → run_anticipation au lieu de run_pass.
     """
 
-    def __init__(self, open_engine, models_dir: str, run_pass=analyse_pass):
+    def __init__(self, open_engine, models_dir: str, run_pass=analyse_pass,
+                 run_anticipation=anticipate_pass):
         self._open_engine = open_engine
         self._models_dir = models_dir
-        self._run_pass = run_pass
+        self._runners = {"analyse": run_pass, "anticipate": run_anticipation}
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._position = None
-        # (fen, elo) → (résultat de la dernière passe terminée, numéro de cette passe).
+        # (fen, elo, mode) → (résultat de la dernière passe terminée, numéro de cette passe).
         self._finished = {}
         self._state = self._initial(0)
 
@@ -62,18 +66,26 @@ class BoardWorker:
     def _initial(position_id: int) -> dict:
         return {"id": position_id, "pass": 1, "passes": len(FACTORS), "running": position_id > 0,
                 "result": "pending", "explosive": None, "forced": None, "best": None,
-                "trap": None, "strategy": None, "error": None}
+                "trap": None, "strategy": None, "anticipated": None, "error": None}
 
-    def submit(self, fen: str, elo_white: int, elo_black: int) -> int:
-        """Nouvelle position : remplace la précédente et réveille le worker."""
+    def submit(self, fen: str, elo_white: int, elo_black: int, bottom: str = "white") -> int:
+        """Nouvelle position : remplace la précédente et réveille le worker.
+
+        bottom : camp du bas de l'échiquier. Trait au camp du bas → analyse_pass, Maia
+        reçoit l'Elo de l'adversaire du trait ; sinon anticipation, Maia reçoit l'Elo
+        du camp au trait (ce sont ses coups qu'on prédit).
+        """
         with self._lock:
             position_id = self._state["id"] + 1
-            # Maia reçoit l'Elo de l'adversaire du trait.
-            elo = elo_black if chess.Board(fen).turn == chess.WHITE else elo_white
-            self._position = (position_id, fen, elo)
+            turn = "white" if chess.Board(fen).turn == chess.WHITE else "black"
+            mode = "analyse" if turn == bottom else "anticipate"
+            elo_turn, elo_other = (elo_white, elo_black) if turn == "white" else (elo_black, elo_white)
+            elo = elo_other if mode == "analyse" else elo_turn
+            key = (fen, elo, mode)
+            self._position = (position_id, key)
             self._state = self._initial(position_id)
-            if (fen, elo) in self._finished:
-                outcome, number = self._finished[(fen, elo)]
+            if key in self._finished:
+                outcome, number = self._finished[key]
                 self._state.update(outcome)
                 self._state.update({"pass": number, "running": number < len(FACTORS)})
         self._wake.set()
@@ -103,13 +115,15 @@ class BoardWorker:
             if engine is None:
                 engine = self._open_engine()
             with self._lock:
-                position_id, fen, elo = self._position
-            self._analyse(engine, position_id, fen, elo)
+                position_id, key = self._position
+            self._analyse(engine, position_id, key)
 
-    def _analyse(self, engine, position_id: int, fen: str, elo: int):
+    def _analyse(self, engine, position_id: int, key: tuple):
         """Passes restantes sur une position ; chacune remplace la précédente."""
+        fen, elo, mode = key
+        run = self._runners[mode]
         with self._lock:
-            done = self._finished[(fen, elo)][1] if (fen, elo) in self._finished else 0
+            done = self._finished[key][1] if key in self._finished else 0
         for number, factor in enumerate(FACTORS[done:], start=done + 1):
             with self._lock:
                 if self._state["id"] != position_id:
@@ -119,7 +133,7 @@ class BoardWorker:
                                 lambda head: self._publish_head(position_id, head))
             start = time.monotonic()
             try:
-                outcome = self._run_pass(proxy, fen, elo, self._models_dir)
+                outcome = run(proxy, fen, elo, self._models_dir)
             except Superseded:
                 log.info(f"board_analysis superseded id={position_id}")
                 return
@@ -136,7 +150,7 @@ class BoardWorker:
                     return
                 self._state.update(outcome)
                 self._state["running"] = number < len(FACTORS)
-                self._finished[(fen, elo)] = (outcome, number)
+                self._finished[key] = (outcome, number)
             log.info(f"board_analysis id={position_id} pass={number} result={outcome['result']} "
                      f"duration={time.monotonic() - start:.1f}s")
 
@@ -251,8 +265,14 @@ def stored_game(fiche: dict, games: list) -> dict:
             "minis": json.loads(fiche.get("minis_json") or "[]")}
 
 
+# Stockfish de /eval (sprint 68) : ouvert au premier appel, gardé ensuite ; le verrou
+# sérialise les requêtes des threads du ThreadingHTTPServer.
+_eval_lock = threading.Lock()
+_eval_engine = None
+
+
 def position_eval(fen: str) -> dict:
-    """Évaluation d'une position seule (jeu libre, sprint 39) : un Stockfish par appel.
+    """Évaluation d'une position seule (jeu libre, sprint 39) : un Stockfish de module.
 
     win en % de gain des blancs, mate signé côté blancs, best en SAN.
     """
@@ -261,12 +281,20 @@ def position_eval(fen: str) -> dict:
         # Position terminale : pas d'analyse ; le camp au trait est maté ou c'est nul.
         win = (0 if board.turn == chess.WHITE else 100) if board.is_checkmate() else 50
         return {"win": win, "mate": None, "best": None}
-    with chess.engine.SimpleEngine.popen_uci(config.stockfish_path) as engine:
-        engine.configure(ENGINE_OPTIONS)
-        info = engine.analyse(board, chess.engine.Limit(time=0.15))
+    global _eval_engine
+    with _eval_lock:
+        if _eval_engine is None:
+            _eval_engine = _open_engine()
+        info = _eval_engine.analyse(board, chess.engine.Limit(time=0.15))
     score = info["score"].white()
     return {"win": round(_win(score.score(mate_score=100000)), 1), "mate": score.mate(),
             "best": board.san(info["pv"][0])}
+
+
+def _game_hash(ucis) -> str:
+    """Hash des coups d'une partie : copie de chess_router._game_hash (même formule,
+    doc_id chess_game_<hash>) ; l'échiquier n'importe pas le router."""
+    return hashlib.sha256("".join(ucis).encode()).hexdigest()[:16]
 
 
 def line_accuracy(wins: list, best: list, first: str) -> dict:
@@ -335,7 +363,8 @@ class _Handler(BaseHTTPRequestHandler):
             log.info(f"board_eval duration={time.monotonic() - start:.2f}s")
             self._json(result)
             return
-        position_id = self.server.worker.submit(data["fen"], int(data["elo_white"]), int(data["elo_black"]))
+        position_id = self.server.worker.submit(data["fen"], int(data["elo_white"]), int(data["elo_black"]),
+                                                data.get("bottom", "white"))
         self._json({"id": position_id})
 
     def _game(self, pgn: str, playing: str):
@@ -345,6 +374,16 @@ class _Handler(BaseHTTPRequestHandler):
         if game is None:
             self._send(400, json.dumps({"error": "PGN illisible"}).encode(), "application/json")
             return
+        # Sprint 68 : partie déjà en fiche → même réponse que /stored, sans moteur.
+        load_games = self.server.load_games
+        if load_games is not None:
+            game_hash = _game_hash(m.uci() for m in game.mainline_moves())
+            games = load_games()
+            fiche = next((g for g in games if g.get("id") == "chess_game_" + game_hash), None)
+            if fiche is not None:
+                log.info(f"board_game stored id={game_hash}")
+                self._json(stored_game(fiche, games))
+                return
         start = time.monotonic()
         plies = analyze_game(game, "white", config.stockfish_path)
         curve = game_wins(plies)

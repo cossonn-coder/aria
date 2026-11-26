@@ -82,7 +82,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ✅ |
 | 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ✅ (mesure seule, dette 68-2) |
 | 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ✅ (Maia à 1 thread torch ; gain mural incertain) |
-| 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ⏳ |
+| 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ✅ |
 | 05 | `05_echiquier_page.md` | Orientation, retournement, flèches et panneau d'anticipation | ⏳ |
 | 06 | `06_run_live.txt` | Run live (Nico) | ⏳ |
 
@@ -108,6 +108,13 @@ récentes avec une miniature d dans `plies_json` (`minis_json` n'existe que sur 
 puis +1 % [2 passages appariés, charge 11-22]. Rejetés : `_MAX_DEEP` 2 (perd 3 coups),
 `_DEEP_TIME` 0.2 (coups différents dans 6 parties). Gain réel à lire au run live
 (`chess_explosive … duration=`). Test : `test_find_explosive_runs_maia_on_one_torch_thread`.
+
+Tronçon 04 fait : `live.anticipate_pass` (Maia du camp au trait, 3 coups p ≥ 0,10, réponse
+tirée de `line_san[1]`) ; `BoardWorker.submit(…, bottom)`, mode `analyse` / `anticipate` dans la clé
+du cache, état `anticipated` ; `/eval` sur un Stockfish de module sous verrou ; piège / stratégie
+publiés par `on_head` dès `_human_moves` ; `FACTORS = (1, 2, 4)` ; `/game` d'un PGN déjà en fiche
+→ `stored_game` (log `board_game stored id=…`, hash dupliqué de `chess_router._game_hash`).
+L'anticipation garde la boucle des 3 passes (temps de réponse ×1, ×2, ×4). Tests : 654 verts.
 
 ## Décisions arrêtées (lot 1, Nico, 2026-11-25)
 

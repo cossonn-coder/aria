@@ -18,12 +18,16 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
-# Facteurs de temps des passes successives sur une même position (≈ 75 s cumulées).
-FACTORS = (1, 2, 4, 8)
+# Facteurs de temps des passes successives sur une même position. Passe ×8 supprimée
+# au sprint 68 (vitesse) : il reste ×1, ×2, ×4.
+FACTORS = (1, 2, 4)
 # Analyse de tête (meilleur coup et 2e) : temps de base, avant facteur.
 _HEAD_TIME = 0.5
 # « Seul coup » : 2e coup à au moins cet écart (pts de % de gain) derrière le meilleur.
 _FORCED_GAP = 20
+# Anticipation (sprint 68) : au plus _ANTICIPATED coups adverses, de probabilité Maia ≥ _ANTICIPATED_P_MIN.
+_ANTICIPATED = 3
+_ANTICIPATED_P_MIN = 0.10
 # Piège (cyan) et stratégie (blanc), sprint 37 : candidats MultiPV + coups de forme,
 # à au plus _HUMAN_WINDOW pts de % de gain du meilleur coup.
 _HUMAN_MULTIPV = 8
@@ -157,6 +161,8 @@ def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
                  "pv_san": _san_line(board, head[0]["pv"][:_REPLY_LINE_PLIES + 1])}
     proxy.on_head({"best": best_dict, "forced": forced})
     human = _human_moves(proxy, board, elo, models_dir)
+    # Sprint 68 : piège et stratégie publiés dès qu'ils sont prêts, sans attendre l'orange.
+    proxy.on_head({"trap": human["trap"], "strategy": human["strategy"]})
 
     if not _WIN_MIN <= win_best <= _WIN_MAX:
         return {"result": "decided", "explosive": None, "forced": forced, "best": best_dict, **human}
@@ -165,3 +171,33 @@ def analyse_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
     if move is None:
         return {"result": "none", "explosive": None, "forced": forced, "best": best_dict, **human}
     return {"result": "explosive", "explosive": _explosive_dict(move), "forced": forced, "best": best_dict, **human}
+
+
+def anticipate_pass(proxy, fen: str, elo: int, models_dir: str) -> dict:
+    """Tour adverse (sprint 68) : coups probables du camp au trait et réponse du joueur du bas.
+
+    Aucune analyse explosive / piège / stratégie (vitesse). elo = Elo du camp au trait :
+    ce sont ses coups que Maia prédit. anticipated : au plus _ANTICIPATED coups de
+    p ≥ _ANTICIPATED_P_MIN, chacun {"uci", "san", "p", "reply_uci", "reply_san",
+    "line_san", "win"} ; reply_* à None si le coup adverse termine la partie ;
+    win = % de gain du joueur du bas (point de vue de _human_replies).
+    """
+    empty = {"explosive": None, "forced": None, "best": None, "trap": None, "strategy": None}
+    board = chess.Board(fen)
+    if board.is_game_over():
+        return {"result": "game_over", "anticipated": [], **empty}
+    distribution = [(uci, p) for uci, p in reply_distribution([fen], elo, models_dir)[0]
+                    if p >= _ANTICIPATED_P_MIN][:_ANTICIPATED]
+    # Aucun coup au-dessus du seuil (position très ouverte) : rien à analyser.
+    replies = _human_replies(proxy, board, distribution)[0] if distribution else []
+    anticipated = []
+    for (uci, p), reply in zip(distribution, replies):
+        after = board.copy(stack=False)
+        after.push(chess.Move.from_uci(uci))
+        # line_san[0] = coup adverse, line_san[1] = meilleure réponse du joueur du bas.
+        answer = after.parse_san(reply["line_san"][1]) if len(reply["line_san"]) > 1 else None
+        anticipated.append({"uci": uci, "san": reply["san"], "p": p,
+                            "reply_uci": answer.uci() if answer else None,
+                            "reply_san": reply["line_san"][1] if answer else None,
+                            "line_san": reply["line_san"], "win": reply["win"]})
+    return {"result": "anticipation", "anticipated": anticipated, **empty}

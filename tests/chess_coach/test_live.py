@@ -73,8 +73,10 @@ def test_head_published_before_human_moves(monkeypatch):
     monkeypatch.setattr(live, "_search_position", lambda *args: None)
     engine = FakeEngine([_info("e2e4", 0), _info("d2d4", -300)])
     analyse_pass(EngineProxy(engine, 1, lambda: False, heads.append), chess.STARTING_FEN, 1500, "")
+    # Sprint 68 : piège et stratégie publiés à leur tour, avant la recherche explosive.
     assert heads == [{"best": {"uci": "e2e4", "san": "e4", "pv_san": ["e4"]},
-                      "forced": {"uci": "e2e4", "san": "e4"}}]
+                      "forced": {"uci": "e2e4", "san": "e4"}},
+                     {"trap": None, "strategy": None}]
 
 
 def test_no_forced_move_when_gap_small(monkeypatch):
@@ -136,3 +138,24 @@ def test_trapping_replies_thresholds():
     rare = {"san": "h6", "p": 0.05, "win": 90.0}
     assert live.trapping_replies([high, low], 60.0) == [high]
     assert live.trapping_replies([low, rare], 60.0) == []
+
+
+def test_anticipate_pass_three_moves_above_threshold(monkeypatch):
+    # Sprint 68, tronçon 04 : au plus 3 coups adverses de p ≥ 0,10 ; reply_uci tiré de line_san[1].
+    distribution = [("e7e5", 0.4), ("c7c5", 0.2), ("e7e6", 0.15), ("d7d5", 0.12), ("g8f6", 0.05)]
+    calls = []
+    monkeypatch.setattr(live, "reply_distribution", lambda fens, elo, d: calls.append(elo) or [distribution])
+
+    def replies(proxy, board, dist):
+        assert [uci for uci, _ in dist] == ["e7e5", "c7c5", "e7e6"]
+        return [{"san": "e5", "p": 0.4, "win": 55.0, "line_san": ["e5", "Nf3", "Nc6"]},
+                {"san": "c5", "p": 0.2, "win": 54.0, "line_san": ["c5", "Nf3"]},
+                {"san": "e6", "p": 0.15, "win": 56.0, "line_san": ["e6"]}], []
+
+    monkeypatch.setattr(live, "_human_replies", replies)
+    outcome = live.anticipate_pass(None, _after("e2e4"), 1400, "")
+    assert calls == [1400]
+    assert outcome["result"] == "anticipation" and outcome["explosive"] is None
+    assert [(a["uci"], a["reply_uci"], a["reply_san"]) for a in outcome["anticipated"]] == [
+        ("e7e5", "g1f3", "Nf3"), ("c7c5", "g1f3", "Nf3"), ("e7e6", None, None)]
+    assert outcome["anticipated"][0]["win"] == 55.0 and outcome["anticipated"][0]["p"] == 0.4
