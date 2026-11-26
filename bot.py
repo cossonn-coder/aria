@@ -7,10 +7,14 @@
  
 import logging
 import os
+import threading
+import time
 from logger import configure_root
 
 configure_root(level=os.getenv("ARIA_LOG_LEVEL", "INFO"))
 
+from chess_coach import difficulty
+from config import config
 from core.kernel import AriaKernel
 from interfaces.board_interface import start_board_server
 from interfaces.telegram_interface import TelegramInterface
@@ -18,6 +22,19 @@ from memory.mempalace_bridge import MempalaceBridge
 from memory.mempalace_store import get_by_metadata, search
  
  
+def _preload(bridge, log):
+    """Charge l'embedder et Maia au démarrage plutôt qu'au premier message (sprint 68).
+    L'embedder se charge à la première recherche : une requête courte via le bridge
+    suffit (règle 2 : lecture par le bridge). Une erreur ne bloque pas le service."""
+    start = time.monotonic()
+    try:
+        bridge.retrieve_memories("préchargement", n=1)
+        difficulty._load(config.maia_models_dir)
+        log.info("preload OK duration=%.1fs", time.monotonic() - start)
+    except Exception:
+        log.exception("preload ERROR")
+
+
 def main():
     from logger import get_logger
     log = get_logger(__name__)
@@ -33,6 +50,7 @@ def main():
         bridge=bridge,
     )
     log.info("Telegram interface prête")
+    threading.Thread(target=_preload, args=(bridge, log), daemon=True).start()
     # Échiquier ARIA (sprint 35) : threads daemon, tués par os._exit à l'arrêt.
     # Sprint 39 : « Envoyer à ARIA » passe par telegram.submit_text (503 avant
     # que la boucle PTB tourne). Sprint 52 : lecture seule des fiches (historique /game).

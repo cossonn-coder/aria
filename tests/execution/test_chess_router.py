@@ -113,6 +113,7 @@ def test_execute_returns_text_and_images_and_delegates_reasoning(monkeypatch, tm
     assert "1 à 3 phrases" in delegated["content"]
     assert "de Position 1 à Position 2, aucune omise" in delegated["content"]
     assert delegated["metadata"]["skip_history"] is True
+    assert delegated["metadata"]["skip_memory"] is True
     assert result["images"][0]["caption"].endswith("\nVariante : 17...d6 ; 18.Nf3.")
     assert "axes de travail" not in delegated["content"]
     # Faits calculés depuis le FEN (après 1.e4) : matériel égal, rien d'attaqué.

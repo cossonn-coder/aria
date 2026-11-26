@@ -24,6 +24,7 @@
 #   10. Écriture MemPalace
 
 import re
+import time
 import unicodedata
 
 from execution.routers.execution_base import BaseRouter
@@ -207,14 +208,23 @@ class LLMExecutionRouter(BaseRouter):
         # Résolution unique — global_memories est réutilisé à l'étape 4.
         # top_k est fixé ici : toutes les étapes suivantes travaillent
         # avec le même budget mémoire pour ce cycle.
-        top_k = MEMORY_TOP_K.get(operation, 4)
-        global_memories = self.mempalace_bridge.retrieve_memories(message, n=top_k)
+        start = time.monotonic()
+        # Drapeau skip_memory (bilan d'une partie, sprint 68) : aucune recherche
+        # mémoire (étapes 1, 4, 4b) ; le prompt porte déjà toutes ses données.
+        skip_memory = metadata.get("skip_memory")
+        if skip_memory:
+            global_memories = {"hits": [], "count": 0}
+            document_hit = None
+            log.info("memory_recall SKIPPED reason=skip_memory")
+        else:
+            top_k = MEMORY_TOP_K.get(operation, 4)
+            global_memories = self.mempalace_bridge.retrieve_memories(message, n=top_k)
 
-        # Fiche document portant un mot de la question (sprint 44, #146) :
-        # la distance vectorielle ne la remonte pas, le filtre lexical si.
-        # Injectée en tête de la section épisodique à l'étape 4b.
-        document_hits = self.mempalace_bridge.find_documents(message)
-        document_hit = document_hits[0] if document_hits else None
+            # Fiche document portant un mot de la question (sprint 44, #146) :
+            # la distance vectorielle ne la remonte pas, le filtre lexical si.
+            # Injectée en tête de la section épisodique à l'étape 4b.
+            document_hits = self.mempalace_bridge.find_documents(message)
+            document_hit = document_hits[0] if document_hits else None
         if document_hit:
             source = re.search(r"^Source : (\S+)$", document_hit.get("text", ""), re.MULTILINE)
             log.info("document_recall source=%s", source.group(1) if source else "?")
@@ -316,7 +326,7 @@ class LLMExecutionRouter(BaseRouter):
         # rappeler retrieve_memories avec les mêmes paramètres.
         session_memories = (
             self.mempalace_bridge.retrieve_by_intent(query=message, intent_id=intent.id)
-            if intent
+            if intent and not skip_memory
             else {"hits": [], "count": 0}
         )
 
@@ -326,7 +336,8 @@ class LLMExecutionRouter(BaseRouter):
         )
 
         # ── 4b. Context builder (sémantique + intents + budget tokens) ─────────
-        context_block = build_context_block(
+        # skip_memory : bloc réduit aux règles et consignes ci-dessous.
+        context_block = "" if skip_memory else build_context_block(
             query=message,
             bridge=self.mempalace_bridge,
             active_intents=self.intent_engine.list_attention_active(),
@@ -372,7 +383,10 @@ class LLMExecutionRouter(BaseRouter):
         )
 
         # ── 6. Pipeline agents ───────────────────────────────────────────────
+        prepared = time.monotonic()
         ctx = self.controller.run(ctx, self.llm_router)
+        log.info("pipeline_timing preparation=%.1fs controller=%.1fs",
+                 prepared - start, time.monotonic() - prepared)
 
         # ── 7. Résolution du résultat ────────────────────────────────────────
         # Priorité : résultat direct du pipeline agents, puis dernier état

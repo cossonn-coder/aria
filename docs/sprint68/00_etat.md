@@ -77,7 +77,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 | # | Kickoff | Objet | État |
 |---|---|---|---|
-| 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ⏳ |
+| 01 | `01_bilan_telegram.md` | Durées par étape, bilan sans rappels mémoire, préchargement | ✅ |
 | 02 | `02_ecritures.md` | Écritures mesurées sur une copie du palace, puis allégées | ⏳ |
 | 03 | `03_recherche_explosive.md` | Recherche explosive plus courte, mêmes coups sur un corpus | ⏳ |
 | 04 | `04_echiquier_serveur.md` | Anticipation, `/eval` persistant, publication précoce, sans ×8, PGN connu | ⏳ |
@@ -88,6 +88,11 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 
 Lire `CLAUDE.md`, ce fichier, puis le kickoff du premier tronçon ⏳. Exécution : `/sprint-auto
 sprint 68`. Contexte des mesures : `audit_joueur_du_bas.md` §6.
+
+Tronçon 01 fait : `chess_timing` (`_execute_game`) et `pipeline_timing` (`_run_pipeline`) au
+journal ; drapeau `skip_memory` posé par `_execute_game` (log `memory_recall SKIPPED`) ;
+préchargement embedder + Maia dans un thread daemon de `bot.py` (log `preload OK duration=…`).
+Gain réel à mesurer au run live (tronçon 06).
 
 ## Décisions arrêtées (lot 1, Nico, 2026-11-25)
 

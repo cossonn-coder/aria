@@ -21,6 +21,7 @@
 import hashlib
 import json
 import re
+import time
 from datetime import date
 from pathlib import Path
 from uuid import uuid4
@@ -1363,6 +1364,9 @@ class ChessExecutionRouter(BaseRouter):
         timestamp : date de la fiche réanalysée, conservée (None = nouvelle partie).
         replaces  : doc_id de la fiche tronquée que cette partie complète (sprint 56),
                     supprimée une fois la nouvelle fiche écrite."""
+        # Sprint 68 : secondes par étape, journalisées en fin de pipeline (chess_timing).
+        durations = {}
+        start = time.monotonic()
         # ── Diagrammes : un PNG par position critique ────────────────────────
         out_dir = Path(config.image_output_dir) / "chess"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1410,6 +1414,8 @@ class ChessExecutionRouter(BaseRouter):
             images.append({"path": str(out_path), "caption": _think_caption(index, p, seconds, think_verdict)})
             minis.append(_mini(p, "think", [("Meilleur coup", p.pv_san)]))
 
+        durations["diagrammes"], start = time.monotonic() - start, time.monotonic()
+
         # ── Fiche de partie (non bloquante) ──────────────────────────────────
         game_hash = _game_hash(p.uci for p in analysis.plies)
         summary = summarize(analysis)
@@ -1426,6 +1432,7 @@ class ChessExecutionRouter(BaseRouter):
                 log.info("chess_router extend old=%s new=%s", replaces, game_hash)
         except Exception:
             log.exception("chess_game_write ERROR hash=%s", game_hash)
+        durations["fiche"], start = time.monotonic() - start, time.monotonic()
 
         # ── Progression (non bloquante) : profil avant / après cette partie ──
         # Recalculé depuis les fiches (la courante est en base depuis l'écriture).
@@ -1441,6 +1448,7 @@ class ChessExecutionRouter(BaseRouter):
                          after.n_games, round(after.ratings["global"].value))
         except Exception:
             log.exception("chess_progression ERROR")
+        durations["progression"], start = time.monotonic() - start, time.monotonic()
 
         story = story_line(analysis.plies, analysis.nico_color, summary["outcome"])
         # Sprint 51 : période gagnante non convertie, ligne écrite par le code.
@@ -1458,9 +1466,12 @@ class ChessExecutionRouter(BaseRouter):
             # sous un intent imposé (le namer répondait « aucun », audit 05).
             # skip_history (tronçon 15) : les analyses passées en historique servaient
             # de moule au LLM ; l'échange reste écrit pour les questions de suivi.
+            # skip_memory (sprint 68) : la recherche vectorielle sur ~9 000 car. coûtait
+            # ~4 s par appel sans rien apporter au bilan, qui a déjà ses données.
             "metadata": {**metadata, "forced_intent_name": FORCED_INTENT_NAME,
-                         "skip_history": True},
+                         "skip_history": True, "skip_memory": True},
         })
+        durations["llm"], start = time.monotonic() - start, time.monotonic()
 
         log.info("chess_router OK critical=%d images=%d", len(analysis.critical), len(images))
         # Chaque entrée « Position N » part en légende de son diagramme (tronçon 05).
@@ -1488,11 +1499,14 @@ class ChessExecutionRouter(BaseRouter):
                 log.info("chess_minis_write OK hash=%s minis=%d", game_hash, len(minis))
             except Exception:
                 log.exception("chess_minis_write ERROR hash=%s", game_hash)
+        durations["miniatures"], start = time.monotonic() - start, time.monotonic()
         # La courbe, ajoutée après ce découpage, reste la dernière image avant le bilan.
         curve_path = out_dir / f"{uuid4().hex[:8]}_curve.png"
         render_curve(nico_wins(analysis.plies, analysis.nico_color),
                      [p.move_number for p in analysis.plies], _point_colors(analysis), str(curve_path))
         images.append({"path": str(curve_path), "caption": "Courbe de la partie : % de gain de Nico"})
+        durations["courbe"] = time.monotonic() - start
+        log.info("chess_timing %s", " ".join(f"{k}={v:.1f}s" for k, v in durations.items()))
         moves_line = _moves_line(summary, analysis)
         if moves_line:
             text += "\n\n" + moves_line
