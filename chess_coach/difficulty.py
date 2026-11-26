@@ -31,7 +31,12 @@ def _load(models_dir: str):
     """Charge paresseusement le modèle Maia-2 rapid et ses dictionnaires."""
     global _model
     if _model is None:
+        import torch
         from maia2 import inference, model
+        # NNPACK non supporté par ce CPU : torch tente de l'initialiser à chaque convolution
+        # et écrit 12 avertissements par appel de Maia dans le journal (run live sprint 68).
+        # Désactivé, torch prend directement son chemin de convolution habituel.
+        torch.backends.nnpack.set_flags(False)
         net = model.from_pretrained(type="rapid", device="cpu", save_root=models_dir)
         # Mode évaluation : sans lui le dropout reste actif et les probabilités
         # varient d'un appel à l'autre (maia2.inference_each fait de même).

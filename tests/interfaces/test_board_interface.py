@@ -135,9 +135,10 @@ def test_index_serves_chessboard_page(monkeypatch):
         # Sprint 37, tronçon 02 : cases des calques piège (cyan) et stratégie (blanc).
         assert "show-trap" in page and "show-strategy" in page
         assert 'strategy: { key: "s", color: "#ffe100"' in page and "#ff5fb0\"></span>" not in page
-        # Sprint 50 : flèches d'erreur cochables, meilleur coup coché, bouton + de la barre mobile.
-        assert 'id="show-errors" type="checkbox" checked' in page
-        assert 'id="show-best" type="checkbox" checked' in page
+        # Sprint 50 : flèches d'erreur cochables, bouton + de la barre mobile. Sprint 68 (run
+        # live) : toutes les cases décochées par défaut, sauf Anticipation.
+        assert 'id="show-errors" type="checkbox">' in page
+        assert 'id="show-best" type="checkbox">' in page
         assert page.index('id="menu"') < page.index('id="new-bar"') < page.index('id="flip-bar"')
         assert "function pointColor(" in page and "<circle cx=" in page
         assert "paintMove(span, color)" in page
