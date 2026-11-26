@@ -348,7 +348,14 @@ function drawShapes() {
   // Exercice « 2e chance » : aucune flèche, elles donneraient la réponse.
   if (exercise) { ground.setAutoShapes([]); return; }
   const shapes = [];
-  const layers = [[state && state.forced, "show-forced", "green"], [bestMove(), "show-best", "blue"],
+  // Ligne d'un encart suivie (run live sprint 68) : seul son prochain coup est fléché, gris
+  // pour l'adversaire, bleu pour le joueur du bas ; le cercle du coup joué et l'erreur restent.
+  const next = nextLineMove();
+  if (next) {
+    const brush = next.color === ground.state.orientation[0] ? "blue" : "grey";
+    shapes.push({ orig: next.from, dest: next.to, brush });
+  }
+  const layers = next ? [] : [[state && state.forced, "show-forced", "green"], [bestMove(), "show-best", "blue"],
                   [state && state.explosive, "show-explosive", "orange"],
                   [state && state.trap, "show-trap", "cyan"], [state && state.strategy, "show-strategy", "strategy"]];
   const drawn = new Set();
@@ -362,7 +369,7 @@ function drawShapes() {
   if (played) shapes.push({ orig: played.from, brush: "white" });
   // Tour adverse (sprint 68) : coup adverse k = pièce cerclée + flèche grise numérotée k,
   // réponse du joueur du bas = flèche bleue portant le même numéro.
-  if (state && state.anticipated && $("show-anticipation").checked) {
+  if (!next && state && state.anticipated && $("show-anticipation").checked) {
     state.anticipated.forEach((move, i) => {
       const label = { text: String(i + 1) };
       shapes.push({ orig: move.uci.slice(0, 2), brush: "grey" });
@@ -461,13 +468,26 @@ function explosiveDetails(fen, explosive) {
 // seulement si le coup change (sinon le coup survolé disparaîtrait à chaque interrogation).
 let shownReplies = null;
 function fillReplies() {
-  const key = JSON.stringify([positionFen, state && state.explosive, state && state.anticipated]);
+  const followed = followedLines();
+  const key = JSON.stringify([positionFen, state && state.explosive, state && state.anticipated, followed]);
   if (key === shownReplies) return;
   shownReplies = key;
   const panel = $("replies");
   panel.replaceChildren();
   $("mini").style.visibility = "hidden";
-  if (!hasReplies()) return;
+  if (followed.length) {
+    const title = document.createElement("div");
+    title.textContent = "Ligne suivie :";
+    const list = document.createElement("ul");
+    for (const line of followed) {
+      const item = document.createElement("li");
+      item.append(variation(pinned.fen, line));
+      list.append(item);
+    }
+    panel.append(title, list);
+    if (hasOwnReplies()) panel.append(document.createElement("hr"));
+  }
+  if (!hasOwnReplies()) return;
   const title = document.createElement("div");
   if (!state.explosive) {
     // Tour adverse (sprint 68) : « k. coup — p % — variante » (coup adverse puis réponse).
@@ -486,9 +506,56 @@ function fillReplies() {
   panel.append(title, ...explosiveDetails(positionFen, state.explosive));
 }
 
-// Le panneau #replies a un contenu : coup explosif ou coups adverses anticipés (sprint 68).
-function hasReplies() {
+// Analyse de la position affichée : coup explosif ou coups adverses anticipés (sprint 68).
+function hasOwnReplies() {
   return Boolean(state && (state.explosive || (state.anticipated && state.anticipated.length)));
+}
+
+// Le panneau #replies a un contenu : analyse de la position, ou ligne d'un encart suivie.
+function hasReplies() {
+  return hasOwnReplies() || followedLines().length > 0;
+}
+
+// Encart conservé (run live sprint 68) : position de l'encart et ses variantes (coups
+// adverses anticipés, ou réponses et suite du coup explosif). Tant que la partie affichée
+// suit l'une d'elles depuis cette position, l'encart reste ; il est remplacé dès qu'on dévie.
+let pinned = null;
+
+function encartLines() {
+  if (!hasOwnReplies()) return [];
+  if (!state.explosive) return state.anticipated.map((move) => move.line_san);
+  const lines = state.explosive.replies.map((reply) => [state.explosive.san, ...reply.line_san]);
+  if (state.explosive.trap_line_san.length) lines.push([state.explosive.san, ...state.explosive.trap_line_san]);
+  return lines;
+}
+
+// Variantes de l'encart conservé dont les coups joués depuis sa position sont le début ;
+// vide à la position de l'encart elle-même, ou si la partie en est sortie.
+function followedLines() {
+  if (!pinned || pinned.fen === positionFen) return [];
+  const history = chess.history({ verbose: true });
+  const start = history.findIndex((m) => m.before === pinned.fen);
+  if (start < 0) return [];
+  const played = history.slice(start).map((m) => m.san);
+  return pinned.lines.filter((line) => played.length <= line.length && played.every((san, k) => san === line[k]));
+}
+
+// Prochain coup de la première variante suivie, joué sur la position affichée (null si la
+// variante est finie) : {from, to, color} avec color "w" ou "b".
+function nextLineMove() {
+  const line = followedLines()[0];
+  if (!line) return null;
+  const played = chess.history().length - chess.history({ verbose: true }).findIndex((m) => m.before === pinned.fen);
+  if (played >= line.length) return null;
+  const move = chess.moves({ verbose: true }).find((m) => m.san === line[played]);
+  return move ? { from: move.from, to: move.to, color: move.color } : null;
+}
+
+// Encart conservé tant qu'on suit sa ligne, sinon celui de la position affichée.
+function updatePinned() {
+  if (followedLines().length) return;
+  const lines = encartLines();
+  pinned = lines.length ? { fen: positionFen, lines } : null;
 }
 
 // Corps d'un bloc de colonne selon sa couleur (le titre est commun).
@@ -574,6 +641,7 @@ function save(kind, move) {
 }
 
 function render() {
+  updatePinned();
   drawShapes();
   $("status").textContent = statusText();
   fillReplies();
