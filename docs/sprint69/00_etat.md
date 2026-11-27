@@ -1,6 +1,6 @@
 # Sprint 69 — état du sprint
 
-**Phase** : B figée (OK Nico 2026-11-26). Prochaine étape : `/sprint-auto sprint 69`.
+**Phase** : close (run live validé 2026-11-27, tag `sprint-69`). Suite : `docs/sprint70/00_etat.md`.
 **Sujet** : étape 8 de la feuille de route, répertoire connu d'ARIA (61-5 + 61-10). Confirmé par Nico
 le 2026-11-26 (les 3 👎 en attente restent pour `/amelioration` après ce sprint).
 **Branche** : `feat/sprint69-repertoire` (depuis `main`, tag `sprint-68`).
@@ -28,7 +28,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 6. ~~67 (ajouté par Nico, 2026-11-25) : boucle de rétroaction (66-3) : réactions 👍 / 👎 sur
    les messages Telegram, enregistrées dans le palace, traitées ensemble en conception~~ : fait au sprint 67, run live validé.
 7. ~~68 : échiquier centré joueur du bas + réponses adverses (61-4 + 62-9), vitesse~~ : fait au sprint 68, run live validé.
-8. Répertoire connu d'ARIA (61-5 + 61-10).
+8. ~~69 : répertoire connu d'ARIA (61-5 + 61-10)~~ : fait au sprint 69, run live validé (ligne ❗ non vue, dette 69-1).
 9. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 10. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
@@ -102,9 +102,9 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | # | Tronçon | Kickoff | État |
 |---|---|---|---|
 | 01 | Répertoire : calcul (`chess_coach/analysis.py`) + lignes 📚 / ❗ (`chess_router._moves_line`) | `01_repertoire.md` | ✅ (pytest 660 verts) |
-| 02 | Run live (Nico, prochaines vraies parties) | `02_run_live.txt` | ⏳ |
+| 02 | Run live (Nico, prochaines vraies parties) | `02_run_live.txt` | ✅ 2026-11-27 : ligne 📚 juste (« suivi jusqu'à 5...h6 (4 parties) ; tu en sors au coup 6 : 6.O-O au lieu de 6.Qb3 (joué 3 fois) ») ; ❗ non vue (pas de coup habituel mauvais rejoué) → dette 69-1. Détail : `03_retour_run_live.md` |
 
-Dettes visées : 61-5, 61-10 (fermées au run live validé).
+Dettes visées : 61-5 fermée ; 61-10 remplacée par 69-1 (ligne ❗ codée et testée, non vue en live).
 
 ## §REPRISE
 
