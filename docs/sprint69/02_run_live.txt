@@ -1,0 +1,30 @@
+Sprint 69 — run live : répertoire connu d'ARIA (Nico)
+
+Prérequis : branche feat/sprint69-repertoire, puis redémarrer le service :
+sudo systemctl restart aria.service
+
+Suivre les logs dans un autre terminal :
+sudo journalctl -u aria -f -o cat
+
+À faire : envoyer à ARIA tes prochaines vraies parties (PGN chess.com), comme d'habitude.
+Pas de partie trafiquée, pas de renvoi d'une partie déjà envoyée (refusée comme doublon).
+
+À observer dans le bilan Telegram, sous la ligne 🔎 « Occasions manquées » :
+
+1. Une ligne 📚, par exemple :
+   📚 Répertoire suivi jusqu'à 4.c3 (77 parties) ; tu en sors au coup 5 : 5.Bc4 au lieu de 5.Nxc3 (joué 40 fois)
+   ou
+   📚 Répertoire suivi jusqu'à 3.b4 (29 parties) ; l'adversaire en sort avec 3...d5 (jamais vu)
+
+   Critère : le dernier coup suivi et le coup de sortie sont bien ceux de la partie, et le bon camp
+   est désigné (toi ou l'adversaire). Le coup « habituel » te paraît juste.
+
+2. Si tu as rejoué un coup habituel mauvais (ex. 5.d5 dans le Portsmouth, 6.exd5 dans le Göring) :
+   ❗ 5.d5, ton coup habituel ici (9 parties), perd 16 pts ; meilleur 5.a3
+   Critère : la ligne est présente. Elle n'apparaît JAMAIS sur un gambit assumé
+   (2.d4 Blackmar-Diemer, 3.b4 contre 2...Bc5, 4.f3 Française, 2...f5, gambits nommés).
+   Le ❗ peut ne pas se voir dès la première partie : il faut rejouer une telle ligne.
+
+journalctl : chess_analysis OK ... first_move=N inchangé ; aucune trace « ERROR » ou « Traceback ».
+
+Signaler : texte exact de la ligne 📚 (et ❗ s'il y en a) + la partie concernée.

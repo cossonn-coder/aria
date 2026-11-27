@@ -1065,6 +1065,27 @@ def test_moves_line_shows_both_official_elo():
     assert line.startswith("🎯 Précision : toi 84 % (1354) · adversaire 79 % (1332)\n")
 
 
+def test_moves_line_shows_repertoire_and_bad_habit():
+    """Sprint 69 : ligne 📚 (Nico sort de son répertoire) puis ligne ❗ (coup habituel qui perd)."""
+    from chess_coach.analysis import RepertoireFacts
+    summary = {"accuracy": None, "nico_best": 1, "opponent_best": 1, "nico_correct": 0, "opponent_correct": 0,
+               "nico_inaccuracy": 0, "opponent_inaccuracy": 0, "nico_mistake": 0, "opponent_mistake": 0,
+               "nico_blunder": 0, "opponent_blunder": 0, "nico_moves": 5, "opponent_moves": 5,
+               "brilliant_moves": None, "best_move": None, "worst_move": None}
+    analysis = _colors_analysis()
+    last, exit_ply, bad = _ply(6, 4, "c3", "c3", "c2c3"), _ply(8, 5, "Bc4", "Nxc3", "b1c3"), _ply(8, 5, "d5", "a3", "a2a3")
+    for p in (last, exit_ply, bad):
+        p.color = "white"
+    bad.loss = 16.4
+    analysis.nico_color = "white"
+    analysis.repertoire = RepertoireFacts(last=last, last_games=77, exit=exit_ply, exit_games=1,
+                                          usual_san="Nxc3", usual_games=40, bad=[(bad, 9)])
+    lines = chess_router_mod._moves_line(summary, analysis).split("\n")
+    assert ("📚 Répertoire suivi jusqu'à 4.c3 (77 parties) ; tu en sors au coup 5 : 5.Bc4 au lieu de 5.Nxc3 "
+            "(joué 40 fois)") in lines
+    assert "❗ 5.d5, ton coup habituel ici (9 parties), perd 16 pts ; meilleur 5.a3" in lines
+
+
 def test_missed_line_lists_unpunished_errors_and_explosives():
     """Sprint 57 : ligne 🔎 = erreurs adverses non punies puis explosifs ; absente sans occasion."""
     analysis = _colors_analysis()

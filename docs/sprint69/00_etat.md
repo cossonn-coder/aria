@@ -1,9 +1,9 @@
 # Sprint 69 — état du sprint
 
-**Phase** : A (à concevoir). Prochaine étape : `/conception sprint 69`.
-**Sujet proposé** : étape 8 de la feuille de route, répertoire connu d'ARIA (61-5 + 61-10). À confirmer
-par Nico (axes `/amelioration` et dette 68-4 possibles).
-**Branche** : à créer depuis `main` (tag `sprint-68`).
+**Phase** : close (run live validé 2026-11-27, tag `sprint-69`). Suite : `docs/sprint70/00_etat.md`.
+**Sujet** : étape 8 de la feuille de route, répertoire connu d'ARIA (61-5 + 61-10). Confirmé par Nico
+le 2026-11-26 (les 3 👎 en attente restent pour `/amelioration` après ce sprint).
+**Branche** : `feat/sprint69-repertoire` (depuis `main`, tag `sprint-68`).
 
 ## Contexte hérité
 
@@ -28,7 +28,7 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 6. ~~67 (ajouté par Nico, 2026-11-25) : boucle de rétroaction (66-3) : réactions 👍 / 👎 sur
    les messages Telegram, enregistrées dans le palace, traitées ensemble en conception~~ : fait au sprint 67, run live validé.
 7. ~~68 : échiquier centré joueur du bas + réponses adverses (61-4 + 62-9), vitesse~~ : fait au sprint 68, run live validé.
-8. Répertoire connu d'ARIA (61-5 + 61-10).
+8. ~~69 : répertoire connu d'ARIA (61-5 + 61-10)~~ : fait au sprint 69, run live validé (ligne ❗ non vue, dette 69-1).
 9. Texte du coach : 61-6, 61-8, 61-11, 61-2 ; progression 61-7 ; noms d'ouverture 61-9.
 10. 62-10 Iona : contenu à préciser par Nico. 60 (lecture d'image) reste suspendu.
 
@@ -71,6 +71,45 @@ Nico, 2026-11-20 : « les choses une après l'autre, sans rien oublier ». Un su
 | 68-4 | Pointe réduite à « gain matériel + clouage absolu » | `combination.point_of` (sprint 61) : la pointe = première prise qui fixe un gain de matériel, clouage absolu en option. Manque : pointe qui mate, qui ne prend rien tout de suite, fourchette, déviation, coup intermédiaire, clouage relatif. Nico 2026-11-26 : « la pointe ne vient pas toujours d'un clouage » | Reconnaître la pointe par son effet ; regroupe 61-3 et 67-2. Étape 9 (texte du coach) ou avant si Nico le veut |
 | 68-5 | Défilement de l'échiquier sur téléphone | Correctif `b5c5c23` (défilement porté par `body`) non confirmé à part au run live | Vérifier à la prochaine ouverture sur téléphone |
 
+## Décisions arrêtées
+
+- 2026-11-26 : sujet = étape 8 (répertoire), pas les 👎 ni 68-4. Raison : feuille de route validée.
+- Lot 1 (Nico, 2026-11-26) : le bilan Telegram signale les trois événements : Nico dévie de son coup
+  habituel ; l'adversaire sort Nico de sa ligne ; le coup habituel joué perd ≥ 10 pts en moyenne
+  (61-10). Raison : demande 61-5 au complet.
+- Gambits choisis (Blackmar-Diemer 2.d4, 3.b4 contre 2...Bc5, Göring) : pas d'avertissement ⚠️,
+  liste courte de gambits assumés. Raison : choix assumé, comme la consigne Göring existante.
+- Lot 2 (Nico, 2026-11-26) : gambits assumés = 2.d4 contre 1...d5 (Blackmar-Diemer), 3.b4 contre
+  2...Bc5, 4.f3 de 1.e4 e6 2.d4 d5 3.Be3 Nf6, 2...f5 noir (letton, Colorado) + les gambits nommés
+  par Nico : Portsmouth, von Hennig, Rousseau, Göring, Scotch, Icelandic, Busch-Gass, Benko.
+  Règle retenue : coup assumé si la position après le coup porte un nom contenant « Gambit » dans
+  `data/openings.tsv`, plus deux positions sans nom (3.b4 contre 2...Bc5, 4.f3 Française). Seul le
+  coup qui atteint la position nommée est assumé : la suite est jugée (5.d5 du Portsmouth signalé).
+- Run live : prochaines vraies parties de Nico (pas de partie trafiquée ni de réanalyse).
+- Coup habituel mauvais : ligne de texte écrite par le code seule, pas de miniature. Raison : budget
+  de 4 miniatures réservé au hors-répertoire, tronçon plus petit.
+
+## Questions ouvertes
+
+- Aucune.
+
+- Perte d'un coup habituel lue sur la partie courante (`p.loss`), pas de moyenne sur le palace.
+  Raison : même position + même coup = même évaluation ; aucune lecture palace en plus.
+- Symbole ❗ pour le coup habituel mauvais (⚠️ déjà pris par « Précision adverse »).
+
 ## Tronçons
 
-À définir en conception.
+| # | Tronçon | Kickoff | État |
+|---|---|---|---|
+| 01 | Répertoire : calcul (`chess_coach/analysis.py`) + lignes 📚 / ❗ (`chess_router._moves_line`) | `01_repertoire.md` | ✅ (pytest 660 verts) |
+| 02 | Run live (Nico, prochaines vraies parties) | `02_run_live.txt` | ✅ 2026-11-27 : ligne 📚 juste (« suivi jusqu'à 5...h6 (4 parties) ; tu en sors au coup 6 : 6.O-O au lieu de 6.Qb3 (joué 3 fois) ») ; ❗ non vue (pas de coup habituel mauvais rejoué) → dette 69-1. Détail : `03_retour_run_live.md` |
+
+Dettes visées : 61-5 fermée ; 61-10 remplacée par 69-1 (ligne ❗ codée et testée, non vue en live).
+
+## §REPRISE
+
+Tronçon 01 livré (2026-11-26) : `repertoire_facts` + `RepertoireFacts` dans `chess_coach/analysis.py`
+(champ `GameAnalysis.repertoire`), `_repertoire_lines` dans `chess_router.py` appelé par `_moves_line`
+après la ligne 🔎. Choix d'implémentation : le « coup habituel » d'une sortie par Nico exclut le coup
+qu'il vient de jouer ; sans autre coup aux parties passées, la ligne 📚 omet « au lieu de ».
+Prochaine étape : run live `02_run_live.txt` (Nico, prochaines vraies parties).

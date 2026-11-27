@@ -673,6 +673,31 @@ def _missed_line(analysis) -> str | None:
     return "🔎 Occasions manquées : " + " · ".join(segments)
 
 
+def _repertoire_lines(rep, nico_color: str) -> list:
+    """Sprint 69 : ligne 📚 (répertoire suivi, qui en sort) puis une ligne ❗ par coup habituel
+    qui perd ≥ 10 pts (chess_coach.analysis.repertoire_facts)."""
+    lines = []
+    last = _move_label(rep.last.move_number, rep.last.color, rep.last.san)
+    if rep.exit is None:
+        lines.append(f"📚 Partie entièrement dans ton répertoire ({rep.last_games} parties)")
+    else:
+        exit_label = _move_label(rep.exit.move_number, rep.exit.color, rep.exit.san)
+        line = f"📚 Répertoire suivi jusqu'à {last} ({rep.last_games} parties) ; "
+        if rep.exit.color == nico_color:
+            line += f"tu en sors au coup {rep.exit.move_number} : {exit_label}"
+            if rep.usual_san is not None:
+                usual = _move_label(rep.exit.move_number, rep.exit.color, rep.usual_san)
+                line += f" au lieu de {usual} (joué {rep.usual_games} fois)"
+        else:
+            seen = "jamais vu" if rep.exit_games == 0 else f"vu {rep.exit_games} fois"
+            line += f"l'adversaire en sort avec {exit_label} ({seen})"
+        lines.append(line)
+    for p, games in rep.bad:
+        lines.append(f"❗ {_move_label(p.move_number, p.color, p.san)}, ton coup habituel ici ({games} parties), "
+                     f"perd {p.loss:.0f} pts ; meilleur {_move_label(p.move_number, p.color, p.best_san)}")
+    return lines
+
+
 def _moves_line(summary: dict, analysis) -> str:
     """Bloc déterministe sous le texte LLM (tronçon 08, sprint 50) : précision, meilleurs
     coups et erreurs des deux camps, coups brillants, meilleur et pire coup, clé des pastilles."""
@@ -697,6 +722,8 @@ def _moves_line(summary: dict, analysis) -> str:
     missed = _missed_line(analysis)
     if missed:
         lines.append(missed)
+    if analysis.repertoire is not None:
+        lines.extend(_repertoire_lines(analysis.repertoire, analysis.nico_color))
     if summary["brilliant_moves"]:
         lines.append(f"💥 Coups brillants : {summary['brilliant_moves']}")
     parts = []
